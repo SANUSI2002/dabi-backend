@@ -9,6 +9,9 @@ export const rateLimitKey = (kind, field) => (req) => `${kind}:${digest(ipKey(re
 
 export const createLimiter = ({ kind, field, max, windowMs = 15 * 60 * 1000 }) => rateLimit({
   windowMs, max, standardHeaders: 'draft-8', legacyHeaders: false, keyGenerator: rateLimitKey(kind, field),
+  // Render checks this route repeatedly from a shared IP. Throttling it makes
+  // Render mark a healthy API instance as failed and return 502 to every app.
+  ...(kind === 'api' ? { skip: (req) => req.method === 'GET' && req.originalUrl.split('?')[0] === '/api/health' } : {}),
   handler: (req, res) => res.status(429).json({ status: 'error', code: `RATE_LIMIT_${kind.toUpperCase()}`, message: 'Too many requests. Please retry later.', retryAfter: Math.ceil(windowMs / 1000) }),
 });
 
