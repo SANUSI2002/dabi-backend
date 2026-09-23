@@ -40,6 +40,8 @@ The generic invite route does not grant owner/super-admin roles. Clinical DOCTOR
 
 The live `GET /api/v1/platform/organizations?page=N` route requires a platform role, `platform.onboarding.review`, and recent MFA. It returns a paginated, deliberately limited organization registry (identity ID, type, name, status, creation time) without tenant clinical records. It is read-only. No public Command Center account-registration endpoint exists. A controlled first-admin script (`scripts/bootstrap-test-platform-admin.mjs`) is restricted to the disposable `sabi_backend_test_db`, an existing active identity, an explicit confirmation flag for mutation, and no pre-existing platform administrator. It logs the assignment. Never use this test bootstrap as a production staff-management flow.
 
+If the first test administrator has not established a password they control, hold that role until verified password setup is available. `scripts/hold-test-platform-admin.mjs` performs a dry run by default; `--apply` requires `SABI_TEST_PLATFORM_HOLD_CONFIRM=hold-test-platform-admin`. It is restricted to the same disposable database, removes only `SABI_PLATFORM_ADMIN` for the named email, revokes that account's sessions, and writes an activity log. The password-reset email adapter is still a placeholder until a real provider is configured; an HTTP 202 from `/password-reset/request` does not prove mail delivery.
+
 ## Migration and deployment
 
 1. Back up the target PostgreSQL database and check the current migration history. Apply `20260923090000_identity_memberships_permissions` with the project's Prisma 7 `npx prisma migrate deploy` command and `DATABASE_URL` set in the backend environment. Do not use `migrate reset` on existing data.
