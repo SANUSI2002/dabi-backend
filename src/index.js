@@ -32,6 +32,7 @@ import fulfilmentRoutes from './modules/fulfilments/fulfilments.routes.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import { globalLimiter, warnRateLimitFallback } from './middleware/rateLimitMiddleware.js';
 import { trustedProxySetting } from './config/proxy.js';
+import platformRoutes from './modules/platform/platform.routes.js';
 
 const app = express();
 app.set('trust proxy', trustedProxySetting());
@@ -61,6 +62,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/v1/hospitals', hospitalPlanRoutes);
 app.use('/api/v1', caregiverRoutes);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/platform', platformRoutes);
 app.use('/api/v1/profile', profileRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);

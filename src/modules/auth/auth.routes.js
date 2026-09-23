@@ -8,7 +8,7 @@ import { loginLimiter, mfaLimiter, registrationLimiter, resetConfirmLimiter, res
 import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
 import { confirmTotp, enrollTotp, mfaStatus, removeMfa, replaceRecoveryCodes, stepUp, verifyMfaLogin } from './auth.mfa.controller.js';
 import { requireOrganization, requirePermission, requirePlatform } from '../../middleware/accessMiddleware.js';
-import { acceptMembership, inviteMembership, listManagedMemberships, organizations, platformContext, revokeMembership, switchOrganization } from '../identity/identity.controller.js';
+import { acceptMembership, inviteMembership, listManagedMemberships, organizations, platformAssignment, platformContext, revokeMembership, switchOrganization } from '../identity/identity.controller.js';
 import { inviteMembershipSchema, managedMembershipSchema, managedOrganizationSchema, membershipIdSchema, switchOrganizationSchema } from '../identity/identity.validator.js';
 
 const router = express.Router();
@@ -38,6 +38,7 @@ router.get('/organizations/:organizationId/memberships', protect, validate(manag
 router.post('/organizations/:organizationId/memberships', protect, validate(inviteMembershipSchema), requireOrganization, requirePermission('membership.manage'), requireRecentMfa, inviteMembership);
 router.post('/organizations/:organizationId/memberships/:id/revoke', protect, validate(managedMembershipSchema), requireOrganization, requirePermission('membership.manage'), requireRecentMfa, revokeMembership);
 router.get('/platform-context', protect, requirePlatform, requireRecentMfa, platformContext);
+router.get('/platform-assignment', protect, requirePlatform, platformAssignment);
 
 router.use((err, req, res, next) => {
   console.error('Auth Module Isolated Error:', err);

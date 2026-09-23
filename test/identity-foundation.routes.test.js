@@ -117,11 +117,17 @@ describe('central identity foundation', () => {
 
   it('keeps platform roles separate and rejects inactive identities', async () => {
     repository.findPlatformRoles.mockResolvedValue([{ role: { code: 'SABI_SECURITY_ADMIN', permissions: [{ permissionCode: 'platform.security.view' }] } }]);
+    expect((await request(app).get('/api/v1/auth/platform-assignment').set(bearer())).body.data).toEqual({ assigned: true });
+    expect((await request(app).get('/api/v1/auth/platform-assignment').set(bearer(userId, organizationId))).status).toBe(403);
     expect((await request(app).get('/platform-probe').set(bearer())).status).toBe(200);
     expect((await request(app).get('/platform-probe').set(bearer(userId, organizationId))).status).toBe(403);
     repository.findIdentity.mockResolvedValue({ id: userId, accountStatus: 'SUSPENDED' });
     expect((await request(app).get('/platform-probe').set(bearer())).status).toBe(401);
     expect((await request(app).post('/api/v1/auth/organizations/switch').set(bearer()).send({ organizationId })).status).toBe(401);
+  });
+
+  it('does not expose a platform assignment to a patient account', async () => {
+    expect((await request(app).get('/api/v1/auth/platform-assignment').set(bearer())).status).toBe(403);
   });
 
   it('invites an existing identity only to the selected organization with allowed roles', async () => {

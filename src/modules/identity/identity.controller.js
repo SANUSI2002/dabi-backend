@@ -41,6 +41,11 @@ export const acceptMembership = async (req, res, next) => {
 export const platformContext = (req, res) =>
   res.json({ status: 'success', data: req.accessContext });
 
+// A signed-in platform staff member can discover that an assignment exists
+// before setting up MFA. Roles and permissions remain behind /platform-context.
+export const platformAssignment = (_req, res) =>
+  res.json({ status: 'success', data: { assigned: true } });
+
 const activePathOrganization = (req, res) => {
   if (req.params.organizationId === req.accessContext?.organization?.id) return true;
   res.status(403).json({ status: 'error', error: { code: 'ORGANIZATION_ACCESS_DENIED', message: 'Access denied.' } });
