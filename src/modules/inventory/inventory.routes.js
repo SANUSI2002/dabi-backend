@@ -1,0 +1,5 @@
+import express from 'express'; import { protect } from '../../middleware/authMiddleware.js'; import { validate } from '../../middleware/validateMiddleware.js'; import * as controller from './inventory.controller.js'; import * as validator from './inventory.validator.js';
+const inventory = express.Router(); inventory.use(protect); inventory.post('/', validate(validator.create), controller.create); inventory.get('/', validate(validator.list), controller.list); inventory.put('/:id', validate(validator.updateItem), controller.update); inventory.delete('/:id', validate(validator.itemId), controller.deactivate); inventory.use((error, req, res, next) => res.status(500).json({ status: 'error', message: 'Inventory module temporarily unavailable' }));
+export const inventoryRoutes = inventory;
+const discovery = express.Router(); discovery.use(protect); discovery.get('/discovery/prescriptions/:id', validate(validator.discovery), controller.discover); discovery.use((error, req, res, next) => res.status(500).json({ status: 'error', message: 'Inventory module temporarily unavailable' }));
+export const discoveryRoutes = discovery;

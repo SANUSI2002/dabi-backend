@@ -1,0 +1,15 @@
+import * as Records from './medical-records.model.js';
+const handle = (error, res, next) => error.code === 'NOT_FOUND' ? res.status(404).json({ status: 'error', message: 'Resource not found' }) : error.code === 'CATEGORY_NOT_EMPTY' ? res.status(409).json({ status: 'error', message: 'Category contains records' }) : next(error);
+export const listRecords = async (req, res, next) => { try { res.json({ status: 'success', data: await Records.list(req.user.id, req.query) }); } catch (error) { next(error); } };
+export const listUncategorized = async (req, res, next) => { try { res.json({ status: 'success', data: await Records.list(req.user.id, { ...req.query, uncategorized: 'true' }) }); } catch (error) { next(error); } };
+export const getRecord = async (req, res, next) => { try { const data = await Records.get(req.user.id, req.params.id); if (!data) return res.status(404).json({ status: 'error', message: 'Resource not found' }); return res.json({ status: 'success', data }); } catch (error) { return next(error); } };
+export const createRecord = async (req, res, next) => { try { res.status(201).json({ status: 'success', data: await Records.create(req.user.id, req.body) }); } catch (error) { handle(error, res, next); } };
+export const updateRecord = async (req, res, next) => { try { res.json({ status: 'success', data: await Records.update(req.user.id, req.params.id, req.body) }); } catch (error) { handle(error, res, next); } };
+export const deleteRecord = async (req, res, next) => { try { await Records.remove(req.user.id, req.params.id); res.json({ status: 'success' }); } catch (error) { handle(error, res, next); } };
+export const assignRecordCategory = async (req, res, next) => { try { res.json({ status: 'success', data: await Records.setCategory(req.user.id, req.params.id, req.body.categoryId) }); } catch (error) { handle(error, res, next); } };
+export const listCategories = async (req, res, next) => { try { res.json({ status: 'success', data: await Records.listCategories(req.user.id) }); } catch (error) { next(error); } };
+export const categoryCounts = async (req, res, next) => { try { res.json({ status: 'success', data: await Records.categoryCounts(req.user.id) }); } catch (error) { next(error); } };
+export const createCategory = async (req, res, next) => { try { res.status(201).json({ status: 'success', data: await Records.createCategory(req.user.id, req.body) }); } catch (error) { next(error); } };
+export const updateCategory = async (req, res, next) => { try { res.json({ status: 'success', data: await Records.updateCategory(req.user.id, req.params.id, req.body) }); } catch (error) { handle(error, res, next); } };
+export const deleteCategory = async (req, res, next) => { try { await Records.removeCategory(req.user.id, req.params.id); res.json({ status: 'success' }); } catch (error) { handle(error, res, next); } };
+export const emergencySummary = async (req, res, next) => { try { res.json({ status: 'success', data: await Records.emergencySummary(req.user.id) }); } catch (error) { next(error); } };

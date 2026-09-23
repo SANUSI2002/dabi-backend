@@ -1,0 +1,17 @@
+import express from 'express';
+import { protect } from '../../middleware/authMiddleware.js';
+import { validate } from '../../middleware/validateMiddleware.js';
+import * as V from './medical-records.validator.js';
+import * as C from './medical-records.controller.js';
+const router = express.Router();
+router.use(protect);
+router.get('/emergency-summary', C.emergencySummary);
+router.get('/timeline', validate(V.listRecords), C.listRecords);
+router.get('/uncategorized', validate(V.listRecords), C.listUncategorized);
+router.get('/categories/counts', C.categoryCounts);
+router.get('/categories', C.listCategories); router.post('/categories', validate(V.categoryBody), C.createCategory);
+router.patch('/categories/:id', validate(V.updateCategory), C.updateCategory); router.delete('/categories/:id', validate(V.categoryId), C.deleteCategory);
+router.get('/', validate(V.listRecords), C.listRecords); router.post('/', validate(V.createRecord), C.createRecord);
+router.get('/:id', validate(V.recordId), C.getRecord); router.patch('/:id', validate(V.updateRecord), C.updateRecord); router.delete('/:id', validate(V.recordId), C.deleteRecord); router.patch('/:id/category', validate(V.assignCategory), C.assignRecordCategory);
+router.use((err, req, res, next) => res.status(500).json({ status: 'error', message: 'Medical records module temporarily unavailable' }));
+export default router;

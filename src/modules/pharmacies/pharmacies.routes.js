@@ -1,0 +1,14 @@
+import express from 'express';
+import { protect } from '../../middleware/authMiddleware.js';
+import { validate } from '../../middleware/validateMiddleware.js';
+import * as controller from './pharmacies.controller.js';
+import * as validator from './pharmacies.validator.js';
+const router = express.Router();
+router.post('/register', validate(validator.register), controller.register);
+router.get('/', validate(validator.publicList), controller.publicList);
+router.get('/compliance', protect, validate(validator.complianceList), controller.complianceList);
+router.get('/mine', protect, controller.mine);
+router.post('/compliance/:id/decision', protect, validate(validator.decision), controller.decision);
+router.get('/:id', validate(validator.pharmacyId), controller.publicDetail);
+router.use((error, req, res, next) => res.status(500).json({ status: 'error', message: 'Pharmacy module temporarily unavailable' }));
+export default router;

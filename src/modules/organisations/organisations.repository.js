@@ -1,0 +1,21 @@
+import prisma from '../../config/db.js';
+export const transaction = (work) => prisma.$transaction(work);
+export const typeMap = { hospital: 'HOSPITAL', clinic: 'CLINIC', laboratory: 'LABORATORY', 'diagnostic-centre': 'DIAGNOSTIC_CENTRE', other: 'OTHER' };
+export const publicSelect = { id: true, type: true, name: true, address: true, country: true, state: true, city: true, contactEmail: true, contactPhone: true };
+export const adminSelect = { ...publicSelect, ownerId: true, status: true, decisionNote: true, decidedAt: true, createdAt: true, updatedAt: true };
+export const submissionSelect = { id: true, details: true, termsAcceptedAt: true, privacyAcceptedAt: true, healthDataAcceptedAt: true, consentVersion: true, documents: { select: { key: true, name: true, contentType: true } } };
+export const createOwner = (tx, data) => tx.user.create({ data, select: { id: true } });
+export const create = (tx, data) => tx.organisation.create({ data, select: adminSelect });
+export const createSubmission = (tx, data) => tx.organisationSubmission.create({ data, select: submissionSelect });
+export const find = (tx, where) => tx.organisation.findFirst({ where, select: { ...adminSelect, onboarding: { select: submissionSelect } } });
+export const pharmacy = (tx, where) => tx.pharmacy.findFirst({ where, select: { id: true, adminUserId: true, name: true, complianceStatus: true, decisionNote: true, decidedAt: true, onboarding: { select: submissionSelect } } });
+export const update = (tx, where, data) => tx.organisation.updateMany({ where, data });
+export const list = async (tx, query, admin = false) => {
+  const where = { status: admin ? query.status : 'VERIFIED', ...(query.type ? { type: typeMap[query.type] } : {}), ...(query.search ? { OR: ['name', 'city', 'address'].map((key) => ({ [key]: { contains: query.search, mode: 'insensitive' } })) } : {}) };
+  const [items, total] = await Promise.all([tx.organisation.findMany({ where, select: admin ? adminSelect : publicSelect, orderBy: [{ name: 'asc' }, { id: 'asc' }], skip: (query.page - 1) * query.limit, take: query.limit }), tx.organisation.count({ where })]);
+  return { items, total, page: query.page, limit: query.limit };
+};
+export const publicList = (query) => list(prisma, query);
+export const publicDetail = (id) => prisma.organisation.findFirst({ where: { id, status: 'VERIFIED' }, select: publicSelect });
+export const submission = (tx, id) => tx.organisationSubmission.findUnique({ where: { id }, select: { organisation: { select: { ownerId: true } }, pharmacy: { select: { adminUserId: true } } } });
+export const document = (tx, submissionId, key) => tx.organisationDocument.findUnique({ where: { submissionId_key: { submissionId, key } }, select: { content: true, contentType: true } });

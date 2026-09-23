@@ -1,0 +1,14 @@
+import express from 'express';
+import { protect } from '../../middleware/authMiddleware.js';
+import { validate } from '../../middleware/validateMiddleware.js';
+import * as schema from './hospital-plans.validator.js';
+import * as controller from './hospital-plans.controller.js';
+const router = express.Router();
+router.get('/:hospitalId/plans/manage', protect, validate(schema.ownerList), controller.ownerList);
+router.post('/:hospitalId/plans', protect, validate(schema.create), controller.create);
+router.patch('/:hospitalId/plans/:planId', protect, validate(schema.update), controller.update);
+router.post('/:hospitalId/plans/:planId/archive', protect, validate(schema.archive), controller.archive);
+router.get('/:hospitalId/plans', validate(schema.publicList), controller.publicList);
+router.get('/:hospitalId/plans/:planId', validate(schema.detail), controller.detail);
+router.use(controller.errorHandler);
+export default router;

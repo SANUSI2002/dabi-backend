@@ -1,0 +1,12 @@
+import prisma from '../../config/db.js';
+export const transaction = (callback) => prisma.$transaction(callback);
+export const existing = (tx, patientId, idempotencyKey) => tx.reservation.findUnique({ where: { patientId_idempotencyKey: { patientId, idempotencyKey } }, include: { allocations: true } });
+export const prescription = (tx, id, patientId) => tx.prescription.findFirst({ where: { id, patientId, status: 'ISSUED' }, select: { id: true, items: { select: { id: true, quantity: true } } } });
+export const quoteItem = (tx, id, patientId, prescriptionId) => tx.pharmacyQuoteItem.findFirst({ where: { id, inventoryItemId: { not: null }, quote: { status: 'ISSUED', quoteExpiresAt: { gt: new Date() }, request: { patientId, prescriptionId, pharmacy: { complianceStatus: 'VERIFIED' } } } }, select: { id: true, prescriptionItemId: true, inventoryItemId: true, availableQuantity: true, unitPriceMinor: true, quote: { select: { revision: true, request: { select: { pharmacyId: true } } } } } });
+export const hold = (tx, id, quantity) => tx.pharmacyInventoryItem.updateMany({ where: { id, isActive: true, availableQuantity: { gte: quantity } }, data: { availableQuantity: { decrement: quantity } } });
+export const create = (tx, data) => tx.reservation.create({ data, include: { allocations: true } });
+export const release = (tx, id, patientId) => tx.reservation.updateMany({ where: { id, patientId, status: 'ACTIVE' }, data: { status: 'RELEASED', releasedAt: new Date() } });
+export const restore = (tx, id, quantity) => tx.pharmacyInventoryItem.update({ where: { id }, data: { availableQuantity: { increment: quantity } } });
+export const due = () => prisma.reservation.findMany({ where: { status: 'ACTIVE', expiresAt: { lte: new Date() } }, select: { id: true, patientId: true }, take: 100 });
+export const active = (patientId) => prisma.reservation.findFirst({ where: { patientId, status: 'ACTIVE', expiresAt: { gt: new Date() } }, include: { allocations: { include: { pharmacy: { select: { id: true, name: true, address: true } } } } } });
+export const detail = (patientId, id) => prisma.reservation.findFirst({ where: { id, patientId }, include: { allocations: { include: { pharmacy: { select: { id: true, name: true, address: true } } } } } });

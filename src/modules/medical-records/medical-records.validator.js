@@ -1,0 +1,15 @@
+import { z } from 'zod';
+const uuid = z.string().uuid(); const date = z.string().datetime({ offset: true });
+const types = z.enum(['PHYSICAL', 'VIRTUAL', 'LAB_RESULT', 'IMAGING', 'OTHER']);
+const icons = z.enum(['folder', 'stethoscope', 'flask', 'scan', 'syringe', 'pill', 'hospital']);
+const page = { page: z.coerce.number().int().min(1).max(10000).default(1), limit: z.coerce.number().int().min(1).max(100).default(20) };
+const text = (max) => z.string().trim().min(1).max(max);
+const recordBody = { title: text(160), recordType: types, doctorName: text(120).nullable().optional(), facility: text(160).nullable().optional(), date, diagnosis: text(500).nullable().optional(), treatment: text(500).nullable().optional(), notes: text(2000).nullable().optional(), documentUrl: z.string().url().max(2048).refine((url) => /^https?:\/\//i.test(url), 'documentUrl must use HTTP(S)').nullable().optional(), categoryId: uuid.nullable().optional() };
+export const recordId = z.object({ params: z.object({ id: uuid }).strict() });
+export const listRecords = z.object({ query: z.object({ ...page, categoryId: uuid.optional(), uncategorized: z.enum(['true', 'false']).optional(), type: types.optional(), search: z.string().trim().min(1).max(100).optional(), from: date.optional(), to: date.optional(), sort: z.enum(['asc', 'desc']).default('desc') }).strict() }).superRefine(({ query }, ctx) => { if (query.from && query.to && new Date(query.from) > new Date(query.to)) ctx.addIssue({ code: 'custom', path: ['query', 'to'], message: 'to must be after from' }); });
+export const createRecord = z.object({ body: z.object(recordBody).strict() });
+export const updateRecord = z.object({ params: z.object({ id: uuid }).strict(), body: z.object(Object.fromEntries(Object.entries(recordBody).map(([key, value]) => [key, value.optional()]))).strict() }).refine(({ body }) => Object.keys(body).length > 0, { path: ['body'], message: 'At least one update field is required' });
+export const assignCategory = z.object({ params: z.object({ id: uuid }).strict(), body: z.object({ categoryId: uuid.nullable() }).strict() });
+export const categoryId = z.object({ params: z.object({ id: uuid }).strict() });
+export const categoryBody = z.object({ body: z.object({ name: text(80), icon: icons, isDefault: z.boolean().optional() }).strict() });
+export const updateCategory = z.object({ params: z.object({ id: uuid }).strict(), body: z.object({ name: text(80).optional(), icon: icons.optional() }).strict() }).refine(({ body }) => Object.keys(body).length > 0, { path: ['body'], message: 'At least one update field is required' });

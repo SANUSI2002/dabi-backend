@@ -1,0 +1,10 @@
+import express from 'express';
+import { protect } from '../../middleware/authMiddleware.js';
+import { validate } from '../../middleware/validateMiddleware.js';
+import { listHealthMetricsSchema } from './health-metrics.validator.js';
+import { listHealthMetrics } from './health-metrics.controller.js';
+const router = express.Router();
+router.use(protect);
+router.get('/', validate(listHealthMetricsSchema), listHealthMetrics);
+router.use((err, req, res, next) => res.status(500).json({ status: 'error', message: 'Health metrics module temporarily unavailable' }));
+export default router;

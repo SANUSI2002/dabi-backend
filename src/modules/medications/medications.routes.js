@@ -1,0 +1,15 @@
+import express from 'express';
+import { protect } from '../../middleware/authMiddleware.js';
+import { validate } from '../../middleware/validateMiddleware.js';
+import { adherenceSchema, createMedicationSchema, listMedicationsSchema, medicationIdSchema, updateMedicationSchema } from './medications.validator.js';
+import { createMedication, deleteMedication, getMedication, listMedications, setMedicationAdherence, updateMedication } from './medications.controller.js';
+const router = express.Router();
+router.use(protect);
+router.get('/', validate(listMedicationsSchema), listMedications);
+router.get('/:id', validate(medicationIdSchema), getMedication);
+router.post('/', validate(createMedicationSchema), createMedication);
+router.put('/:id', validate(updateMedicationSchema), updateMedication);
+router.patch('/:id/taken', validate(adherenceSchema), setMedicationAdherence);
+router.delete('/:id', validate(medicationIdSchema), deleteMedication);
+router.use((err, req, res, next) => res.status(500).json({ status: 'error', message: 'Medications module temporarily unavailable' }));
+export default router;

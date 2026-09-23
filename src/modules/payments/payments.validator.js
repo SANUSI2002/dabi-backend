@@ -1,0 +1,1 @@
+import{z}from'zod';const uuid=z.string().uuid();export const initialize=z.object({params:z.object({id:uuid}).strict(),body:z.object({idempotencyKey:z.string().trim().min(16).max(128)}).strict()});export const id=z.object({params:z.object({id:uuid}).strict()});

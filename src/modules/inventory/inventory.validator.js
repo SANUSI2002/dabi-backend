@@ -1,0 +1,10 @@
+import { z } from 'zod';
+const uuid = z.string().uuid();
+const item = z.object({ medicationName: z.string().trim().min(2).max(120), genericName: z.string().trim().min(2).max(120).optional(), availableQuantity: z.number().int().min(0).max(1000000), unitPriceMinor: z.number().int().min(0).max(1000000000), currency: z.literal('NGN') }).strict();
+const update = z.object({ medicationName: z.string().trim().min(2).max(120).optional(), genericName: z.string().trim().min(2).max(120).nullable().optional(), availableQuantity: z.number().int().min(0).max(1000000).optional(), unitPriceMinor: z.number().int().min(0).max(1000000000).optional(), currency: z.literal('NGN').optional() }).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one update field is required' });
+const page = { page: z.coerce.number().int().min(1).max(10000).default(1), limit: z.coerce.number().int().min(1).max(100).default(20) };
+export const create = z.object({ body: item });
+export const list = z.object({ query: z.object({ ...page, active: z.enum(['true', 'false']).optional() }).strict() });
+export const itemId = z.object({ params: z.object({ id: uuid }).strict() });
+export const updateItem = z.object({ params: z.object({ id: uuid }).strict(), body: update });
+export const discovery = z.object({ params: z.object({ id: uuid }).strict(), query: z.object({ latitude: z.coerce.number().finite().min(-90).max(90), longitude: z.coerce.number().finite().min(-180).max(180), radiusKm: z.coerce.number().finite().positive().max(100), ...page }).strict() });

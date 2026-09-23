@@ -1,0 +1,10 @@
+import prisma from '../../config/db.js';
+const itemSelect = { id: true, medicationName: true, genericName: true, availableQuantity: true, unitPriceMinor: true, currency: true, isActive: true, createdAt: true, updatedAt: true };
+const publicSelect = { id: true, name: true, address: true, country: true, state: true, city: true, contactEmail: true, contactPhone: true, latitude: true, longitude: true };
+export const transaction = (callback) => prisma.$transaction(callback);
+export const create = (tx, data) => tx.pharmacyInventoryItem.create({ data, select: itemSelect });
+export const update = (tx, id, pharmacyId, data) => tx.pharmacyInventoryItem.updateMany({ where: { id, pharmacyId, isActive: true }, data });
+export const deactivate = (tx, id, pharmacyId) => tx.pharmacyInventoryItem.updateMany({ where: { id, pharmacyId, isActive: true }, data: { isActive: false } });
+export const list = async (pharmacyId, query) => { const where = { pharmacyId, ...(query.active ? { isActive: query.active === 'true' } : {}) }; const [items, total] = await Promise.all([prisma.pharmacyInventoryItem.findMany({ where, select: itemSelect, orderBy: { medicationName: 'asc' }, skip: (query.page - 1) * query.limit, take: query.limit }), prisma.pharmacyInventoryItem.count({ where })]); return { items, page: query.page, limit: query.limit, total }; };
+export const issuedPrescription = (id, patientId) => prisma.prescription.findFirst({ where: { id, patientId, status: 'ISSUED' }, select: { id: true } });
+export const pharmaciesInBounds = (bounds) => prisma.pharmacy.findMany({ where: { complianceStatus: 'VERIFIED', latitude: { not: null, gte: bounds.minLat, lte: bounds.maxLat }, longitude: { not: null, gte: bounds.minLon, lte: bounds.maxLon } }, select: publicSelect, orderBy: { name: 'asc' }, take: 500 });

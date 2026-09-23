@@ -1,0 +1,11 @@
+import express from 'express';
+import { protect } from '../../middleware/authMiddleware.js';
+import { validate } from '../../middleware/validateMiddleware.js';
+import { createVitalSchema, listVitalsSchema } from './vitals.validator.js';
+import { createVital, listVitals } from './vitals.controller.js';
+const router = express.Router();
+router.use(protect);
+router.get('/', validate(listVitalsSchema), listVitals);
+router.post('/', validate(createVitalSchema), createVital);
+router.use((err, req, res, next) => res.status(500).json({ status: 'error', message: 'Vitals module temporarily unavailable' }));
+export default router;

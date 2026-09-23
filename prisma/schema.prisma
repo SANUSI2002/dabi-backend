@@ -1,0 +1,1165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  patientId    String    @unique @map("patient_id")
+  email        String?   @unique
+  password     String
+  full_name    String?
+  phone_number String?
+  dob          DateTime? @db.Date
+  accountStatus UserAccountStatus @default(ACTIVE) @map("account_status")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+  lastLoginAt DateTime? @map("last_login_at")
+
+  profile       UserProfile?
+  healthMetrics HealthMetric[]
+  appointments  Appointment[]
+  medications   Medication[]
+  vitals        Vital[]
+  records       MedicalRecord[]
+  familyMembers FamilyMember[]
+  categories    Category[]
+  activityLogs  ActivityLog[]
+  notifications Notification[]
+  roles         UserRole[]
+  refreshTokens RefreshToken[]
+  authSessions AuthSession[]
+  authDevices AuthDevice[]
+  mfaTotp MfaTotp?
+  mfaRecoveryCodes MfaRecoveryCode[]
+  mfaLoginChallenges MfaLoginChallenge[]
+  passwordResetTokens PasswordResetToken[]
+  careRelationshipsOwned CareRelationship[] @relation("PatientCareRelationships")
+  careRelationshipsHeld CareRelationship[] @relation("CaregiverCareRelationships")
+  professionalProfile ProfessionalProfile?
+  doctorCareAsPatient DoctorCareRelationship[] @relation("DoctorCarePatient")
+  prescriptionsAsPatient Prescription[] @relation("PrescriptionPatient")
+  pharmacyAdminOf Pharmacy? @relation("PharmacyAdmin")
+  pharmacyComplianceDecisions Pharmacy[] @relation("PharmacyComplianceDecision")
+  pharmacyStaffMemberships PharmacyStaffMember[]
+  prescriptionRequests PrescriptionRequest[]
+  reservations Reservation[]
+  dependents DependentProfile[]
+  caregiverProfile CaregiverProfile?
+  deliveryPartner DeliveryPartner?
+  organisationOwned Organisation?
+  orders       Order[]
+  identityMemberships OrganizationMembership[]
+  platformRoleAssignments PlatformRoleAssignment[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  userId                       String   @id @map("user_id")
+  health_score                 Int      @default(0)
+  blood_type                   String?
+  genotype                     String?
+  chronic_conditions           String?
+  known_allergies              String?
+  current_medications          String?
+  smoking_status               String?
+  alcohol_frequency            String?
+  physical_activity            String?
+  appointment_reminders        Boolean? @default(true)
+  prescription_alerts          Boolean? @default(true)
+  health_tips_newsletter       Boolean? @default(false)
+  data_sharing_consent         Boolean? @default(false)
+  dataSharingConsentAt         DateTime? @map("data_sharing_consent_at")
+  electronic_health_records    Boolean? @default(true)
+  electronicHealthRecordsAt    DateTime? @map("electronic_health_records_at")
+  emergency_access_permissions String[] @default([])
+  emergencyContactName         String? @map("emergency_contact_name")
+  emergencyContactPhone        String? @map("emergency_contact_phone")
+  emergencyContactRelation     String? @map("emergency_contact_relation")
+  two_factor_auth              Boolean  @default(false)
+  consentGiven                 Boolean  @default(false) @map("consent_given")
+  consentGivenAt               DateTime? @map("consent_given_at")
+  gender                       String?
+  updated_at                   DateTime @default(now()) @updatedAt
+  user                         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+enum UserRoleType {
+  PATIENT
+  PROFESSIONAL
+  SUPER_ADMIN
+  PHARMACY_ADMIN
+  PHARMACY_COMPLIANCE_ADMIN
+  DELIVERY_PARTNER
+  CAREGIVER
+  ORGANISATION_OWNER
+}
+
+enum UserAccountStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  LOCKED
+  DISABLED
+  DEACTIVATED
+}
+
+enum IdentityOrganizationType {
+  HOSPITAL
+  CLINIC
+  LABORATORY
+  DIAGNOSTIC_CENTRE
+  PHARMACY
+  OTHER
+}
+
+enum IdentityMembershipStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum AccessRoleScope {
+  ORGANIZATION
+  PLATFORM
+}
+
+enum ProfessionalVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+model ProfessionalProfile {
+  id                   String                         @id @default(uuid())
+  userId               String                         @unique @map("user_id")
+  professionType       String                         @map("profession_type")
+  registrationNumber   String                         @map("registration_number")
+  practiceName         String?                        @map("practice_name")
+  specialty            String?                        @map("specialty")
+  onboardingProgress   Int                            @default(0) @map("onboarding_progress")
+  verificationStatus   ProfessionalVerificationStatus @default(PENDING) @map("verification_status")
+  decisionReason       String?                        @map("decision_reason")
+  decidedByUserId      String?                        @map("decided_by_user_id")
+  decidedAt            DateTime?                      @map("decided_at")
+  createdAt            DateTime                       @default(now()) @map("created_at")
+  updatedAt            DateTime                       @default(now()) @updatedAt @map("updated_at")
+  user                 User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doctorCareRelationships DoctorCareRelationship[]
+  prescriptionsIssued Prescription[]
+
+  @@index([verificationStatus])
+  @@index([professionType])
+  @@map("professional_profiles")
+}
+
+enum DoctorCareStatus {
+  PENDING
+  ACTIVE
+  DECLINED
+  REVOKED
+  EXPIRED
+}
+
+model DoctorCareRelationship {
+  id                  String           @id @default(uuid())
+  patientId           String           @map("patient_id")
+  doctorProfileId     String           @map("doctor_profile_id")
+  status              DoctorCareStatus @default(PENDING)
+  requestedAt         DateTime         @default(now()) @map("requested_at")
+  respondedAt         DateTime?        @map("responded_at")
+  revokedAt           DateTime?        @map("revoked_at")
+  expiresAt           DateTime?        @map("expires_at")
+  patient             User             @relation("DoctorCarePatient", fields: [patientId], references: [id], onDelete: Cascade)
+  doctorProfile       ProfessionalProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, doctorProfileId])
+  @@index([patientId, status])
+  @@index([doctorProfileId, status])
+  @@map("doctor_care_relationships")
+}
+
+enum PrescriptionStatus {
+  DRAFT
+  ISSUED
+  CANCELLED
+}
+
+model Prescription {
+  id                 String             @id @default(uuid())
+  reference          String             @unique
+  patientId          String             @map("patient_id")
+  doctorProfileId    String             @map("doctor_profile_id")
+  status             PrescriptionStatus @default(DRAFT)
+  instructions       String?
+  issuerAttestedAt   DateTime?          @map("issuer_attested_at")
+  issuedAt           DateTime?          @map("issued_at")
+  cancelledAt        DateTime?          @map("cancelled_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @default(now()) @updatedAt @map("updated_at")
+  patient            User               @relation("PrescriptionPatient", fields: [patientId], references: [id], onDelete: Cascade)
+  doctorProfile      ProfessionalProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
+  items              PrescriptionItem[]
+  pharmacyRequests   PrescriptionRequest[]
+  reservations       Reservation[]
+
+  @@index([patientId, status, issuedAt])
+  @@index([doctorProfileId, status, createdAt])
+  @@map("prescriptions")
+}
+
+model PrescriptionItem {
+  id             String       @id @default(uuid())
+  prescriptionId String       @map("prescription_id")
+  medicationName String       @map("medication_name")
+  dosage         String
+  frequency      String
+  route          String
+  duration       String
+  quantity       Int
+  indication     String
+  createdAt      DateTime     @default(now()) @map("created_at")
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+  @@map("prescription_items")
+}
+
+enum PharmacyComplianceStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+model Pharmacy {
+  onboarding OrganisationSubmission?
+  id               String                   @id @default(uuid())
+  adminUserId      String                   @unique @map("admin_user_id")
+  name             String
+  address          String
+  country          String
+  state            String
+  city             String
+  contactEmail     String                   @map("contact_email")
+  contactPhone     String                   @map("contact_phone")
+  latitude         Float?
+  longitude        Float?
+  complianceStatus PharmacyComplianceStatus @default(PENDING) @map("compliance_status")
+  decisionNote     String?                  @map("decision_note")
+  decidedByUserId  String?                  @map("decided_by_user_id")
+  decidedAt        DateTime?                @map("decided_at")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @default(now()) @updatedAt @map("updated_at")
+  admin            User                     @relation("PharmacyAdmin", fields: [adminUserId], references: [id], onDelete: Cascade)
+  decidedBy        User?                    @relation("PharmacyComplianceDecision", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  inventoryItems   PharmacyInventoryItem[]
+  staffMembers     PharmacyStaffMember[]
+  prescriptionRequests PrescriptionRequest[]
+  reservationAllocations ReservationAllocation[]
+  orderFulfilments OrderFulfilment[]
+  identityOrganization IdentityOrganization?
+
+  @@index([complianceStatus])
+  @@index([country, state, city, complianceStatus])
+  @@map("pharmacies")
+}
+
+enum PharmacyStaffStatus {
+  PENDING
+  ACTIVE
+  DECLINED
+  REVOKED
+}
+enum PrescriptionRequestStatus {
+  REQUESTED
+  QUOTED
+  CANCELLED
+}
+enum PharmacyQuoteStatus {
+  ISSUED
+  REPLACED
+  EXPIRED
+}
+
+model PharmacyStaffMember {
+  id String @id @default(uuid())
+  pharmacyId String @map("pharmacy_id")
+  pharmacistUserId String @map("pharmacist_user_id")
+  status PharmacyStaffStatus @default(PENDING)
+  invitedAt DateTime @default(now()) @map("invited_at")
+  acceptedAt DateTime? @map("accepted_at")
+  pharmacy Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  pharmacist User @relation(fields: [pharmacistUserId], references: [id], onDelete: Cascade)
+  quotes PharmacyQuote[]
+  @@unique([pharmacyId, pharmacistUserId])
+  @@index([pharmacistUserId, status])
+  @@map("pharmacy_staff_members")
+}
+
+model PrescriptionRequest {
+  id String @id @default(uuid())
+  prescriptionId String @map("prescription_id")
+  patientId String @map("patient_id")
+  pharmacyId String @map("pharmacy_id")
+  status PrescriptionRequestStatus @default(REQUESTED)
+  createdAt DateTime @default(now()) @map("created_at")
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  pharmacy Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  quotes PharmacyQuote[]
+  @@unique([prescriptionId, pharmacyId])
+  @@index([patientId, status])
+  @@index([pharmacyId, status])
+  @@map("prescription_requests")
+}
+
+model PharmacyQuote {
+  id String @id @default(uuid())
+  requestId String @map("request_id")
+  pharmacistStaffId String @map("pharmacist_staff_id")
+  revision Int @default(1)
+  status PharmacyQuoteStatus @default(ISSUED)
+  quoteExpiresAt DateTime @map("quote_expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  request PrescriptionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  pharmacistStaff PharmacyStaffMember @relation(fields: [pharmacistStaffId], references: [id], onDelete: Restrict)
+  items PharmacyQuoteItem[]
+  @@unique([requestId, revision])
+  @@index([requestId, status, quoteExpiresAt])
+  @@map("pharmacy_quotes")
+}
+
+model PharmacyQuoteItem {
+  id String @id @default(uuid())
+  quoteId String @map("quote_id")
+  prescriptionItemId String @map("prescription_item_id")
+  inventoryItemId String? @map("inventory_item_id")
+  requiredQuantity Int @map("required_quantity")
+  availableQuantity Int @map("available_quantity")
+  unitPriceMinor Int @map("unit_price_minor")
+  lineTotalMinor Int @map("line_total_minor")
+  availabilityStatus String @map("availability_status")
+  estimatedFulfilment String @map("estimated_fulfilment")
+  pickupAvailable Boolean @default(false) @map("pickup_available")
+  deliveryAvailable Boolean @default(false) @map("delivery_available")
+  quote PharmacyQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  inventoryItem PharmacyInventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  reservationAllocations ReservationAllocation[]
+  @@index([quoteId])
+  @@index([inventoryItemId])
+  @@map("pharmacy_quote_items")
+}
+
+model PharmacyInventoryItem {
+  id             String   @id @default(uuid())
+  pharmacyId     String   @map("pharmacy_id")
+  medicationName String   @map("medication_name")
+  genericName    String?  @map("generic_name")
+  availableQuantity Int   @default(0) @map("available_quantity")
+  unitPriceMinor Int      @map("unit_price_minor")
+  currency       String   @default("NGN")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+  pharmacy       Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  quoteItems     PharmacyQuoteItem[]
+  reservationAllocations ReservationAllocation[]
+
+  @@index([pharmacyId, isActive])
+  @@map("pharmacy_inventory_items")
+}
+
+enum ReservationStatus {
+  ACTIVE
+  RELEASED
+  EXPIRED
+  CONVERTED
+}
+
+model Reservation {
+  id             String            @id @default(uuid())
+  patientId      String            @map("patient_id")
+  prescriptionId String            @map("prescription_id")
+  idempotencyKey String            @map("idempotency_key")
+  status         ReservationStatus @default(ACTIVE)
+  expiresAt      DateTime          @map("expires_at")
+  releasedAt     DateTime?         @map("released_at")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  patient        User              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  prescription   Prescription      @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  allocations    ReservationAllocation[]
+  order          Order?
+
+  @@unique([patientId, idempotencyKey])
+  @@index([patientId, status, expiresAt])
+  @@index([prescriptionId, status])
+  @@map("reservations")
+}
+
+model ReservationAllocation {
+  id                 String                 @id @default(uuid())
+  reservationId      String                 @map("reservation_id")
+  prescriptionItemId String                 @map("prescription_item_id")
+  pharmacyId         String                 @map("pharmacy_id")
+  quoteItemId        String                 @map("quote_item_id")
+  quoteRevision      Int                    @map("quote_revision")
+  inventoryItemId    String                 @map("inventory_item_id")
+  selectedQuantity   Int                    @map("selected_quantity")
+  unitPriceMinor     Int                    @map("unit_price_minor")
+  lineTotalMinor     Int                    @map("line_total_minor")
+  expiresAt          DateTime               @map("expires_at")
+  reservation        Reservation            @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  pharmacy           Pharmacy               @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
+  quoteItem          PharmacyQuoteItem      @relation(fields: [quoteItemId], references: [id], onDelete: Restrict)
+  inventoryItem      PharmacyInventoryItem  @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  @@index([reservationId])
+  @@index([inventoryItemId])
+  @@map("reservation_allocations")
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PAYMENT_FAILED
+  CANCELLED
+}
+
+enum OrderFulfilmentStatus {
+  AWAITING_PAYMENT
+  AWAITING_PHARMACIST_REVIEW
+  APPROVED_FOR_DISPENSING
+  PREPARING
+  READY_FOR_PICKUP
+  PICKED_UP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CLARIFICATION_REQUIRED
+  REJECTED
+  UNABLE_TO_FULFILL
+  CANCELLED
+}
+
+model Order {
+  id                       String      @id @default(uuid())
+  reference                String      @unique
+  patientId                String      @map("patient_id")
+  reservationId            String      @unique @map("reservation_id")
+  idempotencyKey           String      @map("idempotency_key")
+  status                   OrderStatus @default(PENDING_PAYMENT)
+  currency                 String      @default("NGN")
+  pricingConfigVersion     Int         @map("pricing_config_version")
+  platformFeeMinor         Int         @map("platform_fee_minor")
+  deliveryRatePerKmMinor   Int         @map("delivery_rate_per_km_minor")
+  subtotalMinor            Int         @map("subtotal_minor")
+  deliveryFeeMinor         Int         @map("delivery_fee_minor")
+  totalPayableMinor        Int         @map("total_payable_minor")
+  encryptedDeliveryDetails String?     @map("encrypted_delivery_details")
+  createdAt                DateTime    @default(now()) @map("created_at")
+  updatedAt                DateTime    @default(now()) @updatedAt @map("updated_at")
+  patient                  User        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  reservation              Reservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  fulfilments              OrderFulfilment[]
+  paymentAttempts          PaymentAttempt[]
+
+  @@unique([patientId, idempotencyKey])
+  @@index([patientId, createdAt])
+  @@map("orders")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+model PaymentAttempt {
+  id               String        @id @default(uuid())
+  orderId          String        @map("order_id")
+  provider         String
+  idempotencyKey   String        @map("idempotency_key")
+  providerReference String       @unique @map("provider_reference")
+  status           PaymentStatus @default(PENDING)
+  amountMinor      Int           @map("amount_minor")
+  currency         String
+  authorizationUrl String?       @map("authorization_url")
+  accessCode       String?       @map("access_code")
+  expiresAt        DateTime      @map("expires_at")
+  completedAt      DateTime?     @map("completed_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at")
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events           PaymentAttemptEvent[]
+
+  @@unique([orderId, idempotencyKey])
+  @@index([orderId, status, expiresAt])
+  @@map("payment_attempts")
+}
+
+model PaymentAttemptEvent {
+  id               String         @id @default(uuid())
+  paymentAttemptId String         @map("payment_attempt_id")
+  providerEventKey String         @unique @map("provider_event_key")
+  eventType        String         @map("event_type")
+  status           PaymentStatus
+  createdAt        DateTime       @default(now()) @map("created_at")
+  paymentAttempt   PaymentAttempt @relation(fields: [paymentAttemptId], references: [id], onDelete: Cascade)
+
+  @@index([paymentAttemptId, createdAt])
+  @@map("payment_attempt_events")
+}
+
+model OrderFulfilment {
+  id                String                 @id @default(uuid())
+  orderId           String                 @map("order_id")
+  pharmacyId        String                 @map("pharmacy_id")
+  status            OrderFulfilmentStatus  @default(AWAITING_PAYMENT)
+  fulfilmentMethod  String                 @map("fulfilment_method")
+  subtotalMinor     Int                    @map("subtotal_minor")
+  deliveryFeeMinor  Int                    @map("delivery_fee_minor")
+  totalMinor        Int                    @map("total_minor")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  reviewedByUserId  String?                @map("reviewed_by_user_id")
+  reviewedAt        DateTime?              @map("reviewed_at")
+  decisionNote      String?                @map("decision_note")
+  patientMessage    String?                @map("patient_message")
+  inventoryFinalizedAt DateTime?           @map("inventory_finalized_at")
+  order             Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pharmacy          Pharmacy               @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
+  allocations       OrderAllocation[]
+  refundCase        RefundReviewCase?
+  deliveryAssignments DeliveryAssignment[]
+
+  @@index([orderId])
+  @@index([pharmacyId, status])
+  @@map("order_fulfilments")
+}
+
+enum RefundReviewStatus {
+  PENDING_REVIEW
+  RESOLVED
+}
+model RefundReviewCase {
+  id String @id @default(uuid())
+  fulfilmentId String @unique @map("fulfilment_id")
+  orderId String @map("order_id")
+  amountMinor Int @map("amount_minor")
+  currency String
+  status RefundReviewStatus @default(PENDING_REVIEW)
+  reason String
+  createdAt DateTime @default(now()) @map("created_at")
+  fulfilment OrderFulfilment @relation(fields:[fulfilmentId],references:[id],onDelete:Cascade)
+  @@index([orderId,status])
+  @@map("refund_review_cases")
+}
+
+
+model OrderAllocation {
+  id                  String           @id @default(uuid())
+  fulfilmentId        String           @map("fulfilment_id")
+  reservationAllocationId String       @map("reservation_allocation_id")
+  inventoryItemId      String?          @map("inventory_item_id")
+  prescriptionItemId  String           @map("prescription_item_id")
+  medicationName      String           @map("medication_name")
+  selectedQuantity    Int              @map("selected_quantity")
+  unitPriceMinor      Int              @map("unit_price_minor")
+  lineTotalMinor      Int              @map("line_total_minor")
+  fulfilment          OrderFulfilment  @relation(fields: [fulfilmentId], references: [id], onDelete: Cascade)
+
+  @@index([fulfilmentId])
+  @@index([reservationAllocationId])
+  @@map("order_allocations")
+}
+
+model CheckoutPricingConfiguration {
+  id                       String   @id @default(uuid())
+  version                  Int      @unique
+  platformFeeMinor         Int      @default(0) @map("platform_fee_minor")
+  deliveryRatePerKmMinor   Int      @default(60000) @map("delivery_rate_per_km_minor")
+  currency                 String   @default("NGN")
+  effectiveAt              DateTime @default(now()) @map("effective_at")
+  createdByUserId          String?  @map("created_by_user_id")
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  @@index([effectiveAt])
+  @@map("checkout_pricing_configurations")
+}
+
+model UserRole {
+  id        String       @id @default(uuid())
+  userId    String       @map("user_id")
+  role      UserRoleType
+  createdAt DateTime     @default(now()) @map("created_at")
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@map("user_roles")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model AuthDevice {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  label String @db.VarChar(160)
+  userAgent String? @map("user_agent") @db.VarChar(512)
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions AuthSession[]
+
+  @@index([userId])
+  @@map("auth_devices")
+}
+
+model AuthSession {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  deviceId String @map("device_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  mfaVerifiedAt DateTime? @map("mfa_verified_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device AuthDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  refreshCredentials AuthRefreshCredential[]
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model MfaTotp {
+  userId String @id @map("user_id")
+  encryptedSecret String @map("encrypted_secret")
+  enabledAt DateTime? @map("enabled_at")
+  lastUsedStep Int? @map("last_used_step")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mfa_totp")
+}
+
+model MfaRecoveryCode {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  tokenHash String @unique @map("token_hash") @db.Char(64)
+  createdAt DateTime @default(now()) @map("created_at")
+  usedAt DateTime? @map("used_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@map("mfa_recovery_codes")
+}
+
+model MfaLoginChallenge {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  tokenHash String @unique @map("token_hash") @db.Char(64)
+  attempts Int @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("mfa_login_challenges")
+}
+
+model AuthRefreshCredential {
+  id String @id @default(uuid())
+  sessionId String @map("session_id")
+  tokenHash String @unique @map("token_hash") @db.Char(64)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  revokedAt DateTime? @map("revoked_at")
+  session AuthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, revokedAt])
+  @@index([expiresAt])
+  @@map("auth_refresh_credentials")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique @map("token_hash")
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model HealthMetric {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  health_score Int      @default(0)
+  recordedAt   DateTime @default(now()) @map("recorded_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("health_metrics")
+}
+
+model Appointment {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  title      String
+  doctorName String?
+  time       DateTime
+  type       String
+  status     AppointmentStatus @default(SCHEDULED)
+  createdAt  DateTime @default(now()) @map("created_at")
+  cancelledAt DateTime? @map("cancelled_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Medication {
+  id           String  @id @default(uuid())
+  userId       String  @map("user_id")
+  name         String
+  instructions String?
+  time         String
+  isTaken      Boolean @default(false)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+}
+
+enum CareRelationshipStatus {
+  PENDING
+  ACTIVE
+  DECLINED
+  REVOKED
+  EXPIRED
+}
+
+model CareRelationship {
+  id                String                 @id @default(uuid())
+  patientId         String                 @map("patient_id")
+  caregiverId       String?                @map("caregiver_id")
+  caregiverEmail    String                 @map("caregiver_email")
+  invitationKind String @default("DIRECT") @map("invitation_kind")
+  relationshipLabel String? @map("relationship_label")
+  permissionLevel String? @map("permission_level")
+  requestedPermissions String[] @default([]) @map("requested_permissions")
+  joinRequestedAt DateTime? @map("join_requested_at")
+  relationshipType  String                 @map("relationship_type")
+  permissions       String[]               @default([])
+  status            CareRelationshipStatus @default(PENDING)
+  invitationTokenHash String?              @unique @map("invitation_token_hash")
+  expiresAt         DateTime?              @map("expires_at")
+  respondedAt       DateTime?              @map("responded_at")
+  revokedAt         DateTime?              @map("revoked_at")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @default(now()) @updatedAt @map("updated_at")
+  patient           User                   @relation("PatientCareRelationships", fields: [patientId], references: [id], onDelete: Cascade)
+  caregiver         User?                  @relation("CaregiverCareRelationships", fields: [caregiverId], references: [id], onDelete: SetNull)
+
+  @@index([patientId, status])
+  @@index([caregiverId, status])
+  @@index([caregiverEmail, status])
+  @@map("care_relationships")
+}
+
+model Vital {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  type       String
+  value      String
+  unit       String
+  status     String
+  recordedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MedicalRecord {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  categoryId  String?
+  title       String
+  recordType  String    @default("Physical") // e.g. 'Virtual', 'Physical', 'Lab Result', 'Imaging'
+  doctorName  String?
+  facility    String?
+  date        DateTime
+  diagnosis   String?
+  treatment   String?
+  notes       String?
+  documentUrl String?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([categoryId])
+  @@map("medical_records")
+}
+
+model FamilyMember {
+  id       String @id @default(uuid())
+  userId   String @map("user_id")
+  name     String
+  relation String // e.g., "Spouse", "Child", "Parent"
+  age      Int?
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("family_members")
+}
+
+model Category {
+  id        String          @id @default(uuid())
+  userId    String          @map("user_id")
+  name      String // e.g. 'Consultations', 'Dental Records'
+  icon      String // e.g. 'folder', 'stethoscope', 'flask', 'scan', 'syringe', 'pill', 'hospital'
+  isDefault Boolean         @default(false)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  records   MedicalRecord[]
+
+  @@index([userId])
+  @@map("record_categories")
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  type        String // e.g. 'LAB_UPLOAD', 'PERMISSION_GRANTED', 'EMAIL_SHARE'
+  description String
+  meta        Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("activity_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+
+enum DeliveryAssignmentStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COMPLETED
+}
+
+model DeliveryPartner {
+  id String @id @default(uuid())
+  userId String @unique @map("user_id")
+  displayName String @map("display_name")
+  isActive Boolean @default(false) @map("is_active")
+  configuredByUserId String @map("configured_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  assignments DeliveryAssignment[]
+  @@index([isActive])
+  @@map("delivery_partners")
+}
+
+model DeliveryAssignment {
+  id String @id @default(uuid())
+  fulfilmentId String @map("fulfilment_id")
+  partnerId String @map("partner_id")
+  assignedByUserId String @map("assigned_by_user_id")
+  status DeliveryAssignmentStatus @default(PENDING)
+  rejectionReason String? @map("rejection_reason") @db.VarChar(300)
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  respondedAt DateTime? @map("responded_at")
+  pickedUpAt DateTime? @map("picked_up_at")
+  outForDeliveryAt DateTime? @map("out_for_delivery_at")
+  deliveredAt DateTime? @map("delivered_at")
+  fulfilment OrderFulfilment @relation(fields: [fulfilmentId], references: [id], onDelete: Restrict)
+  partner DeliveryPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  trackingPoints DeliveryTrackingPoint[]
+  @@index([partnerId, status, assignedAt])
+  @@index([fulfilmentId, assignedAt])
+  @@map("delivery_assignments")
+}
+
+model DeliveryTrackingPoint {
+  id String @id @default(uuid())
+  assignmentId String @map("assignment_id")
+  latitude Float
+  longitude Float
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  assignment DeliveryAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  @@index([assignmentId, recordedAt])
+  @@map("delivery_tracking_points")
+}
+
+model CaregiverProfile {
+  userId String @id @map("user_id")
+  firstName String @map("first_name")
+  lastName String @map("last_name")
+  country String
+  state String
+  city String
+  caregiverType String @map("caregiver_type")
+  connectionMode String @map("connection_mode")
+  connectionReference String @map("connection_reference")
+  relationship String
+  termsAcceptedAt DateTime @map("terms_accepted_at")
+  privacyAcceptedAt DateTime @map("privacy_accepted_at")
+  consentVersion String @map("consent_version")
+  createdAt DateTime @default(now()) @map("created_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("caregiver_profiles")
+}
+
+model DependentProfile {
+  id String @id @default(uuid())
+  patientId String @map("patient_id")
+  fullName String @map("full_name")
+  nickname String?
+  dateOfBirth DateTime? @db.Date @map("date_of_birth")
+  gender String?
+  bloodGroup String? @map("blood_group")
+  genotype String?
+  allergies String[] @default([])
+  conditions String[] @default([])
+  careType String? @map("care_type")
+  immunizationStatus String? @map("immunization_status")
+  milestones String[] @default([])
+  weightKg Float? @map("weight_kg")
+  heightCm Float? @map("height_cm")
+  primaryPhysician String? @map("primary_physician")
+  insuranceProvider String? @map("insurance_provider")
+  policyNumber String? @map("policy_number")
+  coManagerIds String[] @default([]) @map("co_manager_ids")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  @@index([patientId, createdAt])
+  @@map("dependent_profiles")
+}
+
+
+enum OrganisationType {
+  HOSPITAL
+  CLINIC
+  LABORATORY
+  DIAGNOSTIC_CENTRE
+  OTHER
+}
+
+enum OrganisationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+model Organisation {
+  id String @id @default(uuid())
+  ownerId String @unique @map("owner_id")
+  type OrganisationType
+  name String
+  address String
+  country String
+  state String
+  city String
+  contactEmail String @map("contact_email")
+  contactPhone String @map("contact_phone")
+  status OrganisationStatus @default(PENDING)
+  decisionNote String? @map("decision_note")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  onboarding OrganisationSubmission?
+  memberPlans HospitalMemberPlan[]
+  identityOrganization IdentityOrganization?
+
+  @@index([status, type])
+  @@map("organisations")
+}
+
+// Authentication scopes link existing facility records without replacing their
+// established onboarding, compliance or commercial data.
+model IdentityOrganization {
+  id String @id @default(uuid())
+  type IdentityOrganizationType
+  organisationId String? @unique @map("organisation_id")
+  pharmacyId String? @unique @map("pharmacy_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  pharmacy Pharmacy? @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
+  memberships OrganizationMembership[]
+
+  @@map("identity_organizations")
+}
+
+model OrganizationMembership {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  organizationId String @map("organization_id")
+  status IdentityMembershipStatus @default(PENDING)
+  joinedAt DateTime? @map("joined_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  organization IdentityOrganization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  roles MembershipRole[]
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, status])
+  @@index([userId, status])
+  @@map("organization_memberships")
+}
+
+model AccessRole {
+  code String @id
+  scope AccessRoleScope
+  description String?
+  permissions AccessRolePermission[]
+  membershipRoles MembershipRole[]
+  platformAssignments PlatformRoleAssignment[]
+
+  @@map("access_roles")
+}
+
+model AccessPermission {
+  code String @id
+  description String?
+  roles AccessRolePermission[]
+
+  @@map("access_permissions")
+}
+
+model AccessRolePermission {
+  roleCode String @map("role_code")
+  permissionCode String @map("permission_code")
+  role AccessRole @relation(fields: [roleCode], references: [code], onDelete: Cascade)
+  permission AccessPermission @relation(fields: [permissionCode], references: [code], onDelete: Cascade)
+
+  @@id([roleCode, permissionCode])
+  @@map("access_role_permissions")
+}
+
+model MembershipRole {
+  membershipId String @map("membership_id")
+  roleCode String @map("role_code")
+  membership OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  role AccessRole @relation(fields: [roleCode], references: [code], onDelete: Restrict)
+
+  @@id([membershipId, roleCode])
+  @@map("membership_roles")
+}
+
+model PlatformRoleAssignment {
+  userId String @map("user_id")
+  roleCode String @map("role_code")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role AccessRole @relation(fields: [roleCode], references: [code], onDelete: Restrict)
+
+  @@id([userId, roleCode])
+  @@map("platform_role_assignments")
+}
+
+// Pharmacy keeps its existing owner, role and compliance status. This contains
+// only extra onboarding evidence for the live organisation form.
+model OrganisationSubmission {
+  id String @id @default(uuid())
+  organisationId String? @unique @map("organisation_id")
+  pharmacyId String? @unique @map("pharmacy_id")
+  details Json
+  termsAcceptedAt DateTime @map("terms_accepted_at")
+  privacyAcceptedAt DateTime @map("privacy_accepted_at")
+  healthDataAcceptedAt DateTime? @map("health_data_accepted_at")
+  consentVersion String @default("1.0") @map("consent_version")
+  createdAt DateTime @default(now()) @map("created_at")
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  pharmacy Pharmacy? @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
+  documents OrganisationDocument[]
+
+  @@map("organisation_submissions")
+}
+
+model OrganisationDocument {
+  id String @id @default(uuid())
+  submissionId String @map("submission_id")
+  key String
+  name String
+  contentType String @map("content_type")
+  content Bytes
+  submission OrganisationSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, key])
+  @@map("organisation_documents")
+}
+
+
+enum HospitalMemberPlanStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model HospitalMemberPlan {
+  id String @id @default(uuid())
+  hospitalId String @map("hospital_id")
+  name String
+  description String?
+  feeMinor Int @map("fee_minor")
+  status HospitalMemberPlanStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
+  hospital Organisation @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+
+  @@index([hospitalId, status, createdAt])
+  @@map("hospital_member_plans")
+}

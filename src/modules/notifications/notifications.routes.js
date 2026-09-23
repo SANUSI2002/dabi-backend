@@ -1,0 +1,12 @@
+import express from 'express';
+import { protect } from '../../middleware/authMiddleware.js';
+import { validate } from '../../middleware/validateMiddleware.js';
+import { listNotifications, markAllNotificationsRead, markNotificationRead } from './notifications.controller.js';
+import { listNotificationsSchema, notificationIdSchema } from './notifications.validator.js';
+const router = express.Router();
+router.use(protect);
+router.get('/', validate(listNotificationsSchema), listNotifications);
+router.patch('/read-all', markAllNotificationsRead);
+router.patch('/:id/read', validate(notificationIdSchema), markNotificationRead);
+router.use((err, req, res, next) => res.status(500).json({ status: 'error', message: 'Notifications module temporarily unavailable' }));
+export default router;

@@ -1,0 +1,2 @@
+import{z}from'zod';const uuid=z.string().uuid();export const id=z.object({params:z.object({id:uuid}).strict()});export const decision=z.object({params:z.object({id:uuid}).strict(),body:z.object({decision:z.enum(['APPROVED_FOR_DISPENSING','CLARIFICATION_REQUIRED','REJECTED','UNABLE_TO_FULFILL']),note:z.string().trim().min(1).max(1000),patientMessage:z.string().trim().min(1).max(500).optional()}).strict()});
+export const preparation=z.object({params:z.object({id:uuid}).strict(),body:z.object({transition:z.enum(['PREPARING','READY_FOR_PICKUP'])}).strict()});

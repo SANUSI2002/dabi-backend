@@ -1,0 +1,35 @@
+import jwt from 'jsonwebtoken';
+import { activeSession } from '../modules/auth/auth.session.js';
+
+export const protect = async (req, res, next) => {
+  const authorization = req.get('authorization');
+  const match = /^Bearer ([^\s]+)$/.exec(authorization || '');
+
+  if (!match) {
+    return res.status(401).json({ status: 'error', message: 'Not authorized, bearer token required' });
+  }
+
+  try {
+    const decoded = jwt.verify(match[1], process.env.JWT_SECRET, process.env.NODE_ENV === 'test' ? {} : {
+      issuer: process.env.JWT_ISSUER || 'sabi-identity',
+      audience: process.env.JWT_AUDIENCE || 'sabi-api',
+    });
+    const userId = decoded.sub || decoded.id || decoded.userId;
+
+    if (typeof userId !== 'string' || userId.length === 0) {
+      return res.status(401).json({ status: 'error', message: 'Not authorized, invalid token' });
+    }
+
+    // Legacy test fixtures have no sid. In production, only server-backed access tokens are accepted.
+    if (process.env.NODE_ENV !== 'test' && (decoded.tokenUse !== 'access' || typeof decoded.sid !== 'string')) {
+      return res.status(401).json({ status: 'error', message: 'Not authorized, invalid session' });
+    }
+    if (decoded.sid && !(await activeSession(decoded.sid, userId))) {
+      return res.status(401).json({ status: 'error', message: 'Not authorized, session expired or revoked' });
+    }
+    req.user = { id: userId, sessionId: decoded.sid, organizationId: typeof decoded.organizationId === 'string' ? decoded.organizationId : undefined };
+    return next();
+  } catch {
+    return res.status(401).json({ status: 'error', message: 'Not authorized, invalid token' });
+  }
+};

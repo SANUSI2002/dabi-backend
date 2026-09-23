@@ -1,0 +1,14 @@
+import express from 'express';
+import { protect } from '../../middleware/authMiddleware.js';
+import { validate } from '../../middleware/validateMiddleware.js';
+import { appointmentIdSchema, createAppointmentSchema, listAppointmentsSchema, updateAppointmentSchema } from './appointments.validator.js';
+import { cancelAppointment, createAppointment, getAppointment, listAppointments, updateAppointment } from './appointments.controller.js';
+const router = express.Router();
+router.use(protect);
+router.get('/', validate(listAppointmentsSchema), listAppointments);
+router.get('/:id', validate(appointmentIdSchema), getAppointment);
+router.post('/', validate(createAppointmentSchema), createAppointment);
+router.patch('/:id', validate(updateAppointmentSchema), updateAppointment);
+router.delete('/:id', validate(appointmentIdSchema), cancelAppointment);
+router.use((err, req, res, next) => res.status(500).json({ status: 'error', message: 'Appointments module temporarily unavailable' }));
+export default router;
