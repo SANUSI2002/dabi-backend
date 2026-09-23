@@ -4,7 +4,7 @@ import * as AuthModel from './auth.model.js';
 import { generateAccessToken } from './auth.token.js';
 import { browserRequest, clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './auth.cookie.js';
 import { activeSession, createSession, listSessions, revokeSession, revokeUserSessions, rotateRefreshToken, sessionIdForRefresh, userIdForRefresh } from './auth.session.js';
-import { sendPasswordResetEmail } from './auth.email.js';
+import { passwordResetEmailAllowedFor, passwordResetEmailConfigured, sendPasswordResetEmail } from './auth.email.js';
 import { activeMembershipFor, membershipsFor } from '../identity/identity.service.js';
 import { beginLoginChallenge, hasActiveMfa } from './auth.mfa.js';
 
@@ -131,18 +131,21 @@ export const getCurrentUser = async (req, res, next) => {
   }
 };
 
-const resetMessage = 'If an account exists for that email, a reset link has been sent.';
+const resetMessage = 'If an account exists for that email, password recovery instructions have been requested.';
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
 export const requestPasswordReset = async (req, res, next) => {
   try {
+    if (!passwordResetEmailConfigured()) return res.status(503).json({ status: 'error', message: 'Password recovery email is not configured yet. Please contact Sabi support.' });
+    if (!passwordResetEmailAllowedFor(req.body.email)) return res.status(503).json({ status: 'error', message: 'Password recovery email is limited to the test account until a sending domain is verified.' });
     const user = await AuthModel.findUserByEmail(req.body.email);
     if (user) {
       const rawToken = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-      await AuthModel.createPasswordResetToken(user.id, hashToken(rawToken), expiresAt);
+      const reset = await AuthModel.createPasswordResetToken(user.id, hashToken(rawToken), expiresAt);
       const baseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-      await sendPasswordResetEmail({ email: user.email, resetUrl: `${baseUrl}/reset-password/${user.id}/${rawToken}` });
+      const result = await sendPasswordResetEmail({ email: user.email, resetUrl: `${baseUrl}/reset-password/${user.id}#${rawToken}` });
+      if (!result.delivered) await AuthModel.revokePasswordResetToken(reset.id);
     }
     return res.status(202).json({ status: 'success', message: resetMessage });
   } catch (error) { return next(error); }
@@ -158,6 +161,7 @@ export const confirmPasswordReset = async (req, res, next) => {
     const passwordHash = await bcrypt.hash(password, 12);
     await AuthModel.updatePassword(uid, passwordHash);
     await AuthModel.consumePasswordResetToken(reset.id);
+    await AuthModel.revokeOtherPasswordResetTokens(uid, reset.id);
     await AuthModel.revokeRefreshTokens(uid);
     await revokeUserSessions(uid);
     return res.status(200).json({ status: 'success', message: 'Password reset successfully' });

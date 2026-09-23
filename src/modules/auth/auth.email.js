@@ -1,8 +1,43 @@
-// Provider-neutral seam. Configure an email provider in deployment and replace
-// this adapter; no reset secret is logged or returned through HTTP.
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+
+export const passwordResetEmailConfigured = () => Boolean(
+  process.env.RESEND_API_KEY?.trim()
+  && process.env.PASSWORD_RESET_EMAIL_FROM?.trim()
+  && !process.env.PASSWORD_RESET_EMAIL_FROM.includes('example.com')
+  && (process.env.PASSWORD_RESET_EMAIL_FROM.trim() !== 'onboarding@resend.dev' || process.env.RESEND_TEST_RECIPIENT?.trim()),
+);
+
+export const passwordResetEmailAllowedFor = (email) => {
+  if (process.env.PASSWORD_RESET_EMAIL_FROM?.trim() !== 'onboarding@resend.dev') return true;
+  return email.trim().toLowerCase() === process.env.RESEND_TEST_RECIPIENT?.trim().toLowerCase();
+};
+
 export const sendPasswordResetEmail = async ({ email, resetUrl }) => {
-  if (!process.env.PASSWORD_RESET_EMAIL_FROM) return { delivered: false };
-  void email;
-  void resetUrl;
-  return { delivered: false };
+  if (!passwordResetEmailConfigured()) return { delivered: false };
+
+  try {
+    const response = await globalThis.fetch(RESEND_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: process.env.PASSWORD_RESET_EMAIL_FROM,
+        to: [email],
+        subject: 'Reset your Sabi ID password',
+        text: `Use this link to reset your Sabi ID password. It expires in 30 minutes and can be used once.\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
+      }),
+      signal: globalThis.AbortSignal.timeout(10_000),
+    });
+    // Provider errors can include request details. Never log the response body or reset URL.
+    if (!response.ok) {
+      console.error(`[auth] Password-reset email provider returned HTTP ${response.status}.`);
+      return { delivered: false };
+    }
+    return { delivered: true };
+  } catch {
+    console.error('[auth] Password-reset email provider request failed.');
+    return { delivered: false };
+  }
 };

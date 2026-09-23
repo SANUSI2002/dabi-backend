@@ -42,6 +42,8 @@ export const deleteRefreshTokenById = (id) => prisma.refreshToken.delete({ where
 export const deleteRefreshToken = (token) => prisma.refreshToken.deleteMany({ where: { token } });
 export const revokeRefreshTokens = (userId) => prisma.refreshToken.deleteMany({ where: { userId } });
 export const createPasswordResetToken = (userId, tokenHash, expiresAt) => prisma.passwordResetToken.create({ data: { userId, tokenHash, expiresAt } });
+export const revokePasswordResetToken = (id) => prisma.passwordResetToken.update({ where: { id }, data: { revokedAt: new Date() } });
 export const findPasswordResetToken = (tokenHash) => prisma.passwordResetToken.findUnique({ where: { tokenHash } });
 export const consumePasswordResetToken = (id) => prisma.passwordResetToken.update({ where: { id }, data: { usedAt: new Date() } });
+export const revokeOtherPasswordResetTokens = (userId, usedId) => prisma.passwordResetToken.updateMany({ where: { userId, id: { not: usedId }, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
 export const updatePassword = (userId, password) => prisma.user.update({ where: { id: userId }, data: { password } });
