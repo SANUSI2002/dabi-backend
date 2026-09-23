@@ -1,5 +1,26 @@
 # Sabi identity foundation API (Phase 2)
 
+> Current test-release addendum (23 September 2026): Some Phase 2 notes below describe the original foundation and are superseded by the following email-verification and staff-invitation contracts. The test API now uses server-backed sessions, MFA, and a verified Resend sender.
+
+## Email verification and staff invitations
+
+Patient registration creates a `PENDING` Sabi ID. The API emails a random, single-use verification link through the server-side Resend integration and returns whether the send was accepted. Only the token's SHA-256 hash is stored. Until confirmation, correct credentials return `EMAIL_VERIFICATION_REQUIRED` and no session is issued. `POST /email-verification/request` accepts `{email}` and always returns a generic 202 for a configured sender, with a 60-second per-account cooldown. `POST /email-verification/confirm` accepts `{uid,token}` and atomically consumes a 24-hour token, marks the email verified, and activates the account. Configure `PATIENT_PORTAL_URL` to the HTTPS telemedicine origin; do not place the email API key in any frontend environment variable. Other existing registration paths (organization, pharmacy, caregiver and professional onboarding) retain their earlier behavior and need a separate migration before a universal email-verification claim can be made.
+
+Staff invitations are separate from public registration and the legacy `POST /organizations/:organizationId/memberships` route. They support both new and existing Sabi IDs. No role is assigned until the recipient proves mailbox possession by following a 48-hour, single-use link and accepts it. Existing identities additionally supply their current password. New identities set a full name and a policy-compliant password. Accepted invitation links establish email ownership but do not bypass Command Center MFA. Raw tokens appear only in the email link's URL fragment and are never returned by list/preview endpoints or written to audit logs; the database stores SHA-256 hashes. An invitation's actor, scope, role and lifecycle are audited. Revoked, expired, used, wrong-scope and wrong-tenant invitations cannot be accepted.
+
+| Method and route | Authorization | Behavior |
+| --- | --- | --- |
+| `POST /invitations/preview` | Link token, rate limited | `{id,token}`; returns recipient email, scope, role, organization name and whether an account already exists. No secret returned. |
+| `POST /invitations/accept` | Link token, rate limited | `{id,token,password,fullName?}`; claims once and creates the platform assignment or active tenant membership in a transaction. |
+| `GET /platform/invitations/roles` | Platform role, `platform.staff.invite`, recent MFA | Roles the current operator may grant. A platform administrator can invite support/compliance roles only; a super administrator may additionally invite platform/security admins. `SABI_SUPER_ADMIN` cannot be invited through this API. |
+| `GET/POST /platform/invitations` | Same | List last 50 or create with `{email,roleCode}`. |
+| `POST /platform/invitations/:id/revoke` | Same | Revoke a pending link. |
+| `GET /organizations/:organizationId/invitations/roles` | Active selected tenant, `membership.manage`, recent MFA | Allowed non-clinical roles for that tenant type and caller. |
+| `GET/POST /organizations/:organizationId/invitations` | Same | List last 50 or create with `{email,roleCode}`. Path organization must equal signed selected organization. |
+| `POST /organizations/:organizationId/invitations/:id/revoke` | Same | Revoke a pending link in that tenant only. |
+
+Clinical professional invitations are intentionally excluded here; they continue through credential verification. Tenant admins cannot grant owner roles. `HOSPITAL_ADMIN` and `FINANCE_OFFICER` require an organization owner. Issuance requires the verified Resend sender and an HTTPS `CLIENT_URL` serving `/accept-invite/:id#token`. Provider failure revokes the unsent link. No live recipient should be invited until the operator chooses the address and role.
+
 All paths below are under `/api/v1/auth`. The original patient registration, login, refresh, logout, password-reset and `/me` paths remain available. Every protected call uses `Authorization: Bearer <access-token>`. Tokens are issued by this backend only; no role, membership or permission sent by a browser is authoritative.
 
 | Method and route | Authentication and permission | Request | Response | Errors and security notes |

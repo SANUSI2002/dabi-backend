@@ -37,6 +37,8 @@ model User {
   mfaRecoveryCodes MfaRecoveryCode[]
   mfaLoginChallenges MfaLoginChallenge[]
   passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  identityInvitationsSent IdentityInvitation[] @relation("IdentityInvitationInviter")
   careRelationshipsOwned CareRelationship[] @relation("PatientCareRelationships")
   careRelationshipsHeld CareRelationship[] @relation("CaregiverCareRelationships")
   professionalProfile ProfessionalProfile?
@@ -720,6 +722,41 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
+model EmailVerificationToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique @map("token_hash")
+  userId    String    @map("user_id")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("email_verification_tokens")
+}
+
+model IdentityInvitation {
+  id String @id @default(uuid())
+  tokenHash String @unique @map("token_hash")
+  email String
+  scope String
+  organizationId String? @map("organization_id")
+  roleCode String @map("role_code")
+  invitedByUserId String @map("invited_by_user_id")
+  expiresAt DateTime @map("expires_at")
+  acceptedAt DateTime? @map("accepted_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  inviter User @relation("IdentityInvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  organization IdentityOrganization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([email, scope, organizationId])
+  @@index([expiresAt])
+  @@map("identity_invitations")
+}
+
 model HealthMetric {
   id           String   @id @default(uuid())
   userId       String   @map("user_id")
@@ -1039,6 +1076,7 @@ model IdentityOrganization {
   organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   pharmacy Pharmacy? @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
   memberships OrganizationMembership[]
+  invitations IdentityInvitation[]
 
   @@map("identity_organizations")
 }

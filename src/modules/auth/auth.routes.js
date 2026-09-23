@@ -1,19 +1,24 @@
 import express from 'express';
 import { protect } from '../../middleware/authMiddleware.js';
 import { validate } from '../../middleware/validateMiddleware.js';
-import { confirmPasswordReset, getCurrentUser, getSessions, login, logout, logoutEverywhere, logoutOtherDevices, refreshAccessToken, registerPatient, requestPasswordReset, revokeDeviceSession } from './auth.controller.js';
-import { loginSchema, mfaConfirmSchema, mfaEnrollSchema, mfaFactorSchema, mfaLoginSchema, passwordResetConfirmSchema, passwordResetRequestSchema, refreshTokenSchema, registerPatientSchema, sessionIdSchema } from './auth.validator.js';
+import { confirmEmailVerification, confirmPasswordReset, getCurrentUser, getSessions, login, logout, logoutEverywhere, logoutOtherDevices, refreshAccessToken, registerPatient, requestEmailVerification, requestPasswordReset, revokeDeviceSession } from './auth.controller.js';
+import { emailVerificationConfirmSchema, emailVerificationRequestSchema, loginSchema, mfaConfirmSchema, mfaEnrollSchema, mfaFactorSchema, mfaLoginSchema, passwordResetConfirmSchema, passwordResetRequestSchema, refreshTokenSchema, registerPatientSchema, sessionIdSchema } from './auth.validator.js';
 import { requireTrustedOrigin } from './auth.cookie.js';
-import { loginLimiter, mfaLimiter, registrationLimiter, resetConfirmLimiter, resetRequestLimiter, refreshLimiter, sensitiveLimiter } from '../../middleware/rateLimitMiddleware.js';
+import { invitationAcceptLimiter, invitationPreviewLimiter, loginLimiter, mfaLimiter, registrationLimiter, resetConfirmLimiter, resetRequestLimiter, refreshLimiter, sensitiveLimiter, verificationConfirmLimiter, verificationRequestLimiter } from '../../middleware/rateLimitMiddleware.js';
 import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
 import { confirmTotp, enrollTotp, mfaStatus, removeMfa, replaceRecoveryCodes, stepUp, verifyMfaLogin } from './auth.mfa.controller.js';
 import { requireOrganization, requirePermission, requirePlatform } from '../../middleware/accessMiddleware.js';
 import { acceptMembership, inviteMembership, listManagedMemberships, organizations, platformAssignment, platformContext, revokeMembership, switchOrganization } from '../identity/identity.controller.js';
-import { inviteMembershipSchema, managedMembershipSchema, managedOrganizationSchema, membershipIdSchema, switchOrganizationSchema } from '../identity/identity.validator.js';
+import { identityInvitationAcceptSchema, identityInvitationCreateSchema, identityInvitationIdSchema, identityInvitationTokenSchema, inviteMembershipSchema, managedMembershipSchema, managedOrganizationSchema, membershipIdSchema, switchOrganizationSchema, tenantInvitationIdSchema } from '../identity/identity.validator.js';
+import { acceptIdentityInvitation, createPlatformInvitation, createTenantInvitation, invitationRoles, listPlatformInvitations, listTenantInvitations, previewIdentityInvitation, revokePlatformInvitation, revokeTenantInvitation } from '../identity/identity.invitations.controller.js';
 
 const router = express.Router();
 
 router.post('/register/patient', registrationLimiter, validate(registerPatientSchema), registerPatient);
+router.post('/email-verification/request', verificationRequestLimiter, validate(emailVerificationRequestSchema), requestEmailVerification);
+router.post('/email-verification/confirm', verificationConfirmLimiter, validate(emailVerificationConfirmSchema), confirmEmailVerification);
+router.post('/invitations/preview', invitationPreviewLimiter, validate(identityInvitationTokenSchema), previewIdentityInvitation);
+router.post('/invitations/accept', invitationAcceptLimiter, validate(identityInvitationAcceptSchema), acceptIdentityInvitation);
 router.post('/login', loginLimiter, requireTrustedOrigin, validate(loginSchema), login);
 router.post('/mfa/login/verify', mfaLimiter, requireTrustedOrigin, validate(mfaLoginSchema), verifyMfaLogin);
 router.get('/mfa/status', protect, mfaStatus);
@@ -37,6 +42,14 @@ router.post('/memberships/:id/accept', protect, validate(membershipIdSchema), ac
 router.get('/organizations/:organizationId/memberships', protect, validate(managedOrganizationSchema), requireOrganization, requirePermission('membership.read'), listManagedMemberships);
 router.post('/organizations/:organizationId/memberships', protect, validate(inviteMembershipSchema), requireOrganization, requirePermission('membership.manage'), requireRecentMfa, inviteMembership);
 router.post('/organizations/:organizationId/memberships/:id/revoke', protect, validate(managedMembershipSchema), requireOrganization, requirePermission('membership.manage'), requireRecentMfa, revokeMembership);
+router.get('/platform/invitations', protect, requirePlatform, requirePermission('platform.staff.invite'), requireRecentMfa, listPlatformInvitations);
+router.get('/platform/invitations/roles', protect, requirePlatform, requirePermission('platform.staff.invite'), requireRecentMfa, invitationRoles);
+router.post('/platform/invitations', protect, sensitiveLimiter, requirePlatform, requirePermission('platform.staff.invite'), requireRecentMfa, validate(identityInvitationCreateSchema), createPlatformInvitation);
+router.post('/platform/invitations/:id/revoke', protect, sensitiveLimiter, validate(identityInvitationIdSchema), requirePlatform, requirePermission('platform.staff.invite'), requireRecentMfa, revokePlatformInvitation);
+router.get('/organizations/:organizationId/invitations', protect, validate(managedOrganizationSchema), requireOrganization, requirePermission('membership.manage'), requireRecentMfa, listTenantInvitations);
+router.get('/organizations/:organizationId/invitations/roles', protect, validate(managedOrganizationSchema), requireOrganization, requirePermission('membership.manage'), requireRecentMfa, invitationRoles);
+router.post('/organizations/:organizationId/invitations', protect, sensitiveLimiter, validate(managedOrganizationSchema), requireOrganization, requirePermission('membership.manage'), requireRecentMfa, validate(identityInvitationCreateSchema), createTenantInvitation);
+router.post('/organizations/:organizationId/invitations/:id/revoke', protect, sensitiveLimiter, validate(tenantInvitationIdSchema), requireOrganization, requirePermission('membership.manage'), requireRecentMfa, revokeTenantInvitation);
 router.get('/platform-context', protect, requirePlatform, requireRecentMfa, platformContext);
 router.get('/platform-assignment', protect, requirePlatform, platformAssignment);
 

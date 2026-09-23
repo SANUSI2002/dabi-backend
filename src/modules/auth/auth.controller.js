@@ -4,7 +4,7 @@ import * as AuthModel from './auth.model.js';
 import { generateAccessToken } from './auth.token.js';
 import { browserRequest, clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './auth.cookie.js';
 import { activeSession, createSession, listSessions, revokeSession, revokeUserSessions, rotateRefreshToken, sessionIdForRefresh, userIdForRefresh } from './auth.session.js';
-import { passwordResetEmailAllowedFor, passwordResetEmailConfigured, sendPasswordResetEmail } from './auth.email.js';
+import { passwordResetEmailAllowedFor, passwordResetEmailConfigured, sendPasswordResetEmail, sendEmailVerificationEmail, verificationEmailAllowedFor, verificationEmailConfigured } from './auth.email.js';
 import { activeMembershipFor, membershipsFor } from '../identity/identity.service.js';
 import { beginLoginChallenge, hasActiveMfa } from './auth.mfa.js';
 
@@ -17,10 +17,26 @@ const toUserResponse = (user) => ({
   ...(user.caregiverProfile ? { caregiverProfile: user.caregiverProfile } : {}),
 });
 
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+const verificationMessage = 'If an unverified patient account exists for that email, a verification link has been requested.';
+const patientPortalUrl = () => (process.env.PATIENT_PORTAL_URL || 'http://127.0.0.1:5174').replace(/\/$/, '');
+
+async function sendPatientVerification(user) {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const token = await AuthModel.createEmailVerificationToken(user.id, hashToken(rawToken), expiresAt);
+  const result = await sendEmailVerificationEmail({ email: user.email, verificationUrl: `${patientPortalUrl()}/verify-email/${user.id}#${rawToken}` });
+  if (!result.delivered) await AuthModel.revokeEmailVerificationToken(token.id);
+  else await AuthModel.revokeOtherEmailVerificationTokens(user.id, token.id);
+  return result.delivered;
+}
+
 export const registerPatient = async (req, res, next) => {
   try {
+    if (!verificationEmailConfigured() || !verificationEmailAllowedFor(req.body.email) || (process.env.NODE_ENV === 'production' && !/^https:\/\/[^/]+$/.test(process.env.PATIENT_PORTAL_URL || ''))) return res.status(503).json({ status: 'error', message: 'Patient email verification is not configured yet. Please try again later.' });
     const user = await AuthModel.createPatient(req.body);
-    return res.status(201).json({ status: 'success', message: 'Patient registered successfully', user: toUserResponse(user) });
+    const emailSent = await sendPatientVerification(user);
+    return res.status(201).json({ status: 'success', message: emailSent ? 'Patient registered. Check your email to activate your account.' : 'Patient registered, but the verification email could not be sent. Request a new link.', emailSent, user: toUserResponse(user) });
   } catch (error) {
     if (error?.code === 'P2002') return res.status(409).json({ status: 'error', message: 'User with this email already exists' });
     return next(error);
@@ -31,9 +47,13 @@ export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     const user = await AuthModel.findUserByEmail(email);
-    if (!user || !(await bcrypt.compare(password, user.password)) || (user.accountStatus && user.accountStatus !== 'ACTIVE')) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
     }
+    if (user.accountStatus === 'PENDING' && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT')) {
+      return res.status(403).json({ status: 'error', error: { code: 'EMAIL_VERIFICATION_REQUIRED', message: 'Verify your email before signing in.' } });
+    }
+    if (user.accountStatus && user.accountStatus !== 'ACTIVE') return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
     if (await hasActiveMfa(user.id)) {
       const challengeToken = await beginLoginChallenge(user.id);
       res.set('Cache-Control', 'no-store');
@@ -132,7 +152,25 @@ export const getCurrentUser = async (req, res, next) => {
 };
 
 const resetMessage = 'If an account exists for that email, password recovery instructions have been requested.';
-const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+export const requestEmailVerification = async (req, res, next) => {
+  try {
+    if (!verificationEmailConfigured() || (process.env.NODE_ENV === 'production' && !/^https:\/\/[^/]+$/.test(process.env.PATIENT_PORTAL_URL || ''))) return res.status(503).json({ status: 'error', message: 'Email verification is temporarily unavailable.' });
+    const user = await AuthModel.findUserByEmail(req.body.email);
+    if (user?.accountStatus === 'PENDING' && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT') && verificationEmailAllowedFor(user.email)) {
+      const latest = await AuthModel.latestEmailVerificationToken(user.id);
+      if (!latest || latest.createdAt < new Date(Date.now() - 60_000)) await sendPatientVerification(user);
+    }
+    return res.status(202).json({ status: 'success', message: verificationMessage });
+  } catch (error) { return next(error); }
+};
+
+export const confirmEmailVerification = async (req, res, next) => {
+  try {
+    const verified = await AuthModel.confirmEmailVerificationToken(req.body.uid, hashToken(req.body.token));
+    if (!verified) return res.status(400).json({ status: 'error', message: 'This verification link is invalid, expired, or already used.' });
+    return res.status(200).json({ status: 'success', message: 'Email verified. You can now sign in.' });
+  } catch (error) { return next(error); }
+};
 
 export const requestPasswordReset = async (req, res, next) => {
   try {

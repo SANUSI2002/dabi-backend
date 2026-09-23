@@ -34,4 +34,6 @@ export const mfaEnrollSchema = z.object({ body: z.object({ password: z.string().
 export const mfaConfirmSchema = z.object({ body: z.object({ code: z.string().regex(/^\d{6}$/) }).strict() });
 
 export const passwordResetRequestSchema = z.object({ body: z.object({ email: z.string().email().max(320) }).strict() });
+export const emailVerificationRequestSchema = z.object({ body: z.object({ email: z.string().email().max(320) }).strict() });
+export const emailVerificationConfirmSchema = z.object({ body: z.object({ uid: z.string().uuid(), token: z.string().regex(/^[a-f0-9]{64}$/) }).strict() });
 export const passwordResetConfirmSchema = z.object({ body: z.object({ uid: z.string().uuid(), token: z.string().min(32).max(256), password: passwordSchema.regex(/\d/, 'Password must include a number').regex(/[^A-Za-z0-9]/, 'Password must include a symbol'), confirmPassword: z.string() }).strict().refine((data) => data.password === data.confirmPassword, { message: 'Passwords do not match', path: ['confirmPassword'] }) });
