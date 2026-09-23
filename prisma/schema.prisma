@@ -1167,6 +1167,75 @@ model OrganisationSubmission {
   @@map("organisation_submissions")
 }
 
+// Commercial offers are authored as drafts and become public only after an
+// explicit publish action. Historical versions are never edited in place.
+model PlatformPackage {
+  id String @id @default(uuid())
+  code String @unique
+  name String
+  description String
+  recommended Boolean @default(false)
+  active Boolean @default(true)
+  branchLimit Int @default(1) @map("branch_limit")
+  storageLimitGb Int @default(10) @map("storage_limit_gb")
+  supportLevel String @default("STANDARD") @map("support_level")
+  publishedVersion Int? @map("published_version")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  versions PlatformPackageVersion[]
+  applications PlatformApplication[]
+
+  @@map("platform_packages")
+}
+
+model PlatformPackageVersion {
+  id String @id @default(uuid())
+  packageId String @map("package_id")
+  version Int
+  status String @default("DRAFT")
+  currency String @default("NGN")
+  monthlyPriceMinor Int @map("monthly_price_minor")
+  annualPriceMinor Int @map("annual_price_minor")
+  moduleKeys String[] @default([]) @map("module_keys")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  publishedAt DateTime? @map("published_at")
+  package PlatformPackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  applications PlatformApplication[]
+
+  @@unique([packageId, version])
+  @@index([packageId, status])
+  @@map("platform_package_versions")
+}
+
+// An application is deliberately NOT an IdentityOrganization or a tenant.
+// Email possession is required before it enters the review queue.
+model PlatformApplication {
+  id String @id @default(uuid())
+  clientDraftId String @unique @map("client_draft_id")
+  requestHash String @map("request_hash")
+  reference String @unique
+  ownerEmail String @map("owner_email")
+  organizationName String @map("organization_name")
+  status String @default("AWAITING_EMAIL")
+  details Json
+  packageId String @map("package_id")
+  packageVersionId String @map("package_version_id")
+  billingCycle String @map("billing_cycle")
+  verificationTokenHash String? @unique @map("verification_token_hash")
+  verificationExpiresAt DateTime? @map("verification_expires_at")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  submittedAt DateTime? @map("submitted_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  package PlatformPackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  packageVersion PlatformPackageVersion @relation(fields: [packageVersionId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([ownerEmail, createdAt])
+  @@map("platform_applications")
+}
+
 model OrganisationDocument {
   id String @id @default(uuid())
   submissionId String @map("submission_id")
