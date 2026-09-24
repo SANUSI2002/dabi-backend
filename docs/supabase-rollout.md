@@ -16,6 +16,12 @@ PostgreSQL database. Do not upload real hospital/patient records or switch
   `sabi-hospital-evidence-clean`, `sabi-clinical-documents`, and
   `sabi-profile-images`. Restrict types and sizes per bucket. Do not add public
   read policies or enable public access for profile images by default.
+- Once the test project exists, set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+  and `SUPABASE_EXPECTED_PROJECT_REF` in a secure operator environment (never
+  source control). Run `node scripts/provision-supabase-buckets.mjs` to inspect
+  the exact project. Run it with `--apply` only after confirming the project
+  reference. It creates missing private buckets, verifies MIME/size limits,
+  refuses unsafe existing buckets, and never changes an existing bucket.
 - The service key bypasses Storage RLS. Every Sabi API route must authorize the
   exact application, tenant, patient, actor, and action before touching files.
   Object paths should use random IDs, not patient names or document titles.
