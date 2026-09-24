@@ -1230,10 +1230,35 @@ model PlatformApplication {
   updatedAt DateTime @updatedAt @map("updated_at")
   package PlatformPackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
   packageVersion PlatformPackageVersion @relation(fields: [packageVersionId], references: [id], onDelete: Restrict)
+  evidence PlatformApplicationEvidence[]
 
   @@index([status, createdAt])
   @@index([ownerEmail, createdAt])
   @@map("platform_applications")
+}
+
+// Evidence remains private and cannot satisfy approval until a scanner and an
+// authorized reviewer have independently marked it clean and verified.
+model PlatformApplicationEvidence {
+  id String @id @default(uuid())
+  applicationId String @map("application_id")
+  requirementKey String @map("requirement_key")
+  fileName String @map("file_name")
+  contentType String @map("content_type")
+  sizeBytes Int @map("size_bytes")
+  sha256 String
+  storageKey String @map("storage_key")
+  scanStatus String @default("PENDING") @map("scan_status")
+  reviewStatus String @default("PENDING") @map("review_status")
+  reviewedByUserId String? @map("reviewed_by_user_id")
+  reviewedAt DateTime? @map("reviewed_at")
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  application PlatformApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@unique([applicationId, requirementKey])
+  @@index([applicationId, scanStatus, reviewStatus])
+  @@map("platform_application_evidence")
 }
 
 model OrganisationDocument {

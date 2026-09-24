@@ -8,6 +8,7 @@ import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
 import { createLimiter } from '../../middleware/rateLimitMiddleware.js';
 import { validate } from '../../middleware/validateMiddleware.js';
 import { verificationEmailAllowedFor, verificationEmailConfigured } from '../auth/auth.email.js';
+import { approvalReadiness } from './platform.approval-readiness.js';
 
 export const publicApplicationRoutes = express.Router();
 export const platformApplicationRoutes = express.Router();
@@ -98,6 +99,19 @@ platformApplicationRoutes.get('/:id', validate(detail), safe(async (req, res) =>
   const row = await prisma.platformApplication.findUnique({ where: { id: req.params.id }, select: reviewerDetail });
   if (!row) return responseError(res, 'APPLICATION_NOT_FOUND', 404);
   res.set('Cache-Control', 'no-store').json({ status: 'success', data: row });
+}));
+
+platformApplicationRoutes.get('/:id/approval-readiness', validate(detail), safe(async (req, res) => {
+  const row = await prisma.platformApplication.findUnique({
+    where: { id: req.params.id },
+    select: {
+      status: true, emailVerifiedAt: true, details: true,
+      packageVersion: { select: { status: true, moduleKeys: true } },
+      evidence: { select: { requirementKey: true, scanStatus: true, reviewStatus: true, reviewedByUserId: true, reviewedAt: true, expiresAt: true } },
+    },
+  });
+  if (!row) return responseError(res, 'APPLICATION_NOT_FOUND', 404);
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data: approvalReadiness(row) });
 }));
 
 platformApplicationRoutes.post('/:id/start-review', createLimiter({ kind: 'hospital-review', max: 20 }), validate(detail), safe(async (req, res) => {

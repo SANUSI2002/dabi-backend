@@ -31,6 +31,25 @@ beforeEach(() => {
 });
 
 describe('platform hospital review start', () => {
+  it('keeps approval readiness private and fail-closed without uploaded evidence', async () => {
+    const path = `/api/v1/platform/applications/${applicationId}/approval-readiness`;
+    expect((await request(app).get(path)).status).toBe(401);
+    identity.findPlatformRoles.mockResolvedValue([]);
+    expect((await request(app).get(path).set(auth())).status).toBe(403);
+    identity.findPlatformRoles.mockResolvedValue([{ role: { code: 'SABI_PLATFORM_ADMIN', permissions: [{ permissionCode: 'platform.onboarding.review' }] } }]);
+    db.platformApplication.findUnique.mockResolvedValue({
+      status: 'UNDER_REVIEW', emailVerifiedAt: new Date(),
+      details: { organization: { country: 'Nigeria', state: 'Lagos', facilityType: 'Private Hospital', ownershipType: 'Private' }, regulatoryRegistration: { registrationStatus: 'EXISTING' }, selectedProducts: ['emr'] },
+      packageVersion: { status: 'PUBLISHED', moduleKeys: ['emr'] }, evidence: [],
+    });
+    const result = await request(app).get(path).set(auth());
+    expect(result.status).toBe(200);
+    expect(result.headers['cache-control']).toBe('no-store');
+    expect(result.body.data.ready).toBe(false);
+    expect(result.body.data.blockers).toContain('MISSING_DOCUMENT:OFFICER_LICENCE');
+    expect(result.body.data.blockers).toContain('SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED');
+  });
+
   it('requires authentication and reviewer permission', async () => {
     expect((await request(app).post(`/api/v1/platform/applications/${applicationId}/start-review`).send({})).status).toBe(401);
     identity.findPlatformRoles.mockResolvedValue([]);
