@@ -37,6 +37,7 @@ import platformPackageRoutes, { publicPackageRoutes } from './modules/platform/p
 import { platformApplicationRoutes, publicApplicationRoutes } from './modules/platform/platform.applications.routes.js';
 import { privateStorageClient } from './config/privateStorage.js';
 import { checkOrProvisionBuckets } from './config/supabaseBuckets.js';
+import { startEvidenceScanner } from './modules/platform/platform.evidence-scanner.js';
 
 const app = express();
 app.set('trust proxy', trustedProxySetting());
@@ -113,7 +114,6 @@ if (process.env.SUPABASE_URL || process.env.SUPABASE_SECRET_KEY) {
   });
 }
 startExpiryRunner();
-process.once('SIGTERM', () => { stopExpiryRunner(); server.close(); });
-process.once('SIGINT', () => { stopExpiryRunner(); server.close(); });
-const shutdown = () => server.close(() => process.exit(0));
+const stopEvidenceScanner = startEvidenceScanner();
+const shutdown = () => { stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
 process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown);

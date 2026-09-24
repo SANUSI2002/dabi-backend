@@ -1254,6 +1254,12 @@ model PlatformApplicationEvidence {
   storageKey String @map("storage_key")
   storageBucket String @default("sabi-hospital-evidence-quarantine") @map("storage_bucket")
   scanStatus String @default("PENDING") @map("scan_status")
+  scanLeaseToken String? @map("scan_lease_token")
+  scanLeaseExpiresAt DateTime? @map("scan_lease_expires_at")
+  scanAttempts Int @default(0) @map("scan_attempts")
+  scanErrorCode String? @map("scan_error_code")
+  scannerVersion String? @map("scanner_version")
+  scannedAt DateTime? @map("scanned_at")
   reviewStatus String @default("PENDING") @map("review_status")
   reviewedByUserId String? @map("reviewed_by_user_id")
   reviewedAt DateTime? @map("reviewed_at")
@@ -1264,6 +1270,7 @@ model PlatformApplicationEvidence {
 
   @@index([applicationId, requirementKey, createdAt])
   @@index([applicationId, scanStatus, reviewStatus])
+  @@index([scanStatus, scanLeaseExpiresAt, createdAt])
   @@map("platform_application_evidence")
 }
 

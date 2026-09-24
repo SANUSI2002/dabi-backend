@@ -2,9 +2,10 @@
 
 Status (24 September 2026): the separate `sabi-health-test` project and four
 private, size/MIME-restricted buckets exist. The Render test API has server-only
-Supabase Storage credentials. Applicant upload and reviewer metadata routes are
-implemented behind `HOSPITAL_EVIDENCE_INTAKE_ENABLED=false`; no malware scanner,
-reviewer preview, or clinical file route is available. The API still uses its existing
+Supabase Storage credentials. Applicant upload, asynchronous scanner polling,
+reviewer preview, and authenticity-decision routes are implemented but all three
+activation flags remain false. No ClamAV service is provisioned and no clinical
+file route is available. The API still uses its existing
 Render PostgreSQL database. Do not upload real hospital/patient records or
 switch `DATABASE_URL` until the checks below have been completed.
 
@@ -43,24 +44,44 @@ switch `DATABASE_URL` until the checks below have been completed.
    bucket. Store an SHA-256 digest, `PENDING` scan status, and an append-only
    upload event. Re-submissions create new versions; the newest version controls
    readiness. The reviewer API currently exposes metadata only and logs access.
-3. Scan asynchronously with a separately operated malware scanner. A file
-   remains inaccessible to reviewers while the scan is pending or failed.
-   Infected files are never released.
-4. After a trustworthy `CLEAN` result, atomically record the state and move the
-   object into the private clean bucket. Do not treat an applicant-supplied scan
+3. The optional Node polling loop claims queued rows with a five-minute lease,
+   checks the private object's length and SHA-256, and sends bytes to ClamAV
+   through its `INSTREAM` protocol on a *private* Render hostname. It rejects
+   uncertain responses and stale signatures, retries transient failures at a
+   bounded rate, and never releases infected files. This loop is not enabled in
+   the shared test API because no private ClamAV service is running.
+4. After a trustworthy `CLEAN` result, the worker writes the same bytes to the
+   private clean bucket with `upsert: false`, atomically records the clean
+   location and scan event, then removes the quarantine copy. If the worker
+   crashes after writing, it compares the existing clean object with the
+   original digest before reusing it. Do not treat an applicant-supplied scan
    flag or a manual authenticity check as a malware result.
-5. A platform reviewer with recent MFA can request a short-lived signed
-   preview URL for the exact clean object. Record the access event. Reviewers
+5. Only when the separate review flag is enabled, a platform reviewer with
+   recent MFA can request a 60-second signed preview URL for the exact clean
+   object. Record the access event. Reviewers
    check authenticity on an authoritative external registry without sending
    the uploaded file to that site unless permitted by the data agreement.
-6. A separate audited human verification action may mark the specific evidence
-   requirement `VERIFIED`. Only then can it satisfy approval readiness.
+6. A separate audited human decision records the registry/source reference and
+   marks only the latest clean evidence version `VERIFIED` or `REJECTED`.
+   This does not activate an EMR tenant.
 
-The feature flag must remain false on the shared test service until a scanner
-and safe quarantine operations are available; the current approval gate deliberately retains
+Keep `HOSPITAL_EVIDENCE_INTAKE_ENABLED`, `EVIDENCE_SCANNER_ENABLED`, and
+`HOSPITAL_EVIDENCE_REVIEW_ENABLED` false on the shared test service until a
+private scanner is provisioned and synthetic clean/infected cases pass. ClamAV's
+official container guidance recommends 4 GB RAM; the user declined a paid
+Render test service for now, so do not create it. The current approval gate
+deliberately retains
 `SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED`. Do not remove it until the applicant
 session, upload, scan, private preview, audit, and reviewer decision all pass
 end-to-end tests in the test project.
+
+Supabase Storage is the private file store, not an antivirus verdict. Hosted
+Supabase Edge Functions have a 256 MB memory ceiling, so they are not a place
+to run full ClamAV. See [Supabase Edge Function limits](https://supabase.com/docs/guides/functions/limits)
+and [ClamAV Docker memory guidance](https://docs.clamav.net/manual/Installing/Docker.html).
+For local synthetic testing, run ClamAV on a suitable developer machine and
+point the local Node API at `CLAMD_HOST=127.0.0.1`; never point a public
+deployment at a developer laptop or expose port 3310 to the internet.
 
 ## PostgreSQL cutover
 

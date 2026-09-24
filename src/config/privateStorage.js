@@ -58,9 +58,9 @@ export async function uploadPrivateObject(client, { bucket, path, bytes, content
 // authorized and a separate scanner must attest CLEAN before invoking it.
 export async function signedEvidencePreview(client, evidence) {
   if (evidence.scanStatus !== 'CLEAN') throw new PrivateStorageError('EVIDENCE_NOT_CLEAN');
-  if (evidence.bucket !== PRIVATE_BUCKETS.hospitalEvidenceClean) throw new PrivateStorageError('EVIDENCE_NOT_RELEASED');
-  await assertPrivateBucket(client, evidence.bucket);
-  const { data, error } = await client.storage.from(evidence.bucket).createSignedUrl(evidence.storageKey, 60);
+  if (evidence.storageBucket !== PRIVATE_BUCKETS.hospitalEvidenceClean) throw new PrivateStorageError('EVIDENCE_NOT_RELEASED');
+  await assertPrivateBucket(client, evidence.storageBucket);
+  const { data, error } = await client.storage.from(evidence.storageBucket).createSignedUrl(evidence.storageKey, 60);
   if (error || !data?.signedUrl) throw new PrivateStorageError('PRIVATE_STORAGE_PREVIEW_FAILED');
   return data.signedUrl;
 }

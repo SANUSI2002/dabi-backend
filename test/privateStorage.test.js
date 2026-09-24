@@ -47,9 +47,9 @@ describe('private Supabase Storage boundary', () => {
 
   it('never signs a preview before clean scan and release to the clean bucket', async () => {
     const storage = client();
-    const evidence = { bucket: PRIVATE_BUCKETS.hospitalEvidenceClean, storageKey: 'applications/test/file.pdf', scanStatus: 'PENDING' };
+    const evidence = { storageBucket: PRIVATE_BUCKETS.hospitalEvidenceClean, storageKey: 'applications/test/file.pdf', scanStatus: 'PENDING' };
     await expect(signedEvidencePreview(storage, evidence)).rejects.toThrow('EVIDENCE_NOT_CLEAN');
-    await expect(signedEvidencePreview(storage, { ...evidence, scanStatus: 'CLEAN', bucket: PRIVATE_BUCKETS.hospitalEvidenceQuarantine })).rejects.toThrow('EVIDENCE_NOT_RELEASED');
+    await expect(signedEvidencePreview(storage, { ...evidence, scanStatus: 'CLEAN', storageBucket: PRIVATE_BUCKETS.hospitalEvidenceQuarantine })).rejects.toThrow('EVIDENCE_NOT_RELEASED');
     await expect(signedEvidencePreview(storage, { ...evidence, scanStatus: 'CLEAN' })).resolves.toContain('/signed');
   });
 });
