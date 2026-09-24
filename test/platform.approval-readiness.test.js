@@ -36,13 +36,14 @@ describe('EMR approval readiness', () => {
   });
 
   it('keeps expired evidence and unsupported jurisdictions blocked', () => {
-    const evidence = [{ requirementKey: 'OFFICER_LICENCE', scanStatus: 'CLEAN', reviewStatus: 'VERIFIED', reviewedByUserId: 'reviewer', reviewedAt: new Date('2026-09-01'), expiresAt: new Date('2026-09-20') }];
+    const evidence = [{ requirementKey: 'OFFICER_LICENCE', storageBucket: 'sabi-hospital-evidence-clean', scanStatus: 'CLEAN', reviewStatus: 'VERIFIED', reviewedByUserId: 'reviewer', reviewedAt: new Date('2026-09-01'), expiresAt: new Date('2026-09-20') }];
     expect(approvalReadiness({ ...application, evidence }, new Date('2026-09-24')).blockers).toContain('DOCUMENT_EXPIRED:OFFICER_LICENCE');
     expect(approvalReadiness({ ...application, details: { ...details, organization: { ...details.organization, country: 'Ghana' } } }).blockers).toContain('MANUAL_REQUIREMENT_CONFIGURATION_REQUIRED');
   });
 
   it('cannot pass even if evidence metadata is injected before private upload and scanning are connected', () => {
-    const evidence = requiredEvidence(details).map((requirementKey) => ({ requirementKey, scanStatus: 'CLEAN', reviewStatus: 'VERIFIED', reviewedByUserId: 'reviewer', reviewedAt: new Date('2026-09-24'), expiresAt: null }));
+    const evidence = requiredEvidence(details).map((requirementKey) => ({ requirementKey, storageBucket: 'sabi-hospital-evidence-clean', scanStatus: 'CLEAN', reviewStatus: 'VERIFIED', reviewedByUserId: 'reviewer', reviewedAt: new Date('2026-09-24'), expiresAt: null }));
     expect(approvalReadiness({ ...application, evidence }).blockers).toEqual(['SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED']);
+    expect(approvalReadiness({ ...application, evidence: evidence.map((item) => ({ ...item, storageBucket: 'sabi-hospital-evidence-quarantine' })) }).blockers).toContain('DOCUMENT_NOT_SCANNED:OFFICER_LICENCE');
   });
 });

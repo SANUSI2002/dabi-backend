@@ -34,7 +34,7 @@ export function approvalReadiness(application, now = new Date()) {
   for (const key of requirements ?? []) {
     const document = evidence.find((item) => item.requirementKey === key);
     if (!document) blockers.push(`MISSING_DOCUMENT:${key}`);
-    else if (document.scanStatus !== 'CLEAN') blockers.push(`DOCUMENT_NOT_SCANNED:${key}`);
+    else if (document.scanStatus !== 'CLEAN' || document.storageBucket !== 'sabi-hospital-evidence-clean') blockers.push(`DOCUMENT_NOT_SCANNED:${key}`);
     else if (document.reviewStatus !== 'VERIFIED' || !document.reviewedByUserId || !document.reviewedAt) blockers.push(`DOCUMENT_NOT_VERIFIED:${key}`);
     else if (document.expiresAt && document.expiresAt <= now) blockers.push(`DOCUMENT_EXPIRED:${key}`);
   }

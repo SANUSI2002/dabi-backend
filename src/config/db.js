@@ -19,7 +19,7 @@ const prisma = new PrismaClient({ adapter });
 
 if (process.env.SKIP_DB_CONNECT !== 'true') {
   prisma.$connect()
-    .then(() => console.log('Prisma connected to Neon successfully!'))
+    .then(() => console.log('Prisma connected to PostgreSQL successfully!'))
     .catch((err) => console.error('Prisma connection failed:', err));
 }
 

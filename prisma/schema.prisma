@@ -1249,6 +1249,7 @@ model PlatformApplicationEvidence {
   sizeBytes Int @map("size_bytes")
   sha256 String
   storageKey String @map("storage_key")
+  storageBucket String @default("sabi-hospital-evidence-quarantine") @map("storage_bucket")
   scanStatus String @default("PENDING") @map("scan_status")
   reviewStatus String @default("PENDING") @map("review_status")
   reviewedByUserId String? @map("reviewed_by_user_id")
