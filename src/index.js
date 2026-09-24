@@ -35,6 +35,8 @@ import { trustedProxySetting } from './config/proxy.js';
 import platformRoutes from './modules/platform/platform.routes.js';
 import platformPackageRoutes, { publicPackageRoutes } from './modules/platform/platform.catalog.routes.js';
 import { platformApplicationRoutes, publicApplicationRoutes } from './modules/platform/platform.applications.routes.js';
+import { privateStorageClient } from './config/privateStorage.js';
+import { checkOrProvisionBuckets } from './config/supabaseBuckets.js';
 
 const app = express();
 app.set('trust proxy', trustedProxySetting());
@@ -100,6 +102,16 @@ const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, () => {
   console.log(`--Sabi Health backend securely running on port ${PORT}`);
 });
+// A read-only preflight verifies bucket privacy after deployment. It never
+// creates buckets, logs credentials, or changes the application's DB target.
+if (process.env.SUPABASE_URL || process.env.SUPABASE_SECRET_KEY) {
+  Promise.resolve().then(() => checkOrProvisionBuckets(privateStorageClient())).then((buckets) => {
+    const ready = buckets.filter((bucket) => bucket.state === 'READY').length;
+    console.log(`[storage] ${ready}/${buckets.length} private buckets ready`);
+  }).catch((error) => {
+    console.error(`[storage] private bucket preflight failed: ${error.code ?? 'UNKNOWN_ERROR'}`);
+  });
+}
 startExpiryRunner();
 process.once('SIGTERM', () => { stopExpiryRunner(); server.close(); });
 process.once('SIGINT', () => { stopExpiryRunner(); server.close(); });
