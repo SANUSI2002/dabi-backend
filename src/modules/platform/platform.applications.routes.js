@@ -38,6 +38,7 @@ const body = z.object({
 });
 const submission = z.object({ body, query: empty, params: empty });
 const verification = z.object({ body: z.object({ token: z.string().regex(/^[a-f0-9]{64}$/) }).strict(), query: empty, params: paramsId });
+const verificationRequest = z.object({ body: z.object({ email }).strict(), query: empty, params: paramsId });
 const list = z.object({ body: empty.optional(), query: z.object({ status: z.enum(['AWAITING_EMAIL', 'SUBMITTED', 'UNDER_REVIEW', 'NEEDS_INFORMATION', 'APPROVED', 'REJECTED']).default('SUBMITTED'), page: z.coerce.number().int().min(1).max(200).default(1) }).strict(), params: empty });
 const detail = z.object({ body: empty.optional(), query: empty, params: paramsId });
 const reviewNote = z.object({ body: z.object({ note: text(2000).refine((value) => value.length >= 10) }).strict(), query: empty, params: paramsId });
@@ -109,6 +110,25 @@ publicApplicationRoutes.post('/:id/verify', createLimiter({ kind: 'hospital-veri
   if (changed.count !== 1) return responseError(res, 'VERIFICATION_LINK_INVALID', 400);
   const row = await prisma.platformApplication.findUnique({ where: { id: req.params.id } });
   res.set('Cache-Control', 'no-store').json({ status: 'success', data: { ...publicSummary(row), ...(evidenceAccessToken ? { evidenceAccessToken } : {}) } });
+}));
+
+// Never disclose whether an application exists or whether its owner has already verified.
+// The original link remains single-use; an unverified owner can request a replacement.
+publicApplicationRoutes.post('/:id/verification-link', createLimiter({ kind: 'hospital-verification-link', max: 5 }), validate(verificationRequest), safe(async (req, res) => {
+  const generic = () => res.status(202).set('Cache-Control', 'no-store').json({ status: 'success', message: 'If this application still needs email verification, a new link will be emailed.' });
+  if (!verificationEmailConfigured() || !verificationEmailAllowedFor(req.body.email) || !/^https:\/\/[^/]+$/.test(process.env.CLIENT_URL || '')) return generic();
+  const row = await prisma.platformApplication.findUnique({ where: { id: req.params.id }, select: { ownerEmail: true, status: true, verificationTokenHash: true, verificationExpiresAt: true } });
+  if (!row || row.ownerEmail !== req.body.email || row.status !== 'AWAITING_EMAIL') return generic();
+  const token = crypto.randomBytes(32).toString('hex');
+  const now = new Date();
+  const changed = await prisma.platformApplication.updateMany({
+    where: { id: req.params.id, ownerEmail: req.body.email, status: 'AWAITING_EMAIL', OR: [{ verificationExpiresAt: null }, { verificationExpiresAt: { lt: new Date(now.getTime() + 23 * 60 * 60_000 + 58 * 60_000) } }] },
+    data: { verificationTokenHash: hash(token), verificationExpiresAt: new Date(now.getTime() + 24 * 60 * 60_000) },
+  });
+  if (changed.count !== 1) return generic();
+  const delivered = await sendVerification(req.body.email, req.params.id, token);
+  if (!delivered) await prisma.platformApplication.updateMany({ where: { id: req.params.id, verificationTokenHash: hash(token) }, data: { verificationTokenHash: row.verificationTokenHash, verificationExpiresAt: row.verificationExpiresAt } });
+  return generic();
 }));
 
 platformApplicationRoutes.use(protect, requirePlatform, requirePermission('platform.onboarding.review'), requireRecentMfa);

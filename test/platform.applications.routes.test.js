@@ -46,6 +46,7 @@ describe('hospital application submission', () => {
     expect(response.body.data).not.toHaveProperty('verificationTokenHash');
     expect(db.identityOrganization.create).not.toHaveBeenCalled();
     expect(globalThis.fetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body).text).toContain(`https://sabihealth.org/register/organization/verify/${id}#`);
     expect(db.platformApplication.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ packageVersionId: 'v1' }) }));
   });
 
@@ -63,5 +64,45 @@ describe('hospital application submission', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.status).toBe('SUBMITTED');
     expect(db.platformApplication.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ status: 'AWAITING_EMAIL' }), data: expect.objectContaining({ status: 'SUBMITTED', verificationTokenHash: null }) }));
+  });
+
+  it('sends a replacement only to the unverified application owner', async () => {
+    db.platformApplication.findUnique.mockResolvedValue({ ownerEmail: payload.owner.workEmail, status: 'AWAITING_EMAIL', verificationTokenHash: 'old-hash', verificationExpiresAt: new Date() });
+    db.platformApplication.updateMany.mockResolvedValue({ count: 1 });
+    const response = await request(app).post(`/api/v1/applications/${id}/verification-link`).send({ email: payload.owner.workEmail });
+    expect(response.status).toBe(202);
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body).text).toContain(`https://sabihealth.org/register/organization/verify/${id}#`);
+    expect(db.platformApplication.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ ownerEmail: payload.owner.workEmail, status: 'AWAITING_EMAIL' }) }));
+    expect(response.body).not.toHaveProperty('data');
+  });
+
+  it('does not reveal or email a verified application or the wrong owner', async () => {
+    db.platformApplication.findUnique.mockResolvedValue({ ownerEmail: payload.owner.workEmail, status: 'SUBMITTED' });
+    const verified = await request(app).post(`/api/v1/applications/${id}/verification-link`).send({ email: payload.owner.workEmail });
+    db.platformApplication.findUnique.mockResolvedValue({ ownerEmail: payload.owner.workEmail, status: 'AWAITING_EMAIL' });
+    const wrongOwner = await request(app).post(`/api/v1/applications/${id}/verification-link`).send({ email: 'other@example.com' });
+    expect(verified.status).toBe(202);
+    expect(wrongOwner.body).toEqual(verified.body);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(db.platformApplication.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not send when the replacement is cooling down', async () => {
+    db.platformApplication.findUnique.mockResolvedValue({ ownerEmail: payload.owner.workEmail, status: 'AWAITING_EMAIL' });
+    db.platformApplication.updateMany.mockResolvedValue({ count: 0 });
+    expect((await request(app).post(`/api/v1/applications/${id}/verification-link`).send({ email: payload.owner.workEmail })).status).toBe(202);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('restores the previous token if the mail provider rejects a replacement', async () => {
+    const oldExpiry = new Date('2026-09-25T00:00:00Z');
+    db.platformApplication.findUnique.mockResolvedValue({ ownerEmail: payload.owner.workEmail, status: 'AWAITING_EMAIL', verificationTokenHash: 'old-hash', verificationExpiresAt: oldExpiry });
+    db.platformApplication.updateMany.mockResolvedValue({ count: 1 });
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 503 }));
+    const response = await request(app).post(`/api/v1/applications/${id}/verification-link`).send({ email: payload.owner.workEmail });
+    expect(response.status).toBe(202);
+    expect(db.platformApplication.updateMany).toHaveBeenCalledTimes(2);
+    expect(db.platformApplication.updateMany.mock.calls[1][0].data).toEqual({ verificationTokenHash: 'old-hash', verificationExpiresAt: oldExpiry });
   });
 });
