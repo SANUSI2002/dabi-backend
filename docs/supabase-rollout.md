@@ -2,12 +2,14 @@
 
 Status (24 September 2026): the separate `sabi-health-test` project and four
 private, size/MIME-restricted buckets exist. The Render test API has server-only
-Supabase Storage credentials. Applicant upload, asynchronous scanner polling,
-reviewer preview, and authenticity-decision routes are implemented but all three
-activation flags remain false. No ClamAV service is provisioned and no clinical
-file route is available. The API still uses its existing
-Render PostgreSQL database. Do not upload real hospital/patient records or
-switch `DATABASE_URL` until the checks below have been completed.
+Supabase Storage credentials. The applicant upload and manual evidence-review
+workflow is enabled under a dated, explicit **unscanned test exception** through
+8 October 2026 at 12:00 UTC. The files remain in private quarantine and are
+never labeled clean. The asynchronous scanner path is implemented but disabled;
+no ClamAV service is provisioned. No clinical file route is available. The API
+still uses its disposable Render PostgreSQL database without backups. Do not
+upload patient records or switch `DATABASE_URL` without a separate migration
+plan. See [the temporary exception procedure](TEMPORARY_UNSCANNED_HOSPITAL_EVIDENCE.md).
 
 ## Ownership and isolation
 
@@ -62,18 +64,18 @@ switch `DATABASE_URL` until the checks below have been completed.
    check authenticity on an authoritative external registry without sending
    the uploaded file to that site unless permitted by the data agreement.
 6. A separate audited human decision records the registry/source reference and
-   marks only the latest clean evidence version `VERIFIED` or `REJECTED`.
+   marks only the latest eligible evidence version `VERIFIED` or `REJECTED`.
    This does not activate an EMR tenant.
 
-Keep `HOSPITAL_EVIDENCE_INTAKE_ENABLED`, `EVIDENCE_SCANNER_ENABLED`, and
-`HOSPITAL_EVIDENCE_REVIEW_ENABLED` false on the shared test service until a
-private scanner is provisioned and synthetic clean/infected cases pass. ClamAV's
-official container guidance recommends 4 GB RAM; the user declined a paid
-Render test service for now, so do not create it. The current approval gate
-deliberately retains
-`SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED`. Do not remove it until the applicant
-session, upload, scan, private preview, audit, and reviewer decision all pass
-end-to-end tests in the test project.
+The live test service currently has intake and review enabled, scanning
+disabled, and the dated unscanned exception enabled. The normal clean-file
+preview is still unavailable for these unscanned uploads. An approver must use
+the separate audited attachment download, accept the risk per file, then record
+an external authenticity decision before final EMR approval can pass. The
+exception automatically stops accepting new work when its expiry is reached.
+ClamAV's official container guidance recommends 4 GB RAM; the user declined a
+paid Render test service for now, so do not create it. Restore the normal
+scanner-controlled workflow before treating this as a production release.
 
 Supabase Storage is the private file store, not an antivirus verdict. Hosted
 Supabase Edge Functions have a 256 MB memory ceiling, so they are not a place
