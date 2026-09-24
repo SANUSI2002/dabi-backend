@@ -56,6 +56,7 @@ model User {
   orders       Order[]
   identityMemberships OrganizationMembership[]
   platformRoleAssignments PlatformRoleAssignment[]
+  emrPatientsRegistered EmrPatient[] @relation("EmrPatientRegistrar")
 
   @@map("users")
 }
@@ -1079,6 +1080,7 @@ model IdentityOrganization {
   pharmacy Pharmacy? @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
   memberships OrganizationMembership[]
   invitations IdentityInvitation[]
+  emrPatients EmrPatient[]
 
   @@map("identity_organizations")
 }
@@ -1099,6 +1101,34 @@ model OrganizationMembership {
   @@index([organizationId, status])
   @@index([userId, status])
   @@map("organization_memberships")
+}
+
+// Facility patients are separate from Sabi ID accounts. Every query must be
+// scoped to a signed, active identity-organization membership.
+model EmrPatient {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  medicalRecordNumber String @map("medical_record_number")
+  givenName String @map("given_name")
+  familyName String @map("family_name")
+  dateOfBirth DateTime @db.Date @map("date_of_birth")
+  sex EmrPatientSex @default(UNKNOWN)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  organization IdentityOrganization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy User @relation("EmrPatientRegistrar", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, medicalRecordNumber])
+  @@index([organizationId, createdAt, id])
+  @@map("emr_patients")
+}
+
+enum EmrPatientSex {
+  FEMALE
+  MALE
+  OTHER
+  UNKNOWN
 }
 
 model AccessRole {

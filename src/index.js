@@ -38,6 +38,7 @@ import { platformApplicationRoutes, publicApplicationRoutes } from './modules/pl
 import { privateStorageClient } from './config/privateStorage.js';
 import { checkOrProvisionBuckets } from './config/supabaseBuckets.js';
 import { startEvidenceScanner } from './modules/platform/platform.evidence-scanner.js';
+import emrPatientRoutes from './modules/emr/emr.patients.routes.js';
 
 const app = express();
 app.set('trust proxy', trustedProxySetting());
@@ -67,6 +68,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/v1/hospitals', hospitalPlanRoutes);
 app.use('/api/v1', caregiverRoutes);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/emr/organizations', emrPatientRoutes);
 app.use('/api/v1/platform', platformRoutes);
 app.use('/api/v1/platform/packages', platformPackageRoutes);
 app.use('/api/v1/catalog/packages', publicPackageRoutes);

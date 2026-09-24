@@ -1,5 +1,5 @@
 import * as AuthModel from '../auth/auth.model.js';
-import prisma from '../../config/db.js';
+import { approvedEmrFor, emrPatientRegistryEnabled } from '../emr/emr.entitlement.js';
 import { generateAccessToken } from '../auth/auth.token.js';
 import { activeMembershipFor, acceptOwnMembership, inviteExistingIdentity, managedMemberships, membershipsFor, revokeManagedMembership } from './identity.service.js';
 
@@ -57,21 +57,13 @@ export const emrAccess = async (req, res, next) => {
   if (!activePathOrganization(req, res)) return;
   try {
     const context = req.accessContext;
-    if (context.organization.type === 'PHARMACY' || !context.organization.facilityId) {
-      return res.status(403).json({ status: 'error', error: { code: 'EMR_ACCESS_DENIED', message: 'This organization has no EMR entitlement.' } });
-    }
-    const application = await prisma.platformApplication.findUnique({
-      where: { approvedOrganisationId: context.organization.facilityId },
-      select: { id: true, status: true, setupCompletedAt: true, packageVersion: { select: { status: true, moduleKeys: true } } },
-    });
-    if (application?.status !== 'APPROVED' || !application.setupCompletedAt
-      || application.packageVersion.status !== 'PUBLISHED' || !application.packageVersion.moduleKeys.includes('emr')) {
-      return res.status(403).json({ status: 'error', error: { code: 'EMR_ACCESS_DENIED', message: 'This organization has no active EMR entitlement.' } });
-    }
+      if (!await approvedEmrFor(context)) {
+        return res.status(403).json({ status: 'error', error: { code: 'EMR_ACCESS_DENIED', message: 'This organization has no active EMR entitlement.' } });
+      }
     return res.set('Cache-Control', 'no-store').json({ status: 'success', data: {
       organizationId: context.organization.id, facilityId: context.organization.facilityId,
       organizationName: context.organization.name, roles: context.roles, permissions: context.permissions,
-      clinicalApiConnected: false,
+        clinicalApiConnected: false, patientRegistryEnabled: emrPatientRegistryEnabled(),
     } });
   } catch (error) { return next(error); }
 };
