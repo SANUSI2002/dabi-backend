@@ -61,6 +61,9 @@ end-to-end tests in the test project.
 4. Switch `DATABASE_URL` only after a tested rollback plan. Keep the prior
    Render database available and read-only until verification finishes.
 
-Do not migrate patient data to a free test project. A real release needs a
-backups/restore policy, retention and deletion policy, data-processing review,
-scanner operation, audit retention, and access-control testing.
+The Supabase Free plan does not provide automatic database backups and may
+pause after inactivity. Database backups also do not restore Storage object
+bytes. Do not migrate patient data to a free test project. A real release needs
+separate database and object backups with a tested restore, retention and
+deletion policy, data-processing review, scanner operation, audit retention,
+and access-control testing.
