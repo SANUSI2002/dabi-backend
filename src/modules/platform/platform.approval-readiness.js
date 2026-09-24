@@ -32,7 +32,11 @@ export function approvalReadiness(application, now = new Date()) {
   if (!requirements) blockers.push('MANUAL_REQUIREMENT_CONFIGURATION_REQUIRED');
   const evidence = application.evidence ?? [];
   for (const key of requirements ?? []) {
-    const document = evidence.find((item) => item.requirementKey === key);
+    // Re-submissions are append-only. Only the newest version may satisfy a
+    // requirement; a previously verified file must not mask a new pending one.
+    const document = evidence.filter((item) => item.requirementKey === key).sort((a, b) =>
+      new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
+      || String(b.id ?? '').localeCompare(String(a.id ?? '')))[0];
     if (!document) blockers.push(`MISSING_DOCUMENT:${key}`);
     else if (document.scanStatus !== 'CLEAN' || document.storageBucket !== 'sabi-hospital-evidence-clean') blockers.push(`DOCUMENT_NOT_SCANNED:${key}`);
     else if (document.reviewStatus !== 'VERIFIED' || !document.reviewedByUserId || !document.reviewedAt) blockers.push(`DOCUMENT_NOT_VERIFIED:${key}`);

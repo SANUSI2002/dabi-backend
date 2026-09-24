@@ -2,8 +2,9 @@
 
 Status (24 September 2026): the separate `sabi-health-test` project and four
 private, size/MIME-restricted buckets exist. The Render test API has server-only
-Supabase Storage credentials, but there is no applicant upload, malware scan,
-reviewer preview, or clinical file route yet. The API still uses its existing
+Supabase Storage credentials. Applicant upload and reviewer metadata routes are
+implemented behind `HOSPITAL_EVIDENCE_INTAKE_ENABLED=false`; no malware scanner,
+reviewer preview, or clinical file route is available. The API still uses its existing
 Render PostgreSQL database. Do not upload real hospital/patient records or
 switch `DATABASE_URL` until the checks below have been completed.
 
@@ -31,11 +32,17 @@ switch `DATABASE_URL` until the checks below have been completed.
 
 ## Hospital evidence lifecycle
 
-1. Verify the applicant's email and issue a short-lived, single-purpose
-   document-submission session. Anonymous application IDs are not authority.
-2. Receive bounded PDF/JPEG/PNG bytes via the Node API; validate size, type,
-   content signature, and requirement key. Upload with `upsert: false` to the
-   private quarantine bucket. Store an SHA-256 digest and `PENDING` scan status.
+1. Verify the applicant's email and issue a 30-minute, single-purpose evidence
+   token. The emailed re-entry link is rate-limited, generic on missing/mismatched
+   accounts, and can be reissued after a cooldown. Anonymous application IDs are
+   not authority. The frontend removes the token from URL history and never
+   stores it persistently.
+2. When explicitly enabled for a controlled test, receive bounded PDF/JPEG/PNG
+   bytes via the Node API; validate size, type, content signature, and
+   requirement key. Upload with `upsert: false` to the private quarantine
+   bucket. Store an SHA-256 digest, `PENDING` scan status, and an append-only
+   upload event. Re-submissions create new versions; the newest version controls
+   readiness. The reviewer API currently exposes metadata only and logs access.
 3. Scan asynchronously with a separately operated malware scanner. A file
    remains inaccessible to reviewers while the scan is pending or failed.
    Infected files are never released.
@@ -49,7 +56,8 @@ switch `DATABASE_URL` until the checks below have been completed.
 6. A separate audited human verification action may mark the specific evidence
    requirement `VERIFIED`. Only then can it satisfy approval readiness.
 
-The current approval gate deliberately retains
+The feature flag must remain false on the shared test service until a scanner
+and safe quarantine operations are available; the current approval gate deliberately retains
 `SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED`. Do not remove it until the applicant
 session, upload, scan, private preview, audit, and reviewer decision all pass
 end-to-end tests in the test project.

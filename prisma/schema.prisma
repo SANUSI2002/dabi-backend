@@ -1224,6 +1224,9 @@ model PlatformApplication {
   billingCycle String @map("billing_cycle")
   verificationTokenHash String? @unique @map("verification_token_hash")
   verificationExpiresAt DateTime? @map("verification_expires_at")
+  evidenceAccessTokenHash String? @unique @map("evidence_access_token_hash")
+  evidenceAccessExpiresAt DateTime? @map("evidence_access_expires_at")
+  evidenceAccessSentAt DateTime? @map("evidence_access_sent_at")
   emailVerifiedAt DateTime? @map("email_verified_at")
   submittedAt DateTime? @map("submitted_at")
   createdAt DateTime @default(now()) @map("created_at")
@@ -1257,10 +1260,25 @@ model PlatformApplicationEvidence {
   expiresAt DateTime? @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
   application PlatformApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  events PlatformApplicationEvidenceEvent[]
 
-  @@unique([applicationId, requirementKey])
+  @@index([applicationId, requirementKey, createdAt])
   @@index([applicationId, scanStatus, reviewStatus])
   @@map("platform_application_evidence")
+}
+
+model PlatformApplicationEvidenceEvent {
+  id String @id @default(uuid())
+  evidenceId String @map("evidence_id")
+  eventType String @map("event_type")
+  actorKind String @map("actor_kind")
+  actorId String? @map("actor_id")
+  details Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  evidence PlatformApplicationEvidence @relation(fields: [evidenceId], references: [id], onDelete: Restrict)
+
+  @@index([evidenceId, createdAt])
+  @@map("platform_application_evidence_events")
 }
 
 // Append-only reviewer observations. A note is not proof that a document was

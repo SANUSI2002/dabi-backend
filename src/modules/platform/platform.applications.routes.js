@@ -9,9 +9,11 @@ import { createLimiter } from '../../middleware/rateLimitMiddleware.js';
 import { validate } from '../../middleware/validateMiddleware.js';
 import { verificationEmailAllowedFor, verificationEmailConfigured } from '../auth/auth.email.js';
 import { approvalReadiness } from './platform.approval-readiness.js';
+import { evidenceIntakeEnabled, evidenceRoutes, platformEvidenceRoutes } from './platform.evidence.routes.js';
 
 export const publicApplicationRoutes = express.Router();
 export const platformApplicationRoutes = express.Router();
+publicApplicationRoutes.use(evidenceRoutes);
 const text = (max = 160) => z.string().trim().min(1).max(max);
 const optional = (max = 160) => z.string().trim().max(max);
 const email = z.email().max(254).transform((value) => value.toLowerCase());
@@ -85,13 +87,15 @@ publicApplicationRoutes.post('/', createLimiter({ kind: 'hospital-application', 
 }));
 
 publicApplicationRoutes.post('/:id/verify', createLimiter({ kind: 'hospital-verification', max: 10 }), validate(verification), safe(async (req, res) => {
-  const changed = await prisma.platformApplication.updateMany({ where: { id: req.params.id, status: 'AWAITING_EMAIL', verificationTokenHash: hash(req.body.token), verificationExpiresAt: { gt: new Date() } }, data: { status: 'SUBMITTED', verificationTokenHash: null, verificationExpiresAt: null, emailVerifiedAt: new Date(), submittedAt: new Date() } });
+  const evidenceAccessToken = evidenceIntakeEnabled() ? crypto.randomBytes(32).toString('hex') : null;
+  const changed = await prisma.platformApplication.updateMany({ where: { id: req.params.id, status: 'AWAITING_EMAIL', verificationTokenHash: hash(req.body.token), verificationExpiresAt: { gt: new Date() } }, data: { status: 'SUBMITTED', verificationTokenHash: null, verificationExpiresAt: null, emailVerifiedAt: new Date(), submittedAt: new Date(), ...(evidenceAccessToken ? { evidenceAccessTokenHash: hash(evidenceAccessToken), evidenceAccessExpiresAt: new Date(Date.now() + 30 * 60_000) } : {}) } });
   if (changed.count !== 1) return responseError(res, 'VERIFICATION_LINK_INVALID', 400);
   const row = await prisma.platformApplication.findUnique({ where: { id: req.params.id } });
-  res.set('Cache-Control', 'no-store').json({ status: 'success', data: publicSummary(row) });
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data: { ...publicSummary(row), ...(evidenceAccessToken ? { evidenceAccessToken } : {}) } });
 }));
 
 platformApplicationRoutes.use(protect, requirePlatform, requirePermission('platform.onboarding.review'), requireRecentMfa);
+platformApplicationRoutes.use(platformEvidenceRoutes);
 platformApplicationRoutes.get('/', validate(list), safe(async (req, res) => {
   const rows = await prisma.platformApplication.findMany({ where: { status: req.query.status }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (req.query.page - 1) * 50, take: 51, select: { id: true, reference: true, organizationName: true, status: true, createdAt: true, submittedAt: true, packageId: true, packageVersionId: true } });
   res.set('Cache-Control', 'no-store').json({ status: 'success', data: { items: rows.slice(0, 50), nextPage: rows.length > 50 ? req.query.page + 1 : null } });
@@ -108,7 +112,7 @@ platformApplicationRoutes.get('/:id/approval-readiness', validate(detail), safe(
     select: {
       status: true, emailVerifiedAt: true, details: true,
       packageVersion: { select: { status: true, moduleKeys: true } },
-      evidence: { select: { requirementKey: true, storageBucket: true, scanStatus: true, reviewStatus: true, reviewedByUserId: true, reviewedAt: true, expiresAt: true } },
+      evidence: { select: { id: true, requirementKey: true, createdAt: true, storageBucket: true, scanStatus: true, reviewStatus: true, reviewedByUserId: true, reviewedAt: true, expiresAt: true } },
     },
   });
   if (!row) return responseError(res, 'APPLICATION_NOT_FOUND', 404);
