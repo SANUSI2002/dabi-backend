@@ -3,16 +3,18 @@ import { Buffer } from 'node:buffer';
 import express from 'express';
 import { z } from 'zod';
 import prisma from '../../config/db.js';
-import { PRIVATE_BUCKETS, PrivateStorageError, privateStorageClient, signedEvidencePreview, uploadPrivateObject } from '../../config/privateStorage.js';
+import { assertPrivateBucket, PRIVATE_BUCKETS, PrivateStorageError, privateStorageClient, signedEvidencePreview, uploadPrivateObject } from '../../config/privateStorage.js';
 import { createLimiter } from '../../middleware/rateLimitMiddleware.js';
+import { requirePermission } from '../../middleware/accessMiddleware.js';
 import { validate } from '../../middleware/validateMiddleware.js';
 import { verificationEmailAllowedFor, verificationEmailConfigured } from '../auth/auth.email.js';
 import { requiredEvidence } from './platform.approval-readiness.js';
+import { evidenceWorkflowAvailable, unscannedExceptionEnabled } from './platform.evidence-mode.js';
 
 export const evidenceRoutes = express.Router();
 export const platformEvidenceRoutes = express.Router();
-export const evidenceIntakeEnabled = () => process.env.HOSPITAL_EVIDENCE_INTAKE_ENABLED === 'true';
-export const evidenceReviewEnabled = () => process.env.HOSPITAL_EVIDENCE_REVIEW_ENABLED === 'true';
+export const evidenceIntakeEnabled = () => process.env.HOSPITAL_EVIDENCE_INTAKE_ENABLED === 'true' && evidenceWorkflowAvailable();
+export const evidenceReviewEnabled = () => process.env.HOSPITAL_EVIDENCE_REVIEW_ENABLED === 'true' && evidenceWorkflowAvailable();
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -22,6 +24,11 @@ const accessRequest = z.object({ body: z.object({ email: z.email().max(254).tran
 const listRequest = z.object({ body: z.object({}).strict().optional(), query: z.object({}).strict(), params: routeParams });
 const evidenceParams = z.object({ id: z.string().regex(uuid), evidenceId: z.string().regex(uuid) }).strict();
 const previewRequest = z.object({ body: z.object({}).strict().optional(), query: z.object({}).strict(), params: evidenceParams });
+const exceptionRequest = z.object({ body: z.object({
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  note: z.string().trim().min(20).max(500),
+  acknowledgement: z.literal('I ACCEPT THE UNSCANNED DOCUMENT RISK'),
+}).strict(), query: z.object({}).strict(), params: evidenceParams });
 const decisionRequest = z.object({
   body: z.discriminatedUnion('decision', [
     z.object({ decision: z.literal('VERIFIED'), sourceName: z.string().trim().min(3).max(120), reference: z.string().trim().min(3).max(160), note: z.string().trim().max(1000).optional() }).strict(),
@@ -29,7 +36,7 @@ const decisionRequest = z.object({
   ]), query: z.object({}).strict(), params: evidenceParams,
 });
 const errorResponse = (res, code, status) => res.status(status).set('Cache-Control', 'no-store').json({ status: 'error', error: { code, message: code.replaceAll('_', ' ').toLowerCase() } });
-const evidenceSelect = { id: true, requirementKey: true, fileName: true, contentType: true, sizeBytes: true, sha256: true, scanStatus: true, scannedAt: true, reviewStatus: true, reviewedAt: true, createdAt: true };
+const evidenceSelect = { id: true, requirementKey: true, fileName: true, contentType: true, sizeBytes: true, sha256: true, scanStatus: true, scannedAt: true, unscannedDownloadedAt: true, unscannedExceptionAt: true, reviewStatus: true, reviewedAt: true, createdAt: true };
 const withErrors = (handler) => async (req, res, next) => { try { await handler(req, res); } catch (error) {
   if (error instanceof PrivateStorageError) return errorResponse(res, error.code, error.code === 'EVIDENCE_ACCESS_DENIED' ? 403 : error.code === 'PRIVATE_STORAGE_UPLOAD_INVALID' ? 400 : 503);
   return next(error);
@@ -143,7 +150,56 @@ platformEvidenceRoutes.get('/:id/evidence', validate(listRequest), withErrors(as
     return items;
   });
   if (!result) return errorResponse(res, 'APPLICATION_NOT_FOUND', 404);
-  res.set('Cache-Control', 'no-store').json({ status: 'success', data: { items: result, previewAvailable: evidenceReviewEnabled() } });
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data: { items: result, previewAvailable: evidenceReviewEnabled(), unscannedExceptionAvailable: unscannedExceptionEnabled() } });
+}));
+
+// This is a download, never an inline preview. The file remains marked
+// unscanned and in private quarantine until an operator explicitly accepts
+// the time-limited exception; no endpoint labels it CLEAN.
+platformEvidenceRoutes.get('/:id/evidence/:evidenceId/unscanned-download', requirePermission('platform.onboarding.approve'), createLimiter({ kind: 'unscanned-evidence-download', max: 10 }), validate(previewRequest), withErrors(async (req, res) => {
+  if (!unscannedExceptionEnabled()) return errorResponse(res, 'UNSCANNED_EXCEPTION_DISABLED', 503);
+  const row = await prisma.platformApplicationEvidence.findFirst({
+    where: { id: req.params.evidenceId, applicationId: req.params.id, scanStatus: 'PENDING', storageBucket: PRIVATE_BUCKETS.hospitalEvidenceQuarantine, application: { status: 'UNDER_REVIEW' } },
+    select: { id: true, applicationId: true, requirementKey: true, storageBucket: true, storageKey: true, sha256: true },
+  });
+  if (!row) return errorResponse(res, 'UNSCANNED_DOWNLOAD_UNAVAILABLE', 404);
+  const latest = await prisma.platformApplicationEvidence.findFirst({ where: { applicationId: req.params.id, requirementKey: row.requirementKey }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true } });
+  if (latest?.id !== row.id) return errorResponse(res, 'EVIDENCE_VERSION_SUPERSEDED', 409);
+  const client = privateStorageClient();
+  await assertPrivateBucket(client, row.storageBucket);
+  const { data, error } = await client.storage.from(row.storageBucket).createSignedUrl(row.storageKey, 60, { download: true });
+  if (error || !data?.signedUrl) throw new PrivateStorageError('PRIVATE_STORAGE_PREVIEW_FAILED');
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.platformApplicationEvidence.update({ where: { id: row.id }, data: { unscannedDownloadedByUserId: req.user.id, unscannedDownloadedAt: now } });
+    await tx.platformApplicationEvidenceEvent.create({ data: { evidenceId: row.id, eventType: 'UNSCANNED_DOWNLOAD_ISSUED', actorKind: 'PLATFORM_REVIEWER', actorId: req.user.id, details: { sha256: row.sha256 } } });
+    await tx.activityLog.create({ data: { userId: req.user.id, type: 'PLATFORM_UNSCANNED_EVIDENCE_DOWNLOADED', description: 'Unscanned hospital evidence download issued', meta: { applicationId: row.applicationId, evidenceId: row.id } } });
+  });
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data: { url: data.signedUrl, sha256: row.sha256, expiresInSeconds: 60, warning: 'UNSCANNED_FILE' } });
+}));
+
+platformEvidenceRoutes.post('/:id/evidence/:evidenceId/unscanned-exception', requirePermission('platform.onboarding.approve'), createLimiter({ kind: 'unscanned-evidence-exception', max: 10 }), validate(exceptionRequest), withErrors(async (req, res) => {
+  if (!unscannedExceptionEnabled()) return errorResponse(res, 'UNSCANNED_EXCEPTION_DISABLED', 503);
+  const now = new Date();
+  const row = await prisma.platformApplicationEvidence.findFirst({
+    where: { id: req.params.evidenceId, applicationId: req.params.id, scanStatus: 'PENDING', reviewStatus: 'PENDING', storageBucket: PRIVATE_BUCKETS.hospitalEvidenceQuarantine, application: { status: 'UNDER_REVIEW' } },
+    select: { id: true, requirementKey: true, sha256: true, unscannedDownloadedByUserId: true, unscannedDownloadedAt: true },
+  });
+  if (!row || row.sha256 !== req.body.sha256 || row.unscannedDownloadedByUserId !== req.user.id
+    || !row.unscannedDownloadedAt || row.unscannedDownloadedAt < new Date(now.getTime() - 2 * 60 * 60_000)) return errorResponse(res, 'UNSCANNED_EXCEPTION_NOT_READY', 409);
+  const latest = await prisma.platformApplicationEvidence.findFirst({ where: { applicationId: req.params.id, requirementKey: row.requirementKey }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true } });
+  if (latest?.id !== row.id) return errorResponse(res, 'EVIDENCE_VERSION_SUPERSEDED', 409);
+  const changed = await prisma.$transaction(async (tx) => {
+    const updated = await tx.platformApplicationEvidence.updateMany({ where: { id: row.id, scanStatus: 'PENDING', reviewStatus: 'PENDING', unscannedDownloadedByUserId: req.user.id, unscannedDownloadedAt: { gt: new Date(now.getTime() - 2 * 60 * 60_000) } }, data: {
+      scanStatus: 'UNSCANNED_EXCEPTION', unscannedExceptionByUserId: req.user.id, unscannedExceptionAt: now, unscannedExceptionNote: req.body.note,
+    } });
+    if (updated.count !== 1) return false;
+    await tx.platformApplicationEvidenceEvent.create({ data: { evidenceId: row.id, eventType: 'UNSCANNED_EXCEPTION_ACCEPTED', actorKind: 'PLATFORM_REVIEWER', actorId: req.user.id, details: { sha256: row.sha256, note: req.body.note } } });
+    await tx.activityLog.create({ data: { userId: req.user.id, type: 'PLATFORM_UNSCANNED_EXCEPTION_ACCEPTED', description: 'Temporary unscanned evidence exception accepted', meta: { applicationId: req.params.id, evidenceId: row.id } } });
+    return true;
+  });
+  if (!changed) return errorResponse(res, 'UNSCANNED_EXCEPTION_CONFLICT', 409);
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data: { id: row.id, scanStatus: 'UNSCANNED_EXCEPTION', unscannedExceptionAt: now } });
 }));
 
 platformEvidenceRoutes.get('/:id/evidence/:evidenceId/preview', validate(previewRequest), withErrors(async (req, res) => {
@@ -162,8 +218,12 @@ platformEvidenceRoutes.post('/:id/evidence/:evidenceId/review', validate(decisio
   if (!evidenceReviewEnabled()) return errorResponse(res, 'EVIDENCE_REVIEW_DISABLED', 503);
   const application = await prisma.platformApplication.findUnique({ where: { id: req.params.id }, select: { status: true } });
   if (application?.status !== 'UNDER_REVIEW') return errorResponse(res, 'APPLICATION_NOT_UNDER_REVIEW', 409);
+  const eligibleScan = { OR: [
+    { scanStatus: 'CLEAN', storageBucket: PRIVATE_BUCKETS.hospitalEvidenceClean },
+    ...(unscannedExceptionEnabled() ? [{ scanStatus: 'UNSCANNED_EXCEPTION', storageBucket: PRIVATE_BUCKETS.hospitalEvidenceQuarantine, unscannedExceptionByUserId: { not: null }, unscannedExceptionAt: { not: null } }] : []),
+  ] };
   const document = await prisma.platformApplicationEvidence.findFirst({
-    where: { id: req.params.evidenceId, applicationId: req.params.id, scanStatus: 'CLEAN', storageBucket: PRIVATE_BUCKETS.hospitalEvidenceClean, reviewStatus: 'PENDING' },
+    where: { id: req.params.evidenceId, applicationId: req.params.id, ...eligibleScan, reviewStatus: 'PENDING' },
     select: { id: true, requirementKey: true, expiresAt: true },
   });
   if (!document || (document.expiresAt && document.expiresAt <= new Date())) return errorResponse(res, 'EVIDENCE_REVIEW_UNAVAILABLE', 409);
@@ -174,7 +234,7 @@ platformEvidenceRoutes.post('/:id/evidence/:evidenceId/review', validate(decisio
   const now = new Date();
   const changed = await prisma.$transaction(async (tx) => {
     const updated = await tx.platformApplicationEvidence.updateMany({
-      where: { id: document.id, applicationId: req.params.id, scanStatus: 'CLEAN', storageBucket: PRIVATE_BUCKETS.hospitalEvidenceClean, reviewStatus: 'PENDING' },
+      where: { id: document.id, applicationId: req.params.id, ...eligibleScan, reviewStatus: 'PENDING' },
       data: { reviewStatus: req.body.decision, reviewedByUserId: req.user.id, reviewedAt: now },
     });
     if (updated.count !== 1) return false;

@@ -19,7 +19,7 @@ const facilityType = (value) => {
 const approvalSelect = {
   id: true, status: true, emailVerifiedAt: true, ownerEmail: true, details: true, packageVersionId: true,
   packageVersion: { select: { status: true, moduleKeys: true } },
-  evidence: { select: { id: true, requirementKey: true, createdAt: true, storageBucket: true, scanStatus: true, reviewStatus: true, reviewedByUserId: true, reviewedAt: true, expiresAt: true } },
+  evidence: { select: { id: true, requirementKey: true, createdAt: true, storageBucket: true, scanStatus: true, unscannedExceptionByUserId: true, unscannedExceptionAt: true, reviewStatus: true, reviewedByUserId: true, reviewedAt: true, expiresAt: true } },
 };
 
 function requireDelivery(email) {

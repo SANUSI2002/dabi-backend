@@ -1282,8 +1282,9 @@ model PlatformApplication {
   @@map("platform_applications")
 }
 
-// Evidence remains private and cannot satisfy approval until a scanner and an
-// authorized reviewer have independently marked it clean and verified.
+// Evidence remains private. Approval normally requires a clean scan and
+// authorized verification; a dated, audited test exception may temporarily
+// accept verified evidence in quarantine without labeling it clean.
 model PlatformApplicationEvidence {
   id String @id @default(uuid())
   applicationId String @map("application_id")
@@ -1301,6 +1302,11 @@ model PlatformApplicationEvidence {
   scanErrorCode String? @map("scan_error_code")
   scannerVersion String? @map("scanner_version")
   scannedAt DateTime? @map("scanned_at")
+  unscannedDownloadedByUserId String? @map("unscanned_downloaded_by_user_id")
+  unscannedDownloadedAt DateTime? @map("unscanned_downloaded_at")
+  unscannedExceptionByUserId String? @map("unscanned_exception_by_user_id")
+  unscannedExceptionAt DateTime? @map("unscanned_exception_at")
+  unscannedExceptionNote String? @map("unscanned_exception_note")
   reviewStatus String @default("PENDING") @map("review_status")
   reviewedByUserId String? @map("reviewed_by_user_id")
   reviewedAt DateTime? @map("reviewed_at")

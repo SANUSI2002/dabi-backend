@@ -1,3 +1,5 @@
+import { evidenceWorkflowAvailable, unscannedExceptionEnabled } from './platform.evidence-mode.js';
+
 // This is a server-owned gate. Browser compliance fixtures must never become
 // evidence of a completed document review or an EMR entitlement.
 const LAGOS_FACILITIES = new Set([
@@ -38,15 +40,18 @@ export function approvalReadiness(application, now = new Date()) {
       new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
       || String(b.id ?? '').localeCompare(String(a.id ?? '')))[0];
     if (!document) blockers.push(`MISSING_DOCUMENT:${key}`);
-    else if (document.scanStatus !== 'CLEAN' || document.storageBucket !== 'sabi-hospital-evidence-clean') blockers.push(`DOCUMENT_NOT_SCANNED:${key}`);
+    else if (!(document.scanStatus === 'CLEAN' && document.storageBucket === 'sabi-hospital-evidence-clean')
+      && !(unscannedExceptionEnabled(now) && document.scanStatus === 'UNSCANNED_EXCEPTION'
+        && document.storageBucket === 'sabi-hospital-evidence-quarantine'
+        && document.unscannedExceptionByUserId && document.unscannedExceptionAt)) blockers.push(`DOCUMENT_NOT_SCANNED:${key}`);
     else if (document.reviewStatus !== 'VERIFIED' || !document.reviewedByUserId || !document.reviewedAt) blockers.push(`DOCUMENT_NOT_VERIFIED:${key}`);
     else if (document.expiresAt && document.expiresAt <= now) blockers.push(`DOCUMENT_EXPIRED:${key}`);
   }
-  // An operator must explicitly enable all three independently gated stages.
-  // Each required document must still pass the clean-bucket and human-review
-  // checks above, so flags alone can never grant an EMR entitlement.
+  // Intake, review, and either scanning or the dated exception must be enabled.
+  // Flags alone cannot grant an EMR entitlement: each latest document must
+  // independently pass the evidence and human-authenticity gates above.
   if (process.env.HOSPITAL_EVIDENCE_INTAKE_ENABLED !== 'true'
-    || process.env.EVIDENCE_SCANNER_ENABLED !== 'true'
+    || !evidenceWorkflowAvailable()
     || process.env.HOSPITAL_EVIDENCE_REVIEW_ENABLED !== 'true') blockers.push('SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED');
   return { ready: blockers.length === 0, requiredEvidence: requirements ?? [], blockers };
 }

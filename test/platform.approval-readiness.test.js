@@ -60,4 +60,23 @@ describe('EMR approval readiness', () => {
     vi.stubEnv('HOSPITAL_EVIDENCE_REVIEW_ENABLED', 'false');
     expect(approvalReadiness({ ...application, evidence }).blockers).toContain('SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED');
   });
+
+  it('accepts verified quarantine documents only within the explicit temporary exception window', () => {
+    vi.stubEnv('HOSPITAL_EVIDENCE_INTAKE_ENABLED', 'true');
+    vi.stubEnv('HOSPITAL_EVIDENCE_REVIEW_ENABLED', 'true');
+    vi.stubEnv('EVIDENCE_SCANNER_ENABLED', 'false');
+    vi.stubEnv('HOSPITAL_UNSCANNED_EXCEPTION_ENABLED', 'true');
+    vi.stubEnv('HOSPITAL_UNSCANNED_EXCEPTION_UNTIL', '2026-10-08T12:00:00Z');
+    const now = new Date('2026-09-24T12:00:00Z');
+    const evidence = requiredEvidence(details).map((requirementKey) => ({
+      id: requirementKey, requirementKey, createdAt: now, storageBucket: 'sabi-hospital-evidence-quarantine',
+      scanStatus: 'UNSCANNED_EXCEPTION', unscannedExceptionByUserId: 'reviewer', unscannedExceptionAt: now,
+      reviewStatus: 'VERIFIED', reviewedByUserId: 'reviewer', reviewedAt: now, expiresAt: null,
+    }));
+    expect(approvalReadiness({ ...application, evidence }, now).ready).toBe(true);
+    expect(approvalReadiness({ ...application, evidence }, new Date('2026-10-08T12:00:00Z')).blockers).toContain('DOCUMENT_NOT_SCANNED:OFFICER_LICENCE');
+    expect(approvalReadiness({ ...application, evidence: evidence.map((item) => ({ ...item, unscannedExceptionByUserId: null })) }, now).blockers).toContain('DOCUMENT_NOT_SCANNED:OFFICER_LICENCE');
+    vi.stubEnv('HOSPITAL_UNSCANNED_EXCEPTION_UNTIL', '2026-11-24T12:00:00Z');
+    expect(approvalReadiness({ ...application, evidence }, now).blockers).toContain('SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED');
+  });
 });

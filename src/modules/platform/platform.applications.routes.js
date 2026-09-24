@@ -129,7 +129,7 @@ platformApplicationRoutes.get('/:id/approval-readiness', validate(detail), safe(
     select: {
       status: true, emailVerifiedAt: true, details: true,
       packageVersion: { select: { status: true, moduleKeys: true } },
-      evidence: { select: { id: true, requirementKey: true, createdAt: true, storageBucket: true, scanStatus: true, reviewStatus: true, reviewedByUserId: true, reviewedAt: true, expiresAt: true } },
+      evidence: { select: { id: true, requirementKey: true, createdAt: true, storageBucket: true, scanStatus: true, unscannedExceptionByUserId: true, unscannedExceptionAt: true, reviewStatus: true, reviewedByUserId: true, reviewedAt: true, expiresAt: true } },
     },
   });
   if (!row) return responseError(res, 'APPLICATION_NOT_FOUND', 404);
