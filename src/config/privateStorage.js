@@ -21,7 +21,7 @@ export class PrivateStorageError extends Error {
 // browser code or log its configuration. Sabi Auth remains the session authority.
 export function privateStorageClient() {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new PrivateStorageError('PRIVATE_STORAGE_NOT_CONFIGURED');
   let parsed;
   try { parsed = new URL(url); } catch { throw new PrivateStorageError('PRIVATE_STORAGE_NOT_CONFIGURED'); }

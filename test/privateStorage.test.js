@@ -4,9 +4,11 @@ import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient, signedEvide
 
 const previousUrl = process.env.SUPABASE_URL;
 const previousKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const previousSecret = process.env.SUPABASE_SECRET_KEY;
 afterEach(() => {
   if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl;
   if (previousKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = previousKey;
+  if (previousSecret === undefined) delete process.env.SUPABASE_SECRET_KEY; else process.env.SUPABASE_SECRET_KEY = previousSecret;
 });
 
 const client = ({ bucket = { public: false }, upload = { path: 'applications/test/file.pdf' } } = {}) => ({ storage: {
@@ -18,8 +20,9 @@ describe('private Supabase Storage boundary', () => {
   it('rejects absent, insecure, or credential-bearing URLs before creating a client', () => {
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    delete process.env.SUPABASE_SECRET_KEY;
     expect(() => privateStorageClient()).toThrow('PRIVATE_STORAGE_NOT_CONFIGURED');
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-only-key';
+    process.env.SUPABASE_SECRET_KEY = 'test-only-key';
     for (const url of ['http://example.supabase.co/', 'https://evil.example/', 'https://secret@example.supabase.co/']) {
       process.env.SUPABASE_URL = url;
       expect(() => privateStorageClient()).toThrow('PRIVATE_STORAGE_NOT_CONFIGURED');
