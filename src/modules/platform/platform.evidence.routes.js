@@ -31,7 +31,7 @@ const decisionRequest = z.object({
 const errorResponse = (res, code, status) => res.status(status).set('Cache-Control', 'no-store').json({ status: 'error', error: { code, message: code.replaceAll('_', ' ').toLowerCase() } });
 const evidenceSelect = { id: true, requirementKey: true, fileName: true, contentType: true, sizeBytes: true, sha256: true, scanStatus: true, scannedAt: true, reviewStatus: true, reviewedAt: true, createdAt: true };
 const withErrors = (handler) => async (req, res, next) => { try { await handler(req, res); } catch (error) {
-  if (error instanceof PrivateStorageError) return errorResponse(res, error.code, error.code === 'PRIVATE_STORAGE_UPLOAD_INVALID' ? 400 : 503);
+  if (error instanceof PrivateStorageError) return errorResponse(res, error.code, error.code === 'EVIDENCE_ACCESS_DENIED' ? 403 : error.code === 'PRIVATE_STORAGE_UPLOAD_INVALID' ? 400 : 503);
   return next(error);
 } };
 
@@ -111,6 +111,8 @@ evidenceRoutes.put('/:id/evidence/:requirementKey', createLimiter({ kind: 'hospi
   let item;
   try {
     item = await prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw`SELECT id FROM platform_applications WHERE id = ${application.id} AND status IN ('SUBMITTED', 'UNDER_REVIEW', 'NEEDS_INFORMATION') FOR UPDATE`;
+      if (locked.length !== 1) throw new PrivateStorageError('EVIDENCE_ACCESS_DENIED');
       const created = await tx.platformApplicationEvidence.create({ data: {
         applicationId: application.id, requirementKey: req.params.requirementKey,
         fileName: `${req.params.requirementKey.toLowerCase()}.${extension}`, contentType, sizeBytes: req.body.length, sha256: hash(req.body),

@@ -52,7 +52,7 @@ model User {
   dependents DependentProfile[]
   caregiverProfile CaregiverProfile?
   deliveryPartner DeliveryPartner?
-  organisationOwned Organisation?
+  organisationsOwned Organisation[]
   orders       Order[]
   identityMemberships OrganizationMembership[]
   platformRoleAssignments PlatformRoleAssignment[]
@@ -1041,7 +1041,7 @@ enum OrganisationStatus {
 
 model Organisation {
   id String @id @default(uuid())
-  ownerId String @unique @map("owner_id")
+  ownerId String @map("owner_id")
   type OrganisationType
   name String
   address String
@@ -1060,8 +1060,10 @@ model Organisation {
   onboarding OrganisationSubmission?
   memberPlans HospitalMemberPlan[]
   identityOrganization IdentityOrganization?
+  approvedPlatformApplication PlatformApplication?
 
   @@index([status, type])
+  @@index([ownerId])
   @@map("organisations")
 }
 
@@ -1229,10 +1231,19 @@ model PlatformApplication {
   evidenceAccessSentAt DateTime? @map("evidence_access_sent_at")
   emailVerifiedAt DateTime? @map("email_verified_at")
   submittedAt DateTime? @map("submitted_at")
+  approvedOrganisationId String? @unique @map("approved_organisation_id")
+  approvedByUserId String? @map("approved_by_user_id")
+  approvedAt DateTime? @map("approved_at")
+  setupTokenHash String? @unique @map("setup_token_hash")
+  setupTokenExpiresAt DateTime? @map("setup_token_expires_at")
+  setupDeadlineAt DateTime? @map("setup_deadline_at")
+  setupSentAt DateTime? @map("setup_sent_at")
+  setupCompletedAt DateTime? @map("setup_completed_at")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   package PlatformPackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
   packageVersion PlatformPackageVersion @relation(fields: [packageVersionId], references: [id], onDelete: Restrict)
+  approvedOrganisation Organisation? @relation(fields: [approvedOrganisationId], references: [id], onDelete: Restrict)
   evidence PlatformApplicationEvidence[]
   reviewNotes PlatformApplicationReviewNote[]
 

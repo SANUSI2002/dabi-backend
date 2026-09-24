@@ -8,7 +8,7 @@ import { invitationAcceptLimiter, invitationPreviewLimiter, loginLimiter, mfaLim
 import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
 import { confirmTotp, enrollTotp, mfaStatus, removeMfa, replaceRecoveryCodes, stepUp, verifyMfaLogin } from './auth.mfa.controller.js';
 import { requireOrganization, requirePermission, requirePlatform } from '../../middleware/accessMiddleware.js';
-import { acceptMembership, inviteMembership, listManagedMemberships, organizations, platformAssignment, platformContext, revokeMembership, switchOrganization } from '../identity/identity.controller.js';
+import { acceptMembership, emrAccess, inviteMembership, listManagedMemberships, organizations, platformAssignment, platformContext, revokeMembership, switchOrganization } from '../identity/identity.controller.js';
 import { identityInvitationAcceptSchema, identityInvitationCreateSchema, identityInvitationIdSchema, identityInvitationTokenSchema, inviteMembershipSchema, managedMembershipSchema, managedOrganizationSchema, membershipIdSchema, switchOrganizationSchema, tenantInvitationIdSchema } from '../identity/identity.validator.js';
 import { acceptIdentityInvitation, createPlatformInvitation, createTenantInvitation, invitationRoles, listPlatformInvitations, listTenantInvitations, previewIdentityInvitation, revokePlatformInvitation, revokeTenantInvitation } from '../identity/identity.invitations.controller.js';
 
@@ -38,6 +38,7 @@ router.post('/password-reset/confirm', resetConfirmLimiter, validate(passwordRes
 router.get('/me', protect, getCurrentUser);
 router.get('/organizations', protect, organizations);
 router.post('/organizations/switch', protect, validate(switchOrganizationSchema), switchOrganization);
+router.get('/organizations/:organizationId/emr-access', protect, validate(managedOrganizationSchema), requireOrganization, emrAccess);
 router.post('/memberships/:id/accept', protect, validate(membershipIdSchema), acceptMembership);
 router.get('/organizations/:organizationId/memberships', protect, validate(managedOrganizationSchema), requireOrganization, requirePermission('membership.read'), listManagedMemberships);
 router.post('/organizations/:organizationId/memberships', protect, validate(inviteMembershipSchema), requireOrganization, requirePermission('membership.manage'), requireRecentMfa, inviteMembership);

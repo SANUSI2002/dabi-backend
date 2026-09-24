@@ -9,6 +9,7 @@ import { createLimiter } from '../../middleware/rateLimitMiddleware.js';
 import { validate } from '../../middleware/validateMiddleware.js';
 import { verificationEmailAllowedFor, verificationEmailConfigured } from '../auth/auth.email.js';
 import { approvalReadiness } from './platform.approval-readiness.js';
+import { approveForEmr, completeEmrSetup, previewEmrSetup, resendEmrSetup } from './platform.owner-setup.js';
 import { evidenceIntakeEnabled, evidenceRoutes, platformEvidenceRoutes } from './platform.evidence.routes.js';
 
 export const publicApplicationRoutes = express.Router();
@@ -40,14 +41,30 @@ const verification = z.object({ body: z.object({ token: z.string().regex(/^[a-f0
 const list = z.object({ body: empty.optional(), query: z.object({ status: z.enum(['AWAITING_EMAIL', 'SUBMITTED', 'UNDER_REVIEW', 'NEEDS_INFORMATION', 'APPROVED', 'REJECTED']).default('SUBMITTED'), page: z.coerce.number().int().min(1).max(200).default(1) }).strict(), params: empty });
 const detail = z.object({ body: empty.optional(), query: empty, params: paramsId });
 const reviewNote = z.object({ body: z.object({ note: text(2000).refine((value) => value.length >= 10) }).strict(), query: empty, params: paramsId });
+const setupPreview = z.object({ body: z.object({ token: z.string().regex(/^[a-f0-9]{64}$/) }).strict(), query: empty, params: paramsId });
+const setupComplete = z.object({ body: z.object({
+  token: z.string().regex(/^[a-f0-9]{64}$/),
+  password: z.string().min(1).max(128),
+  confirmPassword: z.string(),
+}).strict().refine((value) => value.password === value.confirmPassword, { path: ['confirmPassword'], message: 'Passwords do not match' }), query: empty, params: paramsId });
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const responseError = (res, code, status) => res.status(status).json({ status: 'error', error: { code, message: code.replaceAll('_', ' ').toLowerCase() } });
 const publicSummary = (row) => ({ id: row.id, reference: row.reference, status: row.status, createdAt: row.createdAt, submittedAt: row.submittedAt });
-const reviewerDetail = { id: true, reference: true, organizationName: true, status: true, createdAt: true, submittedAt: true, emailVerifiedAt: true, details: true, packageId: true, packageVersionId: true, billingCycle: true };
+const reviewerDetail = { id: true, reference: true, organizationName: true, status: true, createdAt: true, submittedAt: true, emailVerifiedAt: true, details: true, packageId: true, packageVersionId: true, billingCycle: true, approvedAt: true, setupDeadlineAt: true, setupSentAt: true, setupCompletedAt: true };
 const safe = (work) => async (req, res, next) => { try { await work(req, res); } catch (error) {
   if (error.code === 'P2002') return responseError(res, 'APPLICATION_CONFLICT', 409);
+  if (error?.status && error?.code) return res.status(error.status).set('Cache-Control', 'no-store').json({ status: 'error', error: { code: error.code, message: error.code.replaceAll('_', ' ').toLowerCase(), ...(error.blockers ? { blockers: error.blockers } : {}) } });
   return next(error);
 } };
+
+publicApplicationRoutes.post('/:id/owner-setup/preview', createLimiter({ kind: 'emr-owner-setup-preview', max: 15 }), validate(setupPreview), safe(async (req, res) => {
+  const data = await previewEmrSetup(req.params.id, req.body.token);
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data });
+}));
+publicApplicationRoutes.post('/:id/owner-setup/complete', createLimiter({ kind: 'emr-owner-setup-complete', max: 10 }), validate(setupComplete), safe(async (req, res) => {
+  const data = await completeEmrSetup(req.params.id, req.body.token, req.body.password);
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data });
+}));
 
 async function sendVerification(emailAddress, id, token) {
   try {
@@ -117,6 +134,16 @@ platformApplicationRoutes.get('/:id/approval-readiness', validate(detail), safe(
   });
   if (!row) return responseError(res, 'APPLICATION_NOT_FOUND', 404);
   res.set('Cache-Control', 'no-store').json({ status: 'success', data: approvalReadiness(row) });
+}));
+
+platformApplicationRoutes.post('/:id/approve-emr', requirePermission('platform.onboarding.approve'), createLimiter({ kind: 'hospital-emr-approval', max: 10 }), validate(detail), safe(async (req, res) => {
+  const data = await approveForEmr(req.params.id, req.user.id);
+  res.status(202).set('Cache-Control', 'no-store').json({ status: 'success', data });
+}));
+
+platformApplicationRoutes.post('/:id/resend-owner-setup', requirePermission('platform.onboarding.approve'), createLimiter({ kind: 'hospital-emr-setup-resend', max: 5 }), validate(detail), safe(async (req, res) => {
+  const data = await resendEmrSetup(req.params.id, req.user.id);
+  res.status(202).set('Cache-Control', 'no-store').json({ status: 'success', data });
 }));
 
 platformApplicationRoutes.post('/:id/start-review', createLimiter({ kind: 'hospital-review', max: 20 }), validate(detail), safe(async (req, res) => {

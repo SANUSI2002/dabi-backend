@@ -42,8 +42,11 @@ export function approvalReadiness(application, now = new Date()) {
     else if (document.reviewStatus !== 'VERIFIED' || !document.reviewedByUserId || !document.reviewedAt) blockers.push(`DOCUMENT_NOT_VERIFIED:${key}`);
     else if (document.expiresAt && document.expiresAt <= now) blockers.push(`DOCUMENT_EXPIRED:${key}`);
   }
-  // Remove this only when private upload, malware scanning, reviewer download,
-  // and audited verification are all wired to this evidence table.
-  blockers.push('SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED');
+  // An operator must explicitly enable all three independently gated stages.
+  // Each required document must still pass the clean-bucket and human-review
+  // checks above, so flags alone can never grant an EMR entitlement.
+  if (process.env.HOSPITAL_EVIDENCE_INTAKE_ENABLED !== 'true'
+    || process.env.EVIDENCE_SCANNER_ENABLED !== 'true'
+    || process.env.HOSPITAL_EVIDENCE_REVIEW_ENABLED !== 'true') blockers.push('SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED');
   return { ready: blockers.length === 0, requiredEvidence: requirements ?? [], blockers };
 }

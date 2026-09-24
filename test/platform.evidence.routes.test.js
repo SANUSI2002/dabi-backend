@@ -15,6 +15,7 @@ const db = {
   platformApplicationEvidenceEvent: { create: vi.fn() },
   activityLog: { create: vi.fn() },
   $transaction: vi.fn(async (callback) => callback(db)),
+  $queryRaw: vi.fn(),
 };
 const storage = { storage: { from: vi.fn(() => ({ remove: vi.fn(async () => ({ error: null })) })) } };
 const uploadPrivateObject = vi.fn();
@@ -51,6 +52,7 @@ beforeEach(() => {
   process.env.CLIENT_URL = 'https://sabihealth.org';
   globalThis.fetch = vi.fn(async () => ({ ok: true }));
   db.$transaction.mockImplementation(async (callback) => callback(db));
+  db.$queryRaw.mockResolvedValue([{ id: applicationId }]);
   db.platformApplication.findFirst.mockResolvedValue({ id: applicationId, details, status: 'SUBMITTED' });
   db.platformApplication.findUnique.mockResolvedValue({ id: applicationId, ownerEmail: 'owner@example.com', emailVerifiedAt: new Date(), status: 'SUBMITTED' });
   db.platformApplication.updateMany.mockResolvedValue({ count: 1 });
@@ -99,6 +101,14 @@ describe('email-proven hospital evidence intake', () => {
     expect(uploadPrivateObject).toHaveBeenCalledWith(storage, expect.objectContaining({ bucket: 'sabi-hospital-evidence-quarantine', bytes, contentType: 'application/pdf' }));
     expect(db.platformApplicationEvidenceEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ evidenceId: 'evidence-1', eventType: 'UPLOADED', actorKind: 'EMAIL_VERIFIED_APPLICANT' }) });
     expect(db.$transaction).toHaveBeenCalledOnce();
+  });
+
+  it('discards a quarantine object if approval closed intake during upload', async () => {
+    db.$queryRaw.mockResolvedValue([]);
+    const response = await request(app).put(uploadPath).set(evidenceAuth).set('Content-Type', 'application/pdf').send(Buffer.from('%PDF-1.7'));
+    expect(response.status).toBe(403);
+    expect(db.platformApplicationEvidence.create).not.toHaveBeenCalled();
+    expect(storage.storage.from).toHaveBeenCalledWith('sabi-hospital-evidence-quarantine');
   });
 
   it('provides a non-enumerating, rate-limited link request', async () => {

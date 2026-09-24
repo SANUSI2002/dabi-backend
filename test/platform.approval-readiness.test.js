@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { approvalReadiness, requiredEvidence } from '../src/modules/platform/platform.approval-readiness.js';
 
 const details = {
@@ -10,6 +10,7 @@ const application = {
   status: 'UNDER_REVIEW', emailVerifiedAt: new Date('2026-09-24'), details,
   packageVersion: { status: 'PUBLISHED', moduleKeys: ['emr'] }, evidence: [],
 };
+afterEach(() => vi.unstubAllEnvs());
 
 describe('EMR approval readiness', () => {
   it('requires the applicable server-side document set', () => {
@@ -45,5 +46,18 @@ describe('EMR approval readiness', () => {
     const evidence = requiredEvidence(details).map((requirementKey) => ({ requirementKey, storageBucket: 'sabi-hospital-evidence-clean', scanStatus: 'CLEAN', reviewStatus: 'VERIFIED', reviewedByUserId: 'reviewer', reviewedAt: new Date('2026-09-24'), expiresAt: null }));
     expect(approvalReadiness({ ...application, evidence }).blockers).toEqual(['SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED']);
     expect(approvalReadiness({ ...application, evidence: evidence.map((item) => ({ ...item, storageBucket: 'sabi-hospital-evidence-quarantine' })) }).blockers).toContain('DOCUMENT_NOT_SCANNED:OFFICER_LICENCE');
+  });
+
+  it('becomes ready only after all workflow gates and each verified clean document are present', () => {
+    vi.stubEnv('HOSPITAL_EVIDENCE_INTAKE_ENABLED', 'true');
+    vi.stubEnv('EVIDENCE_SCANNER_ENABLED', 'true');
+    vi.stubEnv('HOSPITAL_EVIDENCE_REVIEW_ENABLED', 'true');
+    const evidence = requiredEvidence(details).map((requirementKey) => ({
+      id: requirementKey, requirementKey, createdAt: new Date('2026-09-24'), storageBucket: 'sabi-hospital-evidence-clean',
+      scanStatus: 'CLEAN', reviewStatus: 'VERIFIED', reviewedByUserId: 'reviewer', reviewedAt: new Date('2026-09-24'), expiresAt: null,
+    }));
+    expect(approvalReadiness({ ...application, evidence }).ready).toBe(true);
+    vi.stubEnv('HOSPITAL_EVIDENCE_REVIEW_ENABLED', 'false');
+    expect(approvalReadiness({ ...application, evidence }).blockers).toContain('SECURE_DOCUMENT_WORKFLOW_NOT_CONNECTED');
   });
 });
