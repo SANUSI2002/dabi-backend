@@ -7,6 +7,7 @@ const applicationId = '33333333-3333-4333-8333-333333333333';
 const userId = '11111111-1111-4111-8111-111111111111';
 const db = {
   platformApplication: { updateMany: vi.fn(), findUnique: vi.fn() },
+  platformApplicationReviewNote: { findMany: vi.fn(), create: vi.fn() },
   activityLog: { create: vi.fn() },
   $transaction: vi.fn(async (callback) => callback(db)),
 };
@@ -28,6 +29,8 @@ beforeEach(() => {
   db.platformApplication.updateMany.mockResolvedValue({ count: 1 });
   db.platformApplication.findUnique.mockResolvedValue({ id: applicationId, status: 'UNDER_REVIEW' });
   db.activityLog.create.mockResolvedValue({});
+  db.platformApplicationReviewNote.findMany.mockResolvedValue([]);
+  db.platformApplicationReviewNote.create.mockResolvedValue({ id: 'note-1', reviewerId: userId, note: 'Registration details need an independent check.', createdAt: new Date() });
 });
 
 describe('platform hospital review start', () => {
@@ -72,5 +75,32 @@ describe('platform hospital review start', () => {
     expect(response.status).toBe(409);
     expect(response.body.error.code).toBe('APPLICATION_NOT_READY');
     expect(db.activityLog.create).not.toHaveBeenCalled();
+  });
+
+  it('allows a reviewer to record an audited observation but does not alter approval or evidence', async () => {
+    const path = `/api/v1/platform/applications/${applicationId}/review-notes`;
+    expect((await request(app).post(path).send({ note: 'Registration details need an independent check.' })).status).toBe(401);
+    expect((await request(app).post(path).set(auth()).send({ note: 'short' })).status).toBe(400);
+    const result = await request(app).post(path).set(auth()).send({ note: 'Registration details need an independent check.' });
+    expect(result.status).toBe(201);
+    expect(result.headers['cache-control']).toBe('no-store');
+    expect(db.platformApplicationReviewNote.create).toHaveBeenCalledWith(expect.objectContaining({ data: { applicationId, reviewerId: userId, note: 'Registration details need an independent check.' } }));
+    expect(db.activityLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ type: 'PLATFORM_APPLICATION_REVIEW_NOTE_ADDED', meta: { applicationId, reviewNoteId: 'note-1' } }) });
+    expect(db.platformApplication.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('only records notes while the application is under review', async () => {
+    db.platformApplication.findUnique.mockResolvedValue({ id: applicationId, status: 'SUBMITTED' });
+    const response = await request(app).post(`/api/v1/platform/applications/${applicationId}/review-notes`).set(auth()).send({ note: 'Document verification pending.' });
+    expect(response.status).toBe(409);
+    expect(db.platformApplicationReviewNote.create).not.toHaveBeenCalled();
+  });
+
+  it('lists only notes for the requested application behind platform authorization', async () => {
+    const path = `/api/v1/platform/applications/${applicationId}/review-notes`;
+    expect((await request(app).get(path)).status).toBe(401);
+    const result = await request(app).get(path).set(auth());
+    expect(result.status).toBe(200);
+    expect(db.platformApplicationReviewNote.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { applicationId }, take: 100 }));
   });
 });

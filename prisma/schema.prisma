@@ -1231,6 +1231,7 @@ model PlatformApplication {
   package PlatformPackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
   packageVersion PlatformPackageVersion @relation(fields: [packageVersionId], references: [id], onDelete: Restrict)
   evidence PlatformApplicationEvidence[]
+  reviewNotes PlatformApplicationReviewNote[]
 
   @@index([status, createdAt])
   @@index([ownerEmail, createdAt])
@@ -1259,6 +1260,20 @@ model PlatformApplicationEvidence {
   @@unique([applicationId, requirementKey])
   @@index([applicationId, scanStatus, reviewStatus])
   @@map("platform_application_evidence")
+}
+
+// Append-only reviewer observations. A note is not proof that a document was
+// uploaded, scanned, or verified and never changes approval readiness.
+model PlatformApplicationReviewNote {
+  id String @id @default(uuid())
+  applicationId String @map("application_id")
+  reviewerId String @map("reviewer_id")
+  note String
+  createdAt DateTime @default(now()) @map("created_at")
+  application PlatformApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@index([applicationId, createdAt])
+  @@map("platform_application_review_notes")
 }
 
 model OrganisationDocument {

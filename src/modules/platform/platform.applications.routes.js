@@ -37,6 +37,7 @@ const submission = z.object({ body, query: empty, params: empty });
 const verification = z.object({ body: z.object({ token: z.string().regex(/^[a-f0-9]{64}$/) }).strict(), query: empty, params: paramsId });
 const list = z.object({ body: empty.optional(), query: z.object({ status: z.enum(['AWAITING_EMAIL', 'SUBMITTED', 'UNDER_REVIEW', 'NEEDS_INFORMATION', 'APPROVED', 'REJECTED']).default('SUBMITTED'), page: z.coerce.number().int().min(1).max(200).default(1) }).strict(), params: empty });
 const detail = z.object({ body: empty.optional(), query: empty, params: paramsId });
+const reviewNote = z.object({ body: z.object({ note: text(2000).refine((value) => value.length >= 10) }).strict(), query: empty, params: paramsId });
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const responseError = (res, code, status) => res.status(status).json({ status: 'error', error: { code, message: code.replaceAll('_', ' ').toLowerCase() } });
 const publicSummary = (row) => ({ id: row.id, reference: row.reference, status: row.status, createdAt: row.createdAt, submittedAt: row.submittedAt });
@@ -123,4 +124,33 @@ platformApplicationRoutes.post('/:id/start-review', createLimiter({ kind: 'hospi
   });
   if (!row) return responseError(res, 'APPLICATION_NOT_READY', 409);
   res.set('Cache-Control', 'no-store').json({ status: 'success', data: row });
+}));
+
+platformApplicationRoutes.get('/:id/review-notes', validate(detail), safe(async (req, res) => {
+  const application = await prisma.platformApplication.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  if (!application) return responseError(res, 'APPLICATION_NOT_FOUND', 404);
+  const items = await prisma.platformApplicationReviewNote.findMany({
+    where: { applicationId: req.params.id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100,
+    select: { id: true, reviewerId: true, note: true, createdAt: true },
+  });
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data: { items } });
+}));
+
+platformApplicationRoutes.post('/:id/review-notes', createLimiter({ kind: 'hospital-review-note', max: 30 }), validate(reviewNote), safe(async (req, res) => {
+  const row = await prisma.$transaction(async (tx) => {
+    const application = await tx.platformApplication.findUnique({ where: { id: req.params.id }, select: { status: true } });
+    if (!application || application.status !== 'UNDER_REVIEW') return null;
+    const created = await tx.platformApplicationReviewNote.create({
+      data: { applicationId: req.params.id, reviewerId: req.user.id, note: req.body.note },
+      select: { id: true, reviewerId: true, note: true, createdAt: true },
+    });
+    await tx.activityLog.create({ data: {
+      userId: req.user.id, type: 'PLATFORM_APPLICATION_REVIEW_NOTE_ADDED',
+      description: 'Hospital application reviewer note added',
+      meta: { applicationId: req.params.id, reviewNoteId: created.id },
+    } });
+    return created;
+  });
+  if (!row) return responseError(res, 'APPLICATION_NOT_READY', 409);
+  res.status(201).set('Cache-Control', 'no-store').json({ status: 'success', data: row });
 }));
