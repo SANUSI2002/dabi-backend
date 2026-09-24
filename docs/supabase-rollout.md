@@ -1,8 +1,11 @@
 # Supabase test migration and private file storage
 
-Status: preparation only. The deployed test API still uses its existing Render
-PostgreSQL database. Do not upload real hospital/patient records or switch
-`DATABASE_URL` until the checks below have been completed.
+Status (24 September 2026): the separate `sabi-health-test` project and four
+private, size/MIME-restricted buckets exist. The Render test API has server-only
+Supabase Storage credentials, but there is no applicant upload, malware scan,
+reviewer preview, or clinical file route yet. The API still uses its existing
+Render PostgreSQL database. Do not upload real hospital/patient records or
+switch `DATABASE_URL` until the checks below have been completed.
 
 ## Ownership and isolation
 
