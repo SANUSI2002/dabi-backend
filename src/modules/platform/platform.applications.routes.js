@@ -39,6 +39,7 @@ const detail = z.object({ body: empty.optional(), query: empty, params: paramsId
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const responseError = (res, code, status) => res.status(status).json({ status: 'error', error: { code, message: code.replaceAll('_', ' ').toLowerCase() } });
 const publicSummary = (row) => ({ id: row.id, reference: row.reference, status: row.status, createdAt: row.createdAt, submittedAt: row.submittedAt });
+const reviewerDetail = { id: true, reference: true, organizationName: true, status: true, createdAt: true, submittedAt: true, emailVerifiedAt: true, details: true, packageId: true, packageVersionId: true, billingCycle: true };
 const safe = (work) => async (req, res, next) => { try { await work(req, res); } catch (error) {
   if (error.code === 'P2002') return responseError(res, 'APPLICATION_CONFLICT', 409);
   return next(error);
@@ -94,7 +95,18 @@ platformApplicationRoutes.get('/', validate(list), safe(async (req, res) => {
   res.set('Cache-Control', 'no-store').json({ status: 'success', data: { items: rows.slice(0, 50), nextPage: rows.length > 50 ? req.query.page + 1 : null } });
 }));
 platformApplicationRoutes.get('/:id', validate(detail), safe(async (req, res) => {
-  const row = await prisma.platformApplication.findUnique({ where: { id: req.params.id }, select: { id: true, reference: true, organizationName: true, status: true, createdAt: true, submittedAt: true, emailVerifiedAt: true, details: true, packageId: true, packageVersionId: true, billingCycle: true } });
+  const row = await prisma.platformApplication.findUnique({ where: { id: req.params.id }, select: reviewerDetail });
   if (!row) return responseError(res, 'APPLICATION_NOT_FOUND', 404);
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data: row });
+}));
+
+platformApplicationRoutes.post('/:id/start-review', createLimiter({ kind: 'hospital-review', max: 20 }), validate(detail), safe(async (req, res) => {
+  const row = await prisma.$transaction(async (tx) => {
+    const changed = await tx.platformApplication.updateMany({ where: { id: req.params.id, status: 'SUBMITTED', emailVerifiedAt: { not: null } }, data: { status: 'UNDER_REVIEW' } });
+    if (changed.count !== 1) return null;
+    await tx.activityLog.create({ data: { userId: req.user.id, type: 'PLATFORM_APPLICATION_REVIEW_STARTED', description: 'Hospital application review started', meta: { applicationId: req.params.id } } });
+    return tx.platformApplication.findUnique({ where: { id: req.params.id }, select: reviewerDetail });
+  });
+  if (!row) return responseError(res, 'APPLICATION_NOT_READY', 409);
   res.set('Cache-Control', 'no-store').json({ status: 'success', data: row });
 }));
