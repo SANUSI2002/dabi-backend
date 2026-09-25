@@ -53,6 +53,21 @@ describe('live Care Calendar reads', () => {
     expect(JSON.stringify(response.body)).not.toMatch(/PRIVATE|SECRET|userId|conditions|Other doctor/);
     expect(tx.appointment.findMany.mock.calls[0][0].select).toEqual({ id: true, userId: true, doctorName: true, time: true, status: true });
   });
+  it('includes the account holders own hospital appointments, not other patients or dependents', async () => {
+    const hospital = [
+      { id: uid(40), patientId: owner, dependentId: null, appointmentType: 'General consultation', requestedAt: new Date('2026-09-05T09:00:00Z'), status: 'SCHEDULED', reason: 'PRIVATE REASON' },
+      { id: uid(41), patientId: other, dependentId: null, appointmentType: 'Other patient visit', requestedAt: new Date('2026-09-06T09:00:00Z'), status: 'SCHEDULED' },
+      { id: uid(42), patientId: owner, dependentId: dep, appointmentType: 'Child visit', requestedAt: new Date('2026-09-07T09:00:00Z'), status: 'PENDING' },
+    ];
+    tx.hospitalAppointment = { findMany: fn().mockImplementation(async ({ where, select: fields }) => hospital.filter((row) => matches(row, where)).map((row) => select(row, fields))) };
+    try {
+      const events = (await get()).body.data.events;
+      expect(events.map((e) => [e.memberId, e.title])).toEqual([['self', 'Dr Safe'], ['self', 'General consultation'], [dep, 'Child visit']]);
+      expect(JSON.stringify(events)).not.toMatch(/PRIVATE|Other patient/);
+    } finally {
+      delete tx.hospitalAppointment;
+    }
+  });
   it('never treats inviting a member as reciprocal permission to their appointments', async () => {
     expect((await get({ memberId: ownLink })).status).toBe(404);
     relationships.push(grant(reverseLink, member, owner, ['APPOINTMENTS']));

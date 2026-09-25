@@ -20,8 +20,17 @@ export const circle = (userId) => r.transaction(async (tx) => {
   const invited = await r.members(tx, { OR: [{ caregiverId: userId }, ...(account.email ? [{ caregiverEmail: account.email.toLowerCase(), invitationKind: 'DIRECT' }] : [])] });
   // Never expand other circles or their dependents. Only this user's relationship is returned.
   const dependents = owner ? await r.dependents(tx, userId) : [];
-  return { members: owned.map(visible), dependents,
-    joinedCircles: invited.filter((m) => m.patientId !== userId).map(visible),
+  // Minimal identity only: the name of someone who accepted an invite or asked to join (so the
+  // owner can recognise and approve them), and the owner name of each circle this user belongs to.
+  const named = async (m) => {
+    const account = m.caregiverId && (m.status === "ACTIVE" || m.joinRequestedAt) ? await r.user(tx, m.caregiverId) : null;
+    return { ...visible(m), name: account?.full_name ?? null };
+  };
+  const joined = async (m) => ({ ...visible(m), ownerName: (await r.user(tx, m.patientId))?.full_name ?? null });
+  // Sequential on purpose: one interactive transaction runs one query at a time.
+  const members = []; for (const m of owned) members.push(await named(m));
+  const joinedCircles = []; for (const m of invited.filter((item) => item.patientId !== userId)) joinedCircles.push(await joined(m));
+  return { members, dependents, joinedCircles,
     empty: owned.length === 0 && invited.length === 0 && dependents.length === 0 };
 });
 export const memberDetail = (userId, id) => r.transaction(async (tx) => {
@@ -72,7 +81,8 @@ export const lookup = (userId, { token }) => r.transaction(async (tx) => {
   const { item } = await invitation(tx, userId, token);
   const owner = await r.user(tx, item.patientId);
   // Token possession allows only the join confirmation, not membership or permission enumeration.
-  return { name: 'Family Circle', ownerName: owner?.full_name ?? 'Patient', expiresAt: item.expiresAt };
+  // DIRECT invites are accepted as sent (POST /invitations/accept); circle links need the owner's approval (POST /join).
+  return { name: 'Family Circle', ownerName: owner?.full_name ?? 'Patient', expiresAt: item.expiresAt, kind: item.invitationKind === 'CIRCLE_LINK' ? 'CIRCLE_LINK' : 'DIRECT' };
 });
 export const join = (userId, { token, permissionLevel, requestedPermissions }) => r.transaction(async (tx) => {
   const { item, account } = await invitation(tx, userId, token);

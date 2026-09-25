@@ -31,8 +31,8 @@ const listText = z.array(text(120)).max(50);
 const dependentFields = {
   fullName: text(160), nickname: optionalText(100), dateOfBirth: z.string().date().nullable().optional(),
   gender: z.enum(['Male', 'Female']).nullable().optional(),
-  bloodGroup: z.enum(['A+', 'A-', 'B+', 'B-', 'O+']).nullable().optional(),
-  genotype: z.enum(['AA', 'AS', 'SS', 'AC', 'SC']).nullable().optional(),
+  bloodGroup: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']).nullable().optional(),
+  genotype: z.enum(['AA', 'AS', 'SS', 'AC', 'SC', 'CC']).nullable().optional(),
   allergies: listText.optional(), conditions: listText.optional(), careType: z.enum(['Child', 'Elderly']).nullable().optional(),
   immunizationStatus: z.enum(['Up to date', 'Partially complete', 'Not started']).nullable().optional(),
   milestones: z.array(z.enum(['Smiling & Cooing', 'Rolling Over', 'Sitting Unassisted', 'Independent Mobility', 'Uses Walking Aid', 'Fall Risk Assessment Done'])).max(6).optional(),

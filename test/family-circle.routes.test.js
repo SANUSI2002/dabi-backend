@@ -158,7 +158,7 @@ describe('invitations, strong-code join and patient-controlled removal', () => {
     const response = await call('post', '/join-links', { permissionLevel: 'caregiver' }); expect(response.status).toBe(201);
     const { token, id, qrPayload } = response.body.data; expect(qrPayload).toBe(token);
     const lookup = await call('post', '/join/lookup', { token }, caregiver);
-    expect(lookup.body.data).toEqual({ name: 'Family Circle', ownerName: 'Circle Owner', expiresAt: response.body.data.expiresAt });
+    expect(lookup.body.data).toEqual({ name: 'Family Circle', ownerName: 'Circle Owner', expiresAt: response.body.data.expiresAt, kind: 'CIRCLE_LINK' });
     const joined = await call('post', '/join', { token, permissionLevel: 'owner', requestedPermissions: ['PROFILE', 'VITALS'] }, caregiver);
     expect(joined.body.data).toEqual({ id, status: 'PENDING', permissions: [] });
     expect((await call('get', `/access/${owner}`, undefined, caregiver)).body.data.permissions).toEqual([]);
@@ -168,6 +168,29 @@ describe('invitations, strong-code join and patient-controlled removal', () => {
     expect((await call('post', `/members/${id}/approve`, { permissions: ['PROFILE'] })).body.data.permissions).toEqual(['PROFILE']);
     expect((await call('get', `/access/${owner}`, undefined, caregiver)).body.data.permissions).toEqual(['PROFILE']);
     expect(state.userRole.filter((r) => r.userId === caregiver)).toEqual([{ id: uid(7), userId: caregiver, role: 'CAREGIVER' }]);
+  });
+  it('names accepted members and join requesters to the owner, and the owner to the member', async () => {
+    const invite = await call('post', '/members', emailInvite());
+    expect((await call('post', '/join/lookup', { token: invite.body.data.token }, caregiver)).body.data.kind).toBe('DIRECT');
+    const pendingView = await call('get', '/circle');
+    expect(pendingView.body.data.members[0].name).toBeNull();
+    await call('post', '/invitations/accept', { token: invite.body.data.token }, caregiver);
+    expect((await call('get', '/circle')).body.data.members[0]).toMatchObject({ status: 'ACTIVE', name: 'Caregiver' });
+    expect((await call('get', '/circle', undefined, caregiver)).body.data.joinedCircles[0]).toMatchObject({ status: 'ACTIVE', ownerName: 'Circle Owner' });
+    const link = await call('post', '/join-links', { permissionLevel: 'viewer' });
+    await call('post', '/join', { token: link.body.data.token, permissionLevel: 'viewer', requestedPermissions: ['VITALS'] }, other);
+    const requester = (await call('get', '/circle')).body.data.members.find((m) => m.id === link.body.data.id);
+    expect(requester).toMatchObject({ status: 'PENDING', name: 'Other Owner', requestedPermissions: ['VITALS'] });
+  });
+  it('explains that hospital records block deleting a dependent', async () => {
+    const dep = await createDep();
+    tx.dependentProfile.deleteMany = vi.fn(async () => { throw Object.assign(new Error('Foreign key constraint violated'), { code: 'P2003' }); });
+    const response = await call('delete', `/dependents/${dep.id}`);
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('DEPENDENT_HAS_HOSPITAL_RECORDS');
+  });
+  it('accepts every blood group and genotype for a dependent', async () => {
+    for (const bloodGroup of ['AB+', 'AB-', 'O-']) expect((await call('post', '/dependents', { fullName: 'Blood ' + bloodGroup, bloodGroup, genotype: 'CC' })).status).toBe(201);
   });
   it('does not expose rosters, dependents or invitations from another circle to a joined member', async () => {
     const ownLink = await activeLink(); await createDep();

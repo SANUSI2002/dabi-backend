@@ -72,6 +72,9 @@ export const read = (userId, query, upcoming = false) =>
     const rows = userIds.length
       ? await r.appointments(tx, userIds, query, upcoming)
       : [];
+    const ownHospitalRows = userIds.length
+      ? await r.ownHospitalAppointments(tx, userIds, query, upcoming)
+      : [];
     const dependentIds = selected
       .filter((member) => member.kind === "DEPENDENT")
       .map((member) => member.id);
@@ -86,7 +89,9 @@ export const read = (userId, query, upcoming = false) =>
       : [];
     const hasMore =
       upcoming &&
-      (rows.length > query.limit || dependentRows.length > query.limit);
+      (rows.length > query.limit ||
+        ownHospitalRows.length > query.limit ||
+        dependentRows.length > query.limit);
     const events = (upcoming ? rows.slice(0, query.limit) : rows)
       .map((row) => {
         const member = selected.find((m) => sources.get(m.id) === row.userId);
@@ -99,6 +104,21 @@ export const read = (userId, query, upcoming = false) =>
           status: row.status,
         };
       })
+      .concat(
+        (upcoming ? ownHospitalRows.slice(0, query.limit) : ownHospitalRows).map(
+          (row) => {
+            const member = selected.find((m) => sources.get(m.id) === row.patientId);
+            return {
+              id: row.id,
+              memberId: member.id,
+              memberName: member.name,
+              title: row.appointmentType || "Hospital appointment",
+              time: row.requestedAt,
+              status: row.status,
+            };
+          },
+        ),
+      )
       .concat(
         (upcoming ? dependentRows.slice(0, query.limit) : dependentRows).map(
           (row) => {
