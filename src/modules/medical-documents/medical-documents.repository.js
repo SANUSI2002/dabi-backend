@@ -115,6 +115,7 @@ export const emergencySummary = (userId) =>
       profile: {
         select: {
           blood_type: true,
+          genotype: true,
           chronic_conditions: true,
           known_allergies: true,
           emergencyContactName: true,

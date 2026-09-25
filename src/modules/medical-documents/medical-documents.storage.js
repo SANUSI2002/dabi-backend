@@ -76,6 +76,10 @@ export class R2DocumentStorage {
       endpoint: config.endpoint,
       forcePathStyle: config.forcePathStyle,
       credentials: config.credentials,
+      // Otherwise the SDK signs a CRC32 of the *empty* presign-time body into upload URLs
+      // (x-amz-checksum-crc32), and S3-compatible stores reject the real file as a bad digest.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     });
   }
 

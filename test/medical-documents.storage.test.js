@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readConfig, StorageUnavailableError } from '../src/modules/medical-documents/medical-documents.storage.js';
+import { URL } from 'node:url';
+import { R2DocumentStorage, readConfig, StorageUnavailableError } from '../src/modules/medical-documents/medical-documents.storage.js';
 import { PRIVATE_BUCKETS } from '../src/config/privateStorage.js';
 
 const r2 = { DOCUMENT_STORAGE_PROVIDER: 'r2', R2_ACCOUNT_ID: 'acct', R2_ACCESS_KEY_ID: 'key', R2_SECRET_ACCESS_KEY: 'secret', R2_BUCKET: 'docs', R2_ENDPOINT: 'https://acct.r2.example' };
@@ -28,5 +29,17 @@ describe('medical document storage configuration', () => {
     ['a signed-URL lifetime above 15 minutes', { ...supabase, DOCUMENT_SIGNED_URL_TTL_SECONDS: '3600' }],
   ])('fails closed with %s', (_, env) => {
     expect(() => readConfig(env)).toThrow(StorageUnavailableError);
+  });
+
+  it('issues upload URLs a browser can PUT any file to (no presign-time body checksum)', async () => {
+    const saved = { ...process.env };
+    Object.assign(process.env, supabase);
+    try {
+      const upload = await new R2DocumentStorage().createUpload({ objectKey: 'quarantine/test', contentType: 'application/pdf', byteSize: 68 });
+      expect(upload.method).toBe('PUT');
+      expect([...new URL(upload.url).searchParams.keys()].filter((key) => /checksum/i.test(key))).toEqual([]);
+    } finally {
+      process.env = saved;
+    }
   });
 });

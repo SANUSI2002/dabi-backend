@@ -11,6 +11,7 @@ export const buildEmergencySummaryPdf = (data) => {
     `Patient reference: ${data?.patientId || "Not provided"}`,
     `Date of birth: ${data?.dob ? new Date(data.dob).toISOString().slice(0, 10) : "Not provided"}`,
     `Blood type: ${profile.blood_type || "Not provided"}`,
+    `Genotype: ${profile.genotype || "Not provided"}`,
     `Known allergies: ${profile.known_allergies || "Not provided"}`,
     `Chronic conditions: ${profile.chronic_conditions || "Not provided"}`,
     `Emergency contact: ${profile.emergencyContactName || "Not provided"}`,
