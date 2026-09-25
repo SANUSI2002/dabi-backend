@@ -53,6 +53,27 @@ describe('profile routes', () => {
     expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: '5f95ea6b-15e7-4b29-85be-8189931bf2d6' } });
     expect(prisma.appointment.deleteMany).toHaveBeenCalledWith({ where: { userId: '5f95ea6b-15e7-4b29-85be-8189931bf2d6' } });
   });
+  it('returns personal details for an account that has no profile row yet', async () => {
+    prisma.userProfile.findUnique.mockResolvedValueOnce(null);
+    prisma.user.findUnique.mockResolvedValueOnce({ id: '5f95ea6b-15e7-4b29-85be-8189931bf2d6', email: 'c@example.com', full_name: 'Care Giver' });
+    const response = await request(app).get('/profile').set(auth);
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ userId: '5f95ea6b-15e7-4b29-85be-8189931bf2d6', user: { id: '5f95ea6b-15e7-4b29-85be-8189931bf2d6', email: 'c@example.com', full_name: 'Care Giver' } });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: '5f95ea6b-15e7-4b29-85be-8189931bf2d6' }, select: expect.not.objectContaining({ password: true }) }));
+  });
+  it('lets a patient clear blood type, genotype and the emergency contact, and bounds free text', async () => {
+    const response = await request(app).put('/profile/update').set(auth).send({ blood_type: null, genotype: null, emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelation: '' });
+    expect(response.status).toBe(200);
+    expect(prisma.userProfile.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: { blood_type: null, genotype: null, emergencyContactName: null, emergencyContactPhone: null, emergencyContactRelation: null } }));
+    expect((await request(app).put('/profile/update').set(auth).send({ emergencyContactName: 'J' })).status).toBe(400);
+    expect((await request(app).put('/profile/update').set(auth).send({ known_allergies: 'x'.repeat(1001) })).status).toBe(400);
+  });
+  it('explains that retained clinical records block deletion instead of reporting an outage', async () => {
+    prisma.$transaction.mockRejectedValueOnce(Object.assign(new Error('Foreign key constraint violated'), { code: 'P2003' }));
+    const response = await request(app).delete('/profile/delete-account').set(auth).send({ confirmation: 'DELETE' });
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('ACCOUNT_HAS_RETAINED_RECORDS');
+  });
   it('returns a safe response when account deletion transaction fails', async () => {
     prisma.$transaction.mockRejectedValueOnce(new Error('internal transaction topology'));
     const response = await request(app).delete('/profile/delete-account').set(auth).send({ confirmation: 'DELETE' });

@@ -4,6 +4,7 @@ import { z } from 'zod';
 // bad client can't persist junk into the health record.
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 const GENOTYPES = ['AA', 'AS', 'SS', 'AC', 'SC', 'CC'];
+const clearable = (schema) => z.union([schema, z.literal('').transform(() => null)]).optional();
 const EMERGENCY_ACCESS_CATEGORIES = [
   'Appointments',
   'Prescriptions',
@@ -26,18 +27,19 @@ export const updateProfileSchema = z.object({
       dob: z.string().date('Date of birth must be an ISO date, e.g. 1990-05-15').optional(),
 
       // --- Medical History ---
-      blood_type: z.enum(BLOOD_TYPES, { message: 'Invalid blood type' }).optional(),
-      genotype: z.enum(GENOTYPES, { message: 'Invalid genotype' }).optional(),
-      chronic_conditions: z.string().optional(),
+      // null clears a value the patient entered by mistake.
+      blood_type: z.enum(BLOOD_TYPES, { message: 'Invalid blood type' }).nullable().optional(),
+      genotype: z.enum(GENOTYPES, { message: 'Invalid genotype' }).nullable().optional(),
+      chronic_conditions: z.string().max(1000).optional(),
 
       // --- Allergies & Medications (free text, comma-separated on the client) ---
-      known_allergies: z.string().optional(),
-      current_medications: z.string().optional(),
+      known_allergies: z.string().max(1000).optional(),
+      current_medications: z.string().max(1000).optional(),
 
       // --- Lifestyle ---
-      smoking_status: z.string().optional(),
-      alcohol_frequency: z.string().optional(),
-      physical_activity: z.string().optional(),
+      smoking_status: z.string().max(120).optional(),
+      alcohol_frequency: z.string().max(120).optional(),
+      physical_activity: z.string().max(200).optional(),
 
       // --- Notifications ---
       appointment_reminders: z.boolean().optional(),
@@ -47,9 +49,10 @@ export const updateProfileSchema = z.object({
       // --- Consent ---
       data_sharing_consent: z.boolean().optional(),
       electronic_health_records: z.boolean().optional(),
-      emergencyContactName: z.string().trim().min(2).max(120).optional(),
-      emergencyContactPhone: z.string().trim().min(7).max(30).optional(),
-      emergencyContactRelation: z.string().trim().min(2).max(80).optional(),
+      // An empty string removes the emergency contact.
+      emergencyContactName: clearable(z.string().trim().min(2).max(120)),
+      emergencyContactPhone: clearable(z.string().trim().min(7).max(30)),
+      emergencyContactRelation: clearable(z.string().trim().min(2).max(80)),
 
       // --- Emergency Access (which record categories a responder may view) ---
       emergency_access_permissions: z

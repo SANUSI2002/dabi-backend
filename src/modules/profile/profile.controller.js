@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import * as ProfileModel from './profile.model.js';
 import { revokeUserSessions } from '../auth/auth.session.js';
+import { clearRefreshCookie } from '../auth/auth.cookie.js';
 
 export const getProfile = async (req, res, next) => {
   try {
@@ -71,8 +72,19 @@ export const deleteAccount = async (req, res, next) => {
   try {
     const userId = req.user.id;
     await ProfileModel.deleteUserAccount(userId);
+    clearRefreshCookie(res);
     res.status(200).json({ status: 'success', message: 'Account permanently deleted' });
   } catch (error) {
+    // Hospital enrollments/appointments, wellness bookings, medical documents and
+    // organisation roles are retained by design (onDelete: Restrict), so the whole
+    // deletion rolls back. Say so instead of reporting an outage.
+    if (error?.code === 'P2003') {
+      return res.status(409).json({
+        status: 'error',
+        code: 'ACCOUNT_HAS_RETAINED_RECORDS',
+        message: 'Your account is linked to hospital, wellness or document records that must be kept, so it cannot be deleted here. Please contact Sabi support to close your account.',
+      });
+    }
     next(error);
   }
 };

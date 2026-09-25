@@ -11,11 +11,16 @@ const safeUserFields = {
   dob: true,
 };
 
+// Accounts created outside patient registration (e.g. caregivers) may have no profile
+// row yet; still return their personal details so the settings screen can render.
 export const getProfileByUserId = async (userId) => {
-  return prisma.userProfile.findUnique({
+  const profile = await prisma.userProfile.findUnique({
     where: { userId },
     include: { user: { select: safeUserFields } },
   });
+  if (profile) return profile;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: safeUserFields });
+  return user ? { userId, user } : null;
 };
 
 // Saves the settings-hub payload. Personal-info fields live on the User row while
