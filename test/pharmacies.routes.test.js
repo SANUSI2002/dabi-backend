@@ -2,6 +2,8 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Real bcrypt (cost 12) is CPU-bound and times out when the whole suite runs in parallel.
+vi.mock('bcryptjs', () => ({ default: { hash: async (value) => `test-password-hash:${value}`, compare: async (value, hash) => hash === `test-password-hash:${value}` } }));
 
 const f = () => vi.fn();
 const tx = { user: { findUnique: f(), create: f() }, userRole: { findFirst: f() }, pharmacy: { create: f(), findFirst: f(), findUnique: f(), update: f() }, identityOrganization: { create: f() }, organizationMembership: { create: f() }, membershipRole: { create: f() }, activityLog: { create: f() } };

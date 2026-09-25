@@ -57,6 +57,13 @@ model User {
   identityMemberships OrganizationMembership[]
   platformRoleAssignments PlatformRoleAssignment[]
   emrPatientsRegistered EmrPatient[] @relation("EmrPatientRegistrar")
+  hospitalEnrollments HospitalEnrollment[] @relation("HospitalEnrollmentPatient")
+  hospitalEnrollmentDecisions HospitalEnrollment[] @relation("HospitalEnrollmentReviewer")
+  hospitalAppointments HospitalAppointment[] @relation("HospitalAppointmentPatient")
+  hospitalAppointmentDecisions HospitalAppointment[] @relation("HospitalAppointmentReviewer")
+  wellnessBookings WellnessBooking[]
+  medicalDocuments MedicalDocument[] @relation("MedicalDocumentOwner")
+  medicalDocumentSharesReceived MedicalDocumentShare[] @relation("MedicalDocumentShareRecipient")
 
   @@map("users")
 }
@@ -158,6 +165,7 @@ model ProfessionalProfile {
   user                 User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
   doctorCareRelationships DoctorCareRelationship[]
   prescriptionsIssued Prescription[]
+  wellnessProvider WellnessProvider?
 
   @@index([verificationStatus])
   @@index([professionType])
@@ -868,6 +876,7 @@ model MedicalRecord {
   documentUrl String?
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  medicalDocuments MedicalDocument[]
 
   @@index([userId])
   @@index([categoryId])
@@ -1020,6 +1029,8 @@ model DependentProfile {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  hospitalEnrollments HospitalEnrollment[]
+  hospitalAppointments HospitalAppointment[]
   @@index([patientId, createdAt])
   @@map("dependent_profiles")
 }
@@ -1062,6 +1073,9 @@ model Organisation {
   memberPlans HospitalMemberPlan[]
   identityOrganization IdentityOrganization?
   approvedPlatformApplication PlatformApplication?
+  enrollments HospitalEnrollment[]
+  appointments HospitalAppointment[]
+  wellnessProvider WellnessProvider?
 
   @@index([status, type])
   @@index([ownerId])
@@ -1379,7 +1393,223 @@ model HospitalMemberPlan {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   archivedAt DateTime? @map("archived_at")
   hospital Organisation @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  enrollments HospitalEnrollment[]
 
   @@index([hospitalId, status, createdAt])
   @@map("hospital_member_plans")
+}
+
+// ---- Telemedicine care features: hospital enrollment & appointments, wellness, secure medical documents ----
+
+enum MedicalDocumentStatus {
+  PENDING_UPLOAD
+  PENDING_SCAN
+  CLEAN
+  INFECTED
+  REJECTED
+  PENDING_CLINICAL_REVIEW
+  DELETED
+}
+
+enum MedicalDocumentKind {
+  MEDICAL_RECORD
+  LAB_RESULT
+  IMAGING
+  EXTERNAL_PRESCRIPTION
+  OTHER
+}
+
+enum MedicalDocumentScanVerdict {
+  CLEAN
+  INFECTED
+  REJECTED
+}
+
+model MedicalDocument {
+  id                   String                @id @default(uuid())
+  ownerPatientId       String                @map("owner_patient_id")
+  medicalRecordId      String?               @map("medical_record_id")
+  objectKey            String                @unique @map("object_key")
+  originalFilename     String                @db.VarChar(180) @map("original_filename")
+  declaredContentType  String                @db.VarChar(64) @map("declared_content_type")
+  validatedContentType String?               @db.VarChar(64) @map("validated_content_type")
+  byteSize             Int                   @map("byte_size")
+  kind                 MedicalDocumentKind
+  status               MedicalDocumentStatus @default(PENDING_UPLOAD)
+  scanVerdict          MedicalDocumentScanVerdict? @map("scan_verdict")
+  scanRequestedAt      DateTime?             @map("scan_requested_at")
+  scannedAt            DateTime?             @map("scanned_at")
+  sha256               String?               @db.Char(64)
+  deletedAt            DateTime?             @map("deleted_at")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  owner                User                  @relation("MedicalDocumentOwner", fields: [ownerPatientId], references: [id], onDelete: Restrict)
+  medicalRecord        MedicalRecord?        @relation(fields: [medicalRecordId], references: [id], onDelete: SetNull)
+  shares               MedicalDocumentShare[]
+  scanResults          MedicalDocumentScanResult[]
+
+  @@index([ownerPatientId, status, createdAt])
+  @@index([medicalRecordId])
+  @@index([status, scanRequestedAt])
+  @@map("medical_documents")
+}
+
+model MedicalDocumentShare {
+  id          String          @id @default(uuid())
+  documentId  String          @map("document_id")
+  recipientId String          @map("recipient_id")
+  expiresAt   DateTime        @map("expires_at")
+  revokedAt   DateTime?       @map("revoked_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  document    MedicalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  recipient   User            @relation("MedicalDocumentShareRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+
+  @@index([documentId, revokedAt])
+  @@index([recipientId, revokedAt, expiresAt])
+  @@map("medical_document_shares")
+}
+
+model MedicalDocumentScanResult {
+  id                   String                     @id @default(uuid())
+  documentId           String                     @map("document_id")
+  replayDigest         String                     @unique @db.Char(64) @map("replay_digest")
+  verdict              MedicalDocumentScanVerdict
+  validatedContentType String                     @db.VarChar(64) @map("validated_content_type")
+  byteSize             Int                        @map("byte_size")
+  sha256               String                     @db.Char(64)
+  scannerTimestamp     DateTime                   @map("scanner_timestamp")
+  receivedAt           DateTime                   @default(now()) @map("received_at")
+  document             MedicalDocument            @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@index([documentId, receivedAt])
+  @@map("medical_document_scan_results")
+}
+
+enum WellnessOfferingStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum WellnessBookingStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
+model WellnessProvider {
+  id String @id @default(uuid())
+  organisationId String? @unique @map("organisation_id")
+  professionalId String? @unique @map("professional_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  professional ProfessionalProfile? @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  offerings WellnessOffering[]
+  @@map("wellness_providers")
+}
+
+model WellnessOffering {
+  id String @id @default(uuid())
+  providerId String @map("provider_id")
+  name String @db.VarChar(160)
+  category String @db.VarChar(80)
+  description String? @db.VarChar(500)
+  priceMinor Int? @map("price_minor")
+  status WellnessOfferingStatus @default(DRAFT)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  provider WellnessProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  bookings WellnessBooking[]
+  @@index([status, category, createdAt])
+  @@map("wellness_offerings")
+}
+
+model WellnessBooking {
+  id String @id @default(uuid())
+  patientId String @map("patient_id")
+  offeringId String @map("offering_id")
+  status WellnessBookingStatus @default(PENDING)
+  requestedAt DateTime @map("requested_at")
+  context String? @db.VarChar(300)
+  decisionReason String? @db.VarChar(300) @map("decision_reason")
+  decidedAt DateTime? @map("decided_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient User @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  offering WellnessOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  @@index([patientId, createdAt])
+  @@index([offeringId, status, requestedAt])
+  @@map("wellness_bookings")
+}
+
+enum HospitalEnrollmentStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
+model HospitalEnrollment {
+  id String @id @default(uuid())
+  patientId String @map("patient_id")
+  dependentId String? @map("dependent_id")
+  hospitalId String @map("hospital_id")
+  planId String @map("plan_id")
+  status HospitalEnrollmentStatus @default(PENDING)
+  patientNote String? @db.VarChar(500) @map("patient_note")
+  decisionReason String? @db.VarChar(500) @map("decision_reason")
+  decidedAt DateTime? @map("decided_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient User @relation("HospitalEnrollmentPatient", fields: [patientId], references: [id], onDelete: Restrict)
+  dependent DependentProfile? @relation(fields: [dependentId], references: [id], onDelete: Restrict)
+  hospital Organisation @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  plan HospitalMemberPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  decidedBy User? @relation("HospitalEnrollmentReviewer", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  appointments HospitalAppointment[]
+
+  @@index([patientId, createdAt])
+  @@index([patientId, dependentId, createdAt])
+  @@index([dependentId, hospitalId, status])
+  @@index([hospitalId, status, createdAt])
+  @@map("hospital_enrollments")
+}
+
+enum HospitalAppointmentStatus {
+  PENDING
+  SCHEDULED
+  REJECTED
+  CHECKED_IN
+  CANCELLED
+}
+
+model HospitalAppointment {
+  id String @id @default(uuid())
+  patientId String @map("patient_id")
+  dependentId String? @map("dependent_id")
+  hospitalId String @map("hospital_id")
+  enrollmentId String? @map("enrollment_id")
+  status HospitalAppointmentStatus @default(PENDING)
+  requestedAt DateTime @map("requested_at")
+  appointmentType String? @db.VarChar(80) @map("appointment_type")
+  reason String? @db.VarChar(300)
+  decisionReason String? @db.VarChar(300) @map("decision_reason")
+  decidedAt DateTime? @map("decided_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  checkedInAt DateTime? @map("checked_in_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient User @relation("HospitalAppointmentPatient", fields: [patientId], references: [id], onDelete: Restrict)
+  dependent DependentProfile? @relation(fields: [dependentId], references: [id], onDelete: Restrict)
+  hospital Organisation @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  enrollment HospitalEnrollment? @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  decidedBy User? @relation("HospitalAppointmentReviewer", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  @@index([patientId, createdAt])
+  @@index([patientId, dependentId, createdAt])
+  @@index([dependentId, requestedAt])
+  @@index([hospitalId, status, requestedAt])
+  @@index([status, requestedAt])
+  @@map("hospital_appointments")
 }

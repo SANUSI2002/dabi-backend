@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import { Buffer } from 'node:buffer';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Real bcrypt (cost 12) is CPU-bound and times out when the whole suite runs in parallel.
+vi.mock('bcryptjs', () => ({ default: { hash: async (value) => `test-password-hash:${value}`, compare: async (value, hash) => hash === `test-password-hash:${value}` } }));
 const model = () => Object.fromEntries(['create', 'findUnique', 'findFirst', 'findMany', 'count', 'updateMany', 'update'].map((key) => [key, vi.fn()]));
 const prisma = { user: model(), userRole: model(), organisation: model(), organisationSubmission: model(), organisationDocument: model(), pharmacy: model(), identityOrganization: model(), organizationMembership: model(), membershipRole: model(), activityLog: model(), refreshToken: model(), authDevice: model(), authSession: model(), authRefreshCredential: model(), mfaTotp: model(), $transaction: vi.fn() };
 vi.mock('../src/config/db.js', () => ({ default: prisma }));

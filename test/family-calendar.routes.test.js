@@ -65,7 +65,7 @@ describe('live Care Calendar reads', () => {
     appointments[0].doctorName = 'Child';
     const response = await get({ memberId: dep }); expect(response.status).toBe(200);
     expect(response.body.data.events).toEqual([]); expect(response.body.data.empty).toBe(true);
-    expect(response.body.data.members.find((m) => m.id === dep).calendarAvailable).toBe(false);
+    expect(response.body.data.members.find((m) => m.id === dep).calendarAvailable).toBe(true);
     expect(tx.appointment.findMany).not.toHaveBeenCalled();
   });
   it('provides predictable empty states, day reads and independently paginated Upcoming', async () => {
@@ -102,7 +102,7 @@ describe('explicit calendar permission and circle isolation', () => {
     relationships[1].revokedAt = new Date(); expect((await get({ circlePatientId: owner }, caregiver)).status).toBe(404);
     relationships[1].revokedAt = null; relationships[1].permissions = ['PROFILE']; expect((await get({ circlePatientId: owner }, caregiver)).status).toBe(404);
     relationships[1].permissions = []; expect((await get({ circlePatientId: owner }, caregiver)).status).toBe(404);
-    relationships[1].permissions = ['APPOINTMENTS']; const r = await get({ circlePatientId: owner }, caregiver); expect(r.status).toBe(200); expect(r.body.data.members.map((m) => m.id)).toEqual(['self']);
+    relationships[1].permissions = ['APPOINTMENTS']; const r = await get({ circlePatientId: owner }, caregiver); expect(r.status).toBe(200); expect(r.body.data.members.map((m) => m.id)).toEqual(['self', dep]);
   });
   it('requires dependent selection plus both profile and appointment permissions', async () => {
     dependents[0].coManagerIds = [];

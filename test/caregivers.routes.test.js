@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Real bcrypt (cost 12) is CPU-bound and times out when the whole suite runs in parallel.
+vi.mock('bcryptjs', () => ({ default: { hash: async (value) => `test-password-hash:${value}`, compare: async (value, hash) => hash === `test-password-hash:${value}` } }));
 
 const fn = () => vi.fn();
 const prisma = {

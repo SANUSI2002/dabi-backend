@@ -1,0 +1,28 @@
+import express from 'express';
+import jwt from 'jsonwebtoken';
+import request from 'supertest';
+import { beforeEach, expect, it, vi } from 'vitest';
+
+const model = () => Object.fromEntries(['create', 'findFirst', 'findMany', 'count', 'updateMany'].map((key) => [key, vi.fn()]));
+const prisma = { userRole: model(), hospitalEnrollment: model(), hospitalAppointment: model(), activityLog: model(), $transaction: vi.fn() };
+vi.mock('../src/config/db.js', () => ({ default: prisma }));
+const { default: routes } = await import('../src/modules/hospital-appointments/hospital-appointments.routes.js');
+const app = express(); app.use(express.json()); app.use('/api/v1/hospital-appointments', routes);
+process.env.JWT_SECRET = 'hospital-appointment-test';
+const patient = '11111111-1111-4111-8111-111111111111', owner = '22222222-2222-4222-822222222222', other = '33333333-3333-4333-8333-333333333333', hospital = '44444444-4444-4444-8444-444444444444', appointment = '55555555-5555-4555-8555-555555555555';
+const auth = (id, secret = process.env.JWT_SECRET) => ({ Authorization: `Bearer ${jwt.sign({ userId: id }, secret)}` });
+const matches = (row, where) => !where || Object.entries(where).every(([key, value]) => { if (key === 'hospital') return row.hospitalId === hospital && (!value.ownerId || value.ownerId === owner) && value.status === 'VERIFIED' && value.type === 'HOSPITAL'; if (key === 'status') return typeof value === 'object' ? value.in.includes(row.status) : row.status === value; return value === null ? row[key] == null : row[key] === value; });
+let db;
+beforeEach(() => { vi.resetAllMocks(); db = { roles: [{ userId: patient, role: 'PATIENT' }, { userId: owner, role: 'ORGANISATION_OWNER' }], enrollment: { id: '66666666-6666-4666-8666-666666666666', patientId: patient, hospitalId: hospital, status: 'ACTIVE' }, appointments: [], audits: [] };
+  prisma.userRole.findFirst.mockImplementation(async ({ where }) => db.roles.find((x) => matches(x, where)) ?? null);
+  prisma.hospitalEnrollment.findFirst.mockImplementation(async ({ where }) => matches(db.enrollment, where) ? db.enrollment : null);
+  prisma.hospitalAppointment.create.mockImplementation(async ({ data }) => { const row = { id: appointment, createdAt: new Date(), updatedAt: new Date(), hospital: { id: hospital, name: 'Sabi Hospital' }, ...data }; db.appointments.push(row); return row; });
+  prisma.hospitalAppointment.findFirst.mockImplementation(async ({ where }) => db.appointments.find((x) => matches(x, where)) ?? null);
+  prisma.hospitalAppointment.findMany.mockImplementation(async ({ where }) => db.appointments.filter((x) => matches(x, where)));
+  prisma.hospitalAppointment.count.mockImplementation(async ({ where }) => db.appointments.filter((x) => matches(x, where)).length);
+  prisma.hospitalAppointment.updateMany.mockImplementation(async ({ where, data }) => { const rows = db.appointments.filter((x) => matches(x, where)); rows.forEach((x) => Object.assign(x, data)); return { count: rows.length }; });
+  prisma.activityLog.create.mockImplementation(async ({ data }) => { db.audits.push(data); return data; }); prisma.$transaction.mockImplementation((fn) => fn(prisma));
+});
+it('creates a pending appointment only with an active same-hospital enrollment', async () => { const body = { hospitalId: hospital, requestedAt: '2027-01-01T09:00:00.000Z', appointmentType: 'CONSULTATION' }; const res = await request(app).post('/api/v1/hospital-appointments').set(auth(patient)).send(body); expect(res.status).toBe(201); expect(res.body.data.status).toBe('PENDING'); expect(db.audits[0].meta).toEqual({ appointmentId: appointment }); db.enrollment.status = 'REJECTED'; expect((await request(app).post('/api/v1/hospital-appointments').set(auth(patient)).send(body)).status).toBe(404); });
+it('scopes patient reads and permits only the verified owner to decide and the patient to check in', async () => { const body = { hospitalId: hospital, requestedAt: '2027-01-01T09:00:00.000Z' }; await request(app).post('/api/v1/hospital-appointments').set(auth(patient)).send(body); expect((await request(app).get(`/api/v1/hospital-appointments/${appointment}`).set(auth(other))).status).toBe(404); expect((await request(app).post(`/api/v1/hospital-appointments/${appointment}/confirm`).set(auth(other)).send({})).status).toBe(404); expect((await request(app).post(`/api/v1/hospital-appointments/${appointment}/confirm`).set(auth(owner)).send({})).body.data.status).toBe('SCHEDULED'); expect((await request(app).post(`/api/v1/hospital-appointments/${appointment}/check-in`).set(auth(patient)).send({})).body.data.status).toBe('CHECKED_IN'); expect((await request(app).post(`/api/v1/hospital-appointments/${appointment}/check-in`).set(auth(patient)).send({})).status).toBe(404); });
+it('rejects malformed values and tokens and safely handles database failures', async () => { expect((await request(app).post('/api/v1/hospital-appointments').set(auth(patient)).send({ hospitalId: 'bad', requestedAt: 'today' })).status).toBe(400); expect((await request(app).get('/api/v1/hospital-appointments/mine').set(auth(patient, 'wrong'))).status).toBe(401); prisma.userRole.findFirst.mockRejectedValueOnce(new Error('private database password')); const res = await request(app).get('/api/v1/hospital-appointments/mine').set(auth(patient)); expect(res.status).toBe(500); expect(res.body.message).toBe('Hospital appointment service temporarily unavailable'); });
