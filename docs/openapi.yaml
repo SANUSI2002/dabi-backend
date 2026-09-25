@@ -46,6 +46,8 @@ tags:
     description: Hospital Appointments endpoints currently registered by the backend.
   - name: Doctor Care
     description: Doctor Care endpoints currently registered by the backend.
+  - name: Doctor Appointments
+    description: Doctor Appointments endpoints currently registered by the backend.
   - name: Prescriptions
     description: Prescriptions endpoints currently registered by the backend.
   - name: Pharmacies
@@ -4298,6 +4300,670 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/doctors/{doctorId}/slots:
+    get:
+      tags:
+        - Doctor Appointments
+      summary: List a verified doctor's open slots
+      description: Future, unbooked, uncancelled slots. Defaults to the next 14 days; range at most 31 days.
+      operationId: get__api_v1_doctor_appointments_doctors_doctorId_slots
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: doctorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments:
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Book a doctor slot
+      description: Patient books an open slot for themselves or an owned dependent. Creates REQUESTED; 409 SLOT_UNAVAILABLE if another booking holds the slot; 400 TYPE_NOT_OFFERED.
+      operationId: post__api_v1_doctor_appointments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoctorBooking"
+      responses:
+        "201":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/mine:
+    get:
+      tags:
+        - Doctor Appointments
+      summary: List my doctor appointments
+      description: upcoming=true returns future REQUESTED/CONFIRMED soonest first.
+      operationId: get__api_v1_doctor_appointments_mine
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - REQUESTED
+              - CONFIRMED
+              - DECLINED
+              - CANCELLED
+              - COMPLETED
+        - name: upcoming
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/{id}:
+    get:
+      tags:
+        - Doctor Appointments
+      summary: Get my doctor appointment
+      description: Owner patient only.
+      operationId: get__api_v1_doctor_appointments_id_
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/{id}/cancel:
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Cancel my doctor appointment
+      description: Future REQUESTED/CONFIRMED only; releases the slot.
+      operationId: post__api_v1_doctor_appointments_id_cancel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoctorPatientCancel"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/{id}/reschedule:
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Reschedule to another slot with the same doctor
+      description: Cancels the current booking (Rescheduled by patient) and creates a new REQUESTED booking atomically.
+      operationId: post__api_v1_doctor_appointments_id_reschedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoctorReschedule"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/practice/profile:
+    get:
+      tags:
+        - Doctor Appointments
+      summary: Get my practice profile (doctor)
+      description: "Doctor workspace: public practice details."
+      operationId: get__api_v1_doctor_appointments_practice_profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    patch:
+      tags:
+        - Doctor Appointments
+      summary: Update my practice profile (verified doctor)
+      operationId: patch__api_v1_doctor_appointments_practice_profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PracticeProfile"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/practice/slots:
+    get:
+      tags:
+        - Doctor Appointments
+      summary: List my slots (verified doctor)
+      description: Includes state OPEN, REQUESTED, BOOKED or CANCELLED and the holding appointmentId. Range at most 62 days.
+      operationId: get__api_v1_doctor_appointments_practice_slots
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Publish availability slots (verified doctor)
+      description: Up to 100 future slots of 5-240 minutes, within 180 days; 409 SLOT_OVERLAP if any overlaps an existing slot.
+      operationId: post__api_v1_doctor_appointments_practice_slots
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoctorSlots"
+      responses:
+        "201":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/practice/slots/{id}:
+    delete:
+      tags:
+        - Doctor Appointments
+      summary: Withdraw an unbooked slot (verified doctor)
+      description: 409 SLOT_BOOKED while a REQUESTED/CONFIRMED appointment holds it.
+      operationId: delete__api_v1_doctor_appointments_practice_slots_id_
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/practice/appointments:
+    get:
+      tags:
+        - Doctor Appointments
+      summary: List my appointment requests and bookings (verified doctor)
+      description: Patient identity is limited to name and Sabi patient ID; dependents to name and date of birth.
+      operationId: get__api_v1_doctor_appointments_practice_appointments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - REQUESTED
+              - CONFIRMED
+              - DECLINED
+              - CANCELLED
+              - COMPLETED
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/practice/appointments/{id}/confirm:
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Confirm a requested appointment
+      description: REQUESTED (future) to CONFIRMED; optional https meeting link for virtual consultations.
+      operationId: post__api_v1_doctor_appointments_practice_appointments_id_confirm
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoctorConfirm"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/practice/appointments/{id}/meeting-link:
+    patch:
+      tags:
+        - Doctor Appointments
+      summary: Set or clear the meeting link
+      description: CONFIRMED virtual appointments only.
+      operationId: patch__api_v1_doctor_appointments_practice_appointments_id_meeting_link
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeetingLink"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/practice/appointments/{id}/decline:
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Decline a requested appointment
+      description: REQUESTED to DECLINED with a reason shown to the patient; releases the slot.
+      operationId: post__api_v1_doctor_appointments_practice_appointments_id_decline
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoctorReason"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/practice/appointments/{id}/cancel:
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Cancel an appointment (doctor)
+      description: Future REQUESTED/CONFIRMED to CANCELLED with a reason; releases the slot.
+      operationId: post__api_v1_doctor_appointments_practice_appointments_id_cancel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoctorReason"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/doctor-appointments/practice/appointments/{id}/complete:
+    post:
+      tags:
+        - Doctor Appointments
+      summary: Mark an appointment completed
+      description: CONFIRMED appointments that have started.
+      operationId: post__api_v1_doctor_appointments_practice_appointments_id_complete
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Empty"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
   /api/v1/prescriptions/patient:
     get:
       tags:
@@ -8015,6 +8681,155 @@ components:
       type: object
       description: Provider payload. Frontends must never call this endpoint.
       additionalProperties: true
+    DoctorBooking:
+      type: object
+      additionalProperties: false
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        consultationType:
+          type: string
+          enum:
+            - VIRTUAL
+            - IN_PERSON
+        reason:
+          type: string
+          maxLength: 500
+        dependentId:
+          type: string
+          format: uuid
+      required:
+        - slotId
+        - consultationType
+    DoctorReschedule:
+      type: object
+      additionalProperties: false
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        consultationType:
+          type: string
+          enum:
+            - VIRTUAL
+            - IN_PERSON
+        reason:
+          type: string
+          maxLength: 500
+      required:
+        - slotId
+    DoctorPatientCancel:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+    PracticeProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        practiceName:
+          type: string
+          maxLength: 160
+        bio:
+          type:
+            - string
+            - "null"
+          maxLength: 2000
+        yearsOfExperience:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          maximum: 70
+        consultationFeeMinor:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          description: NGN minor units (kobo).
+        consultationTypes:
+          type: array
+          items:
+            type: string
+            enum:
+              - VIRTUAL
+              - IN_PERSON
+        practiceAddress:
+          type:
+            - string
+            - "null"
+          maxLength: 300
+    DoctorSlots:
+      type: object
+      additionalProperties: false
+      properties:
+        slots:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              startsAt:
+                type: string
+                format: date-time
+              endsAt:
+                type: string
+                format: date-time
+              consultationTypes:
+                type: array
+                minItems: 1
+                items:
+                  type: string
+                  enum:
+                    - VIRTUAL
+                    - IN_PERSON
+            required:
+              - startsAt
+              - endsAt
+              - consultationTypes
+      required:
+        - slots
+    DoctorConfirm:
+      type: object
+      additionalProperties: false
+      properties:
+        meetingUrl:
+          type: string
+          format: uri
+          pattern: ^https://
+          maxLength: 500
+    MeetingLink:
+      type: object
+      additionalProperties: false
+      properties:
+        meetingUrl:
+          type:
+            - string
+            - "null"
+          format: uri
+          pattern: ^https://
+          maxLength: 500
+      required:
+        - meetingUrl
+    DoctorReason:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 300
+      required:
+        - reason
+    Empty:
+      type: object
+      additionalProperties: false
+      properties: {}
     FulfilmentDecision:
       type: object
       additionalProperties: false

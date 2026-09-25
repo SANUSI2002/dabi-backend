@@ -16,8 +16,8 @@ const endpoint = (operation, created = false) => async (req, res, next) => {
   catch (error) {
     if (error.code === 'INVALID_INPUT') return res.status(400).json({ status: 'error', message: 'Invalid family-circle input' });
     if (['P2002', 'P2034'].includes(error.code)) return res.status(409).json({ status: 'error', message: 'Family circle changed; refresh and retry' });
-    // Hospital enrollments/appointments for a dependent are retained (onDelete: Restrict).
-    if (error.code === 'P2003') return res.status(409).json({ status: 'error', code: 'DEPENDENT_HAS_HOSPITAL_RECORDS', message: 'This dependent has hospital enrollments or appointments that must be kept, so the profile cannot be deleted.' });
+    // Hospital enrollments/appointments and doctor appointments for a dependent are retained (onDelete: Restrict).
+    if (error.code === 'P2003') return res.status(409).json({ status: 'error', code: 'DEPENDENT_HAS_HOSPITAL_RECORDS', message: 'This dependent has hospital enrollments, hospital appointments or doctor appointments that must be kept, so the profile cannot be deleted.' });
     return handle(error, res, next);
   }
 };

@@ -43,6 +43,7 @@ model User {
   careRelationshipsHeld CareRelationship[] @relation("CaregiverCareRelationships")
   professionalProfile ProfessionalProfile?
   doctorCareAsPatient DoctorCareRelationship[] @relation("DoctorCarePatient")
+  doctorAppointmentsAsPatient DoctorAppointment[] @relation("DoctorAppointmentPatient")
   prescriptionsAsPatient Prescription[] @relation("PrescriptionPatient")
   pharmacyAdminOf Pharmacy? @relation("PharmacyAdmin")
   pharmacyComplianceDecisions Pharmacy[] @relation("PharmacyComplianceDecision")
@@ -166,6 +167,14 @@ model ProfessionalProfile {
   doctorCareRelationships DoctorCareRelationship[]
   prescriptionsIssued Prescription[]
   wellnessProvider WellnessProvider?
+  // Public practice details the doctor edits in their workspace.
+  bio                  String?                  @map("bio")
+  yearsOfExperience    Int?                     @map("years_of_experience")
+  consultationFeeMinor Int?                     @map("consultation_fee_minor")
+  consultationTypes    DoctorConsultationType[] @default([]) @map("consultation_types")
+  practiceAddress      String?                  @map("practice_address")
+  availabilitySlots    DoctorAvailabilitySlot[]
+  doctorAppointments   DoctorAppointment[]
 
   @@index([verificationStatus])
   @@index([professionType])
@@ -1031,6 +1040,7 @@ model DependentProfile {
   patient User @relation(fields: [patientId], references: [id], onDelete: Cascade)
   hospitalEnrollments HospitalEnrollment[]
   hospitalAppointments HospitalAppointment[]
+  doctorAppointments DoctorAppointment[]
   @@index([patientId, createdAt])
   @@map("dependent_profiles")
 }
@@ -1612,4 +1622,64 @@ model HospitalAppointment {
   @@index([hospitalId, status, requestedAt])
   @@index([status, requestedAt])
   @@map("hospital_appointments")
+}
+
+enum DoctorConsultationType {
+  VIRTUAL
+  IN_PERSON
+}
+
+enum DoctorAppointmentStatus {
+  REQUESTED
+  CONFIRMED
+  DECLINED
+  CANCELLED
+  COMPLETED
+}
+
+// A bookable time a verified doctor has published. At most one REQUESTED/CONFIRMED appointment
+// may hold a slot (partial unique index in the migration).
+model DoctorAvailabilitySlot {
+  id                String                   @id @default(uuid())
+  doctorProfileId   String                   @map("doctor_profile_id")
+  startsAt          DateTime                 @map("starts_at")
+  endsAt            DateTime                 @map("ends_at")
+  consultationTypes DoctorConsultationType[] @map("consultation_types")
+  cancelledAt       DateTime?                @map("cancelled_at")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  doctorProfile     ProfessionalProfile      @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  appointments      DoctorAppointment[]
+
+  @@index([doctorProfileId, startsAt])
+  @@map("doctor_availability_slots")
+}
+
+model DoctorAppointment {
+  id               String                  @id @default(uuid())
+  patientId        String                  @map("patient_id")
+  dependentId      String?                 @map("dependent_id")
+  doctorProfileId  String                  @map("doctor_profile_id")
+  slotId           String                  @map("slot_id")
+  startsAt         DateTime                @map("starts_at")
+  endsAt           DateTime                @map("ends_at")
+  consultationType DoctorConsultationType  @map("consultation_type")
+  reason           String?                 @db.VarChar(500)
+  status           DoctorAppointmentStatus @default(REQUESTED)
+  decisionReason   String?                 @map("decision_reason") @db.VarChar(300)
+  meetingUrl       String?                 @map("meeting_url") @db.VarChar(500)
+  cancelledBy      String?                 @map("cancelled_by") @db.VarChar(20)
+  confirmedAt      DateTime?               @map("confirmed_at")
+  cancelledAt      DateTime?               @map("cancelled_at")
+  completedAt      DateTime?               @map("completed_at")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  patient          User                    @relation("DoctorAppointmentPatient", fields: [patientId], references: [id], onDelete: Restrict)
+  dependent        DependentProfile?       @relation(fields: [dependentId], references: [id], onDelete: Restrict)
+  doctorProfile    ProfessionalProfile     @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
+  slot             DoctorAvailabilitySlot  @relation(fields: [slotId], references: [id], onDelete: Restrict)
+
+  @@index([patientId, startsAt])
+  @@index([doctorProfileId, status, startsAt])
+  @@index([slotId])
+  @@map("doctor_appointments")
 }
