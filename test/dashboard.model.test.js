@@ -57,6 +57,13 @@ describe('dashboard overview data access', () => {
     expect(prisma.notification.count).toHaveBeenCalledWith({ where: { userId, isRead: false } });
   });
 
+  it('finds vitals recorded through the vitals API (canonical type codes)', async () => {
+    await getDashboardOverview(userId);
+    const [bp, hr] = prisma.vital.findFirst.mock.calls.map(([args]) => args.where.OR.map((clause) => clause.type.equals));
+    expect(bp).toContain('BLOOD_PRESSURE');
+    expect(hr).toContain('HEART_RATE');
+  });
+
   it('calculates records statistics with independently user-scoped counters', async () => {
     prisma.medicalRecord.count.mockResolvedValueOnce(2).mockResolvedValueOnce(4);
     prisma.appointment.count.mockResolvedValueOnce(3).mockResolvedValueOnce(5);

@@ -4,8 +4,9 @@ import prisma from '../../config/db.js';
 
 // Vital `type` labels can arrive from the frontend or an IoT sync in either the
 // spelled-out form or the short code, so we match any of them case-insensitively.
-const BLOOD_PRESSURE_LABELS = ['Blood Pressure', 'BP'];
-const HEART_RATE_LABELS = ['Heart Rate', 'HR'];
+// The vitals API itself stores the canonical codes (BLOOD_PRESSURE / HEART_RATE).
+const BLOOD_PRESSURE_LABELS = ['BLOOD_PRESSURE', 'Blood Pressure', 'BP'];
+const HEART_RATE_LABELS = ['HEART_RATE', 'Heart Rate', 'HR'];
 
 // Builds a Prisma `where` fragment that matches a vital whose `type` equals any
 // of the given labels, case-insensitively (e.g. "bp", "BP", "Blood Pressure").
