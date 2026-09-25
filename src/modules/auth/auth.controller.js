@@ -11,6 +11,7 @@ import { beginLoginChallenge, hasActiveMfa } from './auth.mfa.js';
 const toUserResponse = (user) => ({
   id: user.id,
   email: user.email,
+  fullName: user.full_name ?? null,
   patientId: user.patientId,
   profile: user.profile,
   roles: user.roles.map(({ role }) => role),

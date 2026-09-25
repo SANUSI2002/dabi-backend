@@ -45,8 +45,10 @@ export const offerings = async (q) => {
   ]);
   return { items, total, limit: q.limit, offset: q.offset };
 };
-export const offering = (id) =>
-  prisma.wellnessOffering.findFirst({
+// Pass the transaction client when called inside one: reading through the global client
+// would need a second pooled connection while the transaction holds the first.
+export const offering = (id, client = prisma) =>
+  client.wellnessOffering.findFirst({
     where: { id, ...published },
     select: pub,
   });

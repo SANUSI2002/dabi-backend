@@ -9,7 +9,7 @@ export const detail = async (id) => {
 export const book = (u, d) =>
   r.tx(async (t) => {
     if (!(await r.patient(t, u))) throw fail();
-    const o = await r.offering(d.offeringId);
+    const o = await r.offering(d.offeringId, t);
     if (!o) throw fail();
     const b = await r.create(t, {
       patientId: u,

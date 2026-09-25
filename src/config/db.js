@@ -5,10 +5,11 @@ import 'dotenv/config';
 
 const { Pool } = pg;
 
-// Initialize the pg Pool
+// Pool size is configurable because hosted Postgres plans cap connections per database.
+const poolMax = Number(process.env.DATABASE_POOL_MAX);
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 10, // Keeps connections in check
+  max: Number.isInteger(poolMax) && poolMax > 0 ? poolMax : 10,
 });
 
 // Pass the pool to the adapter
