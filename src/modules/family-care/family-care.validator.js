@@ -4,7 +4,7 @@ const uuid = z.string().uuid(); const permissions = z.array(z.enum(PERMISSIONS))
 export const listSchema = z.object({ query: z.object({ page: z.coerce.number().int().min(1).max(10000).default(1), limit: z.coerce.number().int().min(1).max(100).default(20), status: z.enum(['PENDING', 'ACTIVE', 'DECLINED', 'REVOKED', 'EXPIRED']).optional() }).strict() });
 export const inviteSchema = z.object({ body: z.object({ email: z.string().trim().email().transform((email) => email.toLowerCase()), relationshipType: z.enum(['CAREGIVER', 'DEPENDENT']), permissions, expiresAt: z.string().datetime({ offset: true }).optional() }).strict() }).superRefine(({ body }, ctx) => { if (body.expiresAt && new Date(body.expiresAt) <= new Date()) ctx.addIssue({ code: 'custom', path: ['body', 'expiresAt'], message: 'expiresAt must be in the future' }); });
 export const relationshipId = z.object({ params: z.object({ id: uuid }).strict() });
-export const permissionsSchema = z.object({ params: z.object({ id: uuid }).strict(), body: z.object({ permissions }).strict() });
+export const permissionsSchema = z.object({ params: z.object({ id: uuid }).strict(), body: z.object({ permissions, permissionLevel: z.enum(['owner', 'care-manager', 'caregiver', 'viewer', 'emergency-only']).optional() }).strict() });
 export const tokenSchema = z.object({ body: z.object({ token: z.string().min(32).max(512) }).strict() });
 export const accessSchema = z.object({ params: z.object({ patientId: uuid }).strict() });
 

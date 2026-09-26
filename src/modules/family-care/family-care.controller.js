@@ -4,7 +4,7 @@ export const list = async (req, res, next) => { try { res.json({ status: 'succes
 export const invite = async (req, res, next) => { try { res.status(201).json({ status: 'success', data: await Care.invite(req.user.id, req.body) }); } catch (error) { handle(error, res, next); } };
 export const accept = async (req, res, next) => { try { res.json({ status: 'success', data: await Care.respond(req.user.id, req.body.token, true) }); } catch (error) { handle(error, res, next); } };
 export const decline = async (req, res, next) => { try { res.json({ status: 'success', data: await Care.respond(req.user.id, req.body.token, false) }); } catch (error) { handle(error, res, next); } };
-export const permissions = async (req, res, next) => { try { res.json({ status: 'success', data: await Care.updatePermissions(req.user.id, req.params.id, req.body.permissions) }); } catch (error) { handle(error, res, next); } };
+export const permissions = async (req, res, next) => { try { res.json({ status: 'success', data: await Care.updatePermissions(req.user.id, req.params.id, req.body.permissions, req.body.permissionLevel) }); } catch (error) { handle(error, res, next); } };
 export const revoke = async (req, res, next) => { try { await Care.revoke(req.user.id, req.params.id); res.json({ status: 'success' }); } catch (error) { handle(error, res, next); } };
 export const access = async (req, res, next) => { try { res.json({ status: 'success', data: { permissions: await Care.access(req.user.id, req.params.patientId) } }); } catch (error) { next(error); } };
 
