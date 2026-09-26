@@ -3,7 +3,7 @@ import prisma from '../../config/db.js';
 const orderInclude = {
   fulfilments: {
     include: {
-      pharmacy: { select: { id: true, name: true, address: true, country: true, state: true, city: true } },
+      pharmacy: { select: { id: true, name: true, address: true, country: true, state: true, city: true, latitude: true, longitude: true } },
       allocations: true,
     },
   },

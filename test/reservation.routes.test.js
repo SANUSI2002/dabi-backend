@@ -162,6 +162,7 @@ describe('reservation routes', () => {
       const response = await request(app).post('/reservations').set(auth()).send(body);
       expect(response.status).toBe(400);
       expect(response.body.message).toBe('Reservation cannot be created');
+      expect(response.body.code).toBe(code);
       expect(response.text).not.toContain(`private-${code}`);
     }
   });
