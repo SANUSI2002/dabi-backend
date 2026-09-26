@@ -75,6 +75,9 @@ export const read = (userId, query, upcoming = false) =>
     const ownHospitalRows = userIds.length
       ? await r.ownHospitalAppointments(tx, userIds, query, upcoming)
       : [];
+    const ownDoctorRows = userIds.length
+      ? await r.doctorAppointments(tx, userIds, undefined, query, upcoming)
+      : [];
     const dependentIds = selected
       .filter((member) => member.kind === "DEPENDENT")
       .map((member) => member.id);
@@ -87,10 +90,15 @@ export const read = (userId, query, upcoming = false) =>
           upcoming,
         )
       : [];
+    const dependentDoctorRows = dependentIds.length
+      ? await r.doctorAppointments(tx, [query.circlePatientId ?? userId], dependentIds, query, upcoming)
+      : [];
     const hasMore =
       upcoming &&
       (rows.length > query.limit ||
         ownHospitalRows.length > query.limit ||
+        ownDoctorRows.length > query.limit ||
+        dependentDoctorRows.length > query.limit ||
         dependentRows.length > query.limit);
     const events = (upcoming ? rows.slice(0, query.limit) : rows)
       .map((row) => {
@@ -118,6 +126,25 @@ export const read = (userId, query, upcoming = false) =>
             };
           },
         ),
+      )
+      .concat(
+        [
+          ...(upcoming ? ownDoctorRows.slice(0, query.limit) : ownDoctorRows),
+          ...(upcoming ? dependentDoctorRows.slice(0, query.limit) : dependentDoctorRows),
+        ].map((row) => {
+          const member = row.dependentId
+            ? selected.find((item) => item.id === row.dependentId)
+            : selected.find((m) => sources.get(m.id) === row.patientId);
+          const doctor = row.doctorProfile?.user?.full_name;
+          return {
+            id: row.id,
+            memberId: member.id,
+            memberName: member.name,
+            title: `${row.consultationType === "VIRTUAL" ? "Video consultation" : "Doctor visit"}${doctor ? ` · ${doctor}` : ""}`,
+            time: row.startsAt,
+            status: row.status,
+          };
+        }),
       )
       .concat(
         (upcoming ? dependentRows.slice(0, query.limit) : dependentRows).map(

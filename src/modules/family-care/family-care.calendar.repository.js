@@ -105,3 +105,26 @@ export const ownHospitalAppointments = (tx, patientIds, query, upcoming) =>
     orderBy: [{ requestedAt: "asc" }, { id: "asc" }],
     ...(upcoming ? { take: query.limit + 1, skip: query.offset } : {}),
   }) ?? [];
+// Doctor bookings for the account holders themselves (dependentIds omitted) or for dependents.
+export const doctorAppointments = (tx, patientIds, dependentIds, query, upcoming) =>
+  tx.doctorAppointment?.findMany({
+    where: {
+      patientId: { in: patientIds },
+      dependentId: dependentIds ? { in: dependentIds } : null,
+      startsAt: {
+        gte: new Date(query.from),
+        ...(!upcoming ? { lt: new Date(query.to) } : {}),
+      },
+    },
+    select: {
+      id: true,
+      patientId: true,
+      dependentId: true,
+      startsAt: true,
+      status: true,
+      consultationType: true,
+      doctorProfile: { select: { user: { select: { full_name: true } } } },
+    },
+    orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+    ...(upcoming ? { take: query.limit + 1, skip: query.offset } : {}),
+  }) ?? [];

@@ -68,6 +68,24 @@ describe('live Care Calendar reads', () => {
       delete tx.hospitalAppointment;
     }
   });
+  it('includes doctor bookings for the account holder and their dependents', async () => {
+    const booked = [
+      { id: uid(50), patientId: owner, dependentId: null, startsAt: new Date('2026-09-08T09:00:00Z'), status: 'CONFIRMED', consultationType: 'VIRTUAL', doctorProfile: { user: { full_name: 'Dr Okoro' } }, reason: 'PRIVATE REASON' },
+      { id: uid(51), patientId: owner, dependentId: dep, startsAt: new Date('2026-09-09T09:00:00Z'), status: 'REQUESTED', consultationType: 'IN_PERSON', doctorProfile: { user: { full_name: 'Dr Okoro' } } },
+      { id: uid(52), patientId: other, dependentId: null, startsAt: new Date('2026-09-10T09:00:00Z'), status: 'CONFIRMED', consultationType: 'VIRTUAL', doctorProfile: { user: { full_name: 'Dr Other' } } },
+    ];
+    tx.doctorAppointment = { findMany: fn().mockImplementation(async ({ where, select: fields }) => booked.filter((row) => matches(row, where)).map((row) => select(row, fields))) };
+    try {
+      const events = (await get()).body.data.events;
+      expect(events.filter((e) => e.id === uid(50) || e.id === uid(51)).map((e) => [e.memberId, e.title, e.status])).toEqual([
+        ['self', 'Video consultation · Dr Okoro', 'CONFIRMED'],
+        [dep, 'Doctor visit · Dr Okoro', 'REQUESTED'],
+      ]);
+      expect(JSON.stringify(events)).not.toMatch(/PRIVATE|Dr Other/);
+    } finally {
+      delete tx.doctorAppointment;
+    }
+  });
   it('never treats inviting a member as reciprocal permission to their appointments', async () => {
     expect((await get({ memberId: ownLink })).status).toBe(404);
     relationships.push(grant(reverseLink, member, owner, ['APPOINTMENTS']));
