@@ -50,6 +50,11 @@ export async function createTenant(label, { roles = ['HOSPITAL_ADMIN'], emr = tr
 
 export async function addMember(tenant, roles, existing) {
   const member = existing ?? await user(roles.join('-').toLowerCase());
+  // Clinical roles need a verified professional profile of the same type (identity rule).
+  const profession = roles.find((role) => ['DOCTOR', 'NURSE', 'PHARMACIST'].includes(role));
+  if (profession) {
+    await prisma.professionalProfile.create({ data: { userId: member.id, professionType: profession, registrationNumber: `REG-${short()}`, verificationStatus: 'VERIFIED' } });
+  }
   await prisma.organizationMembership.create({
     data: { userId: member.id, organizationId: tenant.organizationId, status: 'ACTIVE', joinedAt: new Date(), roles: { create: roles.map((roleCode) => ({ roleCode })) } },
   });

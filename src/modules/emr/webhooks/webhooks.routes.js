@@ -15,6 +15,8 @@ import { handle, validateEmr } from '../core/validate.js';
 export const EVENT_TYPES = [
   '*',
   'patient.registered', 'patient.updated', 'patient.deactivated', 'patient.reactivated', 'patient.account_linked',
+  'encounter.created', 'encounter.started', 'encounter.finished', 'encounter.cancelled',
+  'clinical_note.signed', 'clinical_note.amended', 'vitals.recorded', 'diagnosis.recorded',
 ];
 const MAX_SUBSCRIPTIONS = 10;
 

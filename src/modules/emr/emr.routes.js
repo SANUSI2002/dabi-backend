@@ -15,6 +15,7 @@ import { tenantRateLimit } from './core/rateLimit.js';
 import { EmrError, emrErrorHandler } from './core/errors.js';
 import { validateEmr } from './core/validate.js';
 import patientRoutes from './patients/patients.routes.js';
+import encounterRoutes from './encounters/encounters.routes.js';
 import webhookRoutes from './webhooks/webhooks.routes.js';
 import auditRoutes from './audit/audit.routes.js';
 
@@ -28,6 +29,7 @@ router.get('/internal/metrics', protect, requirePlatform, (req, res) => {
 
 const tenant = express.Router({ mergeParams: true });
 tenant.use('/patients', patientRoutes);
+tenant.use('/encounters', encounterRoutes);
 tenant.use('/webhooks', webhookRoutes);
 tenant.use('/audit-events', auditRoutes);
 

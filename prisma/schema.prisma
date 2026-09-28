@@ -1159,6 +1159,7 @@ model EmrPatient {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   organization IdentityOrganization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   createdBy User @relation("EmrPatientRegistrar", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  encounters EmrEncounter[]
 
   @@unique([organizationId, medicalRecordNumber])
   @@unique([organizationId, id])
@@ -1795,4 +1796,152 @@ model EmrWebhookDelivery {
 
   @@unique([organizationId, subscriptionId, eventId])
   @@map("emr_webhook_deliveries")
+}
+
+// ---- EMR encounters (migration 20260929090000_emr_encounters) ----
+enum EmrEncounterClass {
+  OUTPATIENT
+  INPATIENT
+  EMERGENCY
+  TELEHEALTH
+}
+
+enum EmrEncounterStatus {
+  ARRIVED
+  IN_PROGRESS
+  FINISHED
+  CANCELLED
+}
+
+enum EmrEncounterSource {
+  DIRECT
+  TELEMEDICINE
+}
+
+enum EmrNoteKind {
+  CONSULTATION
+  PROGRESS
+  NURSING
+  PROCEDURE
+  DISCHARGE
+}
+
+enum EmrNoteStatus {
+  DRAFT
+  SIGNED
+}
+
+enum EmrEntryStatus {
+  ACTIVE
+  ENTERED_IN_ERROR
+}
+
+enum EmrDiagnosisRank {
+  PRIMARY
+  SECONDARY
+}
+
+model EmrEncounter {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  class EmrEncounterClass @default(OUTPATIENT)
+  status EmrEncounterStatus @default(ARRIVED)
+  reason String?
+  attendingUserId String? @map("attending_user_id")
+  source EmrEncounterSource @default(DIRECT)
+  sourceReference String? @map("source_reference")
+  arrivedAt DateTime @default(now()) @map("arrived_at")
+  startedAt DateTime? @map("started_at")
+  endedAt DateTime? @map("ended_at")
+  cancellationReason String? @map("cancellation_reason")
+  version Int @default(1)
+  createdByUserId String @map("created_by_user_id")
+  updatedByUserId String? @map("updated_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, id, patientId])
+  @@index([organizationId, status, arrivedAt])
+  @@map("emr_encounters")
+}
+
+model EmrClinicalNote {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  encounterId String @map("encounter_id")
+  patientId String @map("patient_id")
+  kind EmrNoteKind
+  status EmrNoteStatus @default(DRAFT)
+  subjective String?
+  objective String?
+  assessment String?
+  plan String?
+  body String?
+  authorUserId String @map("author_user_id")
+  signedByUserId String? @map("signed_by_user_id")
+  signedAt DateTime? @map("signed_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([organizationId, id])
+  @@index([organizationId, encounterId, createdAt])
+  @@map("emr_clinical_notes")
+}
+
+model EmrNoteAmendment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  noteId String @map("note_id")
+  authorUserId String @map("author_user_id")
+  reason String
+  body String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, noteId, createdAt])
+  @@map("emr_note_amendments")
+}
+
+model EmrObservation {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  encounterId String @map("encounter_id")
+  patientId String @map("patient_id")
+  code String
+  value Decimal @db.Decimal(8, 2)
+  unit String
+  status EmrEntryStatus @default(ACTIVE)
+  recordedByUserId String @map("recorded_by_user_id")
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  errorReason String? @map("error_reason")
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id])
+  @@index([organizationId, encounterId, recordedAt])
+  @@map("emr_observations")
+}
+
+model EmrDiagnosis {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  encounterId String @map("encounter_id")
+  patientId String @map("patient_id")
+  code String
+  description String
+  rank EmrDiagnosisRank @default(SECONDARY)
+  status EmrEntryStatus @default(ACTIVE)
+  recordedByUserId String @map("recorded_by_user_id")
+  errorReason String? @map("error_reason")
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id])
+  @@index([organizationId, encounterId, createdAt])
+  @@map("emr_diagnoses")
 }

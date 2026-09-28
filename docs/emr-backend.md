@@ -249,6 +249,19 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `POST /patients/{id}/deactivate` `{ reason }` | `patient.deactivate` | `If-Match`. Records are never deleted. |
 | `POST /patients/{id}/reactivate` | `patient.deactivate` | `If-Match`. |
 | `POST /patients/{id}/link-account` `{ userId }` | `patient.update` | `If-Match`. The account must have an ACTIVE enrollment with this hospital; one record per account per tenant. |
+| `GET /encounters?status=ARRIVED,IN_PROGRESS&patientId&class&cursor&limit` | `encounter.read` | Visit list with patient summary (no clinical content). Keyset pages. |
+| `POST /encounters` `{ patientId, class?, reason?, attendingUserId? }` | `encounter.create` | Check-in. Optional `Idempotency-Key`. 409 `ENCOUNTER_ALREADY_OPEN` (one open visit per patient), 409 `PATIENT_INACTIVE` (UC-17). The attending must be an active doctor of the tenant. |
+| `GET /encounters/{id}` · `PATCH /encounters/{id}` | `encounter.read` · `encounter.update` | `ETag`; PATCH needs `If-Match` and an open visit. |
+| `POST /encounters/{id}/start` · `/finish` · `/cancel` `{ reason }` | `encounter.update` | `If-Match`. ARRIVED → IN_PROGRESS → FINISHED; open visits can be cancelled with a reason. |
+| `GET /encounters/{id}/notes` | `clinical.read` | Notes with their amendments. Audited. |
+| `POST /encounters/{id}/notes` `{ kind, subjective?, objective?, assessment?, plan?, body? }` | `clinical.note.write` | Draft. You may only write a kind you may sign (nurses: `NURSING`). |
+| `PATCH /encounters/{id}/notes/{noteId}` | `clinical.note.write` | Author only, draft only, `If-Match`. 409 `NOTE_SIGNED`. |
+| `POST /encounters/{id}/notes/{noteId}/sign` | `clinical.note.sign` (any) / `nursing.note.sign` (nursing) | Author only, `If-Match`. The database then refuses any change or delete (UC-16). |
+| `POST /encounters/{id}/notes/{noteId}/amendments` `{ reason, body }` | as signing | Append-only; the original is never modified. |
+| `GET` · `POST /encounters/{id}/vitals` `{ recordedAt?, readings: [{ code, value }] }` | `clinical.read` · `vitals.record` | Units fixed server-side; plausibility ranges; BP needs both values. Open visits only. |
+| `POST /encounters/{id}/vitals/{observationId}/entered-in-error` `{ reason }` | `vitals.record` | Values are never edited (column-level grant). |
+| `GET` · `POST /encounters/{id}/diagnoses` `{ code (ICD-10), description, rank }` | `clinical.read` · `diagnosis.record` | One active PRIMARY per visit (409 `PRIMARY_DIAGNOSIS_EXISTS`). |
+| `POST /encounters/{id}/diagnoses/{diagnosisId}/entered-in-error` `{ reason }` | `diagnosis.record` | |
 | `GET /audit-events?resourceType&resourceId&cursor&limit` | `audit.view` | Newest first; reading it is audited. |
 | `GET /webhooks` · `POST /webhooks` `{ url, eventTypes }` | `emr.webhook.manage` | HTTPS only, max 10 active. The signing `secret` is returned once. |
 | `PATCH /webhooks/{id}` · `POST /webhooks/{id}/rotate-secret` | `emr.webhook.manage` | `If-Match`. Disable with `active: false` (no hard delete). |
@@ -268,6 +281,6 @@ delivery is marked `DEAD`.
 | --- | --- |
 | Foundation (tenant context, RLS, audit, idempotency, concurrency, rate limit, logging/metrics, outbox, webhooks) | Done — `npm run test:emr` (24 real-DB cases) + 20 fast tests |
 | Patients | Done |
-| Encounters | Next |
-| Telemedicine handoff (UC-2) | After encounters |
+| Encounters (visits, notes + amendments, vitals, diagnoses) | Done — 14 real-DB cases + 8 fast policy tests |
+| Telemedicine handoff (UC-2) | Next |
 | Lab, prescriptions, admissions, billing | Later, same pattern |
