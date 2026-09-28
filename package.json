@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:emr": "vitest run --config vitest.emr.config.js",
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
     "docs:build": "node scripts/build-openapi.mjs",
@@ -34,6 +35,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.4.1",
+    "@electric-sql/pglite-socket": "^0.1.1",
     "@eslint/js": "^10.0.1",
     "@redocly/cli": "^2.54.3",
     "@vitest/coverage-v8": "^5.0.0",

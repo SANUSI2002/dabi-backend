@@ -4,6 +4,7 @@ import { startExpiryRunner, stopExpiryRunner } from './modules/reservations/rese
 import { privateStorageClient } from './config/privateStorage.js';
 import { checkOrProvisionBuckets } from './config/supabaseBuckets.js';
 import { startEvidenceScanner } from './modules/platform/platform.evidence-scanner.js';
+import { startEmrWorker, stopEmrWorker } from './modules/emr/core/outbox.js';
 
 const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, () => {
@@ -21,5 +22,7 @@ if (process.env.SUPABASE_URL || process.env.SUPABASE_SECRET_KEY) {
 }
 startExpiryRunner();
 const stopEvidenceScanner = startEvidenceScanner();
-const shutdown = () => { stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
+// EMR outbox → webhook delivery. Off by default; safe to run on several instances (SKIP LOCKED).
+if (process.env.EMR_OUTBOX_WORKER === 'true') startEmrWorker();
+const shutdown = () => { stopEmrWorker(); stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
 process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown);

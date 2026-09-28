@@ -1,6 +1,7 @@
 import prisma from '../../config/db.js';
 
-export const emrPatientRegistryEnabled = () => process.env.EMR_PATIENT_REGISTRY_ENABLED === 'true';
+// EMR_API_ENABLED is the switch; EMR_PATIENT_REGISTRY_ENABLED is the older name, still honoured.
+export const emrPatientRegistryEnabled = () => process.env.EMR_API_ENABLED === 'true' || process.env.EMR_PATIENT_REGISTRY_ENABLED === 'true';
 
 export async function approvedEmrFor(context, db = prisma) {
   if (!context?.organization?.facilityId || context.organization.type === 'PHARMACY') return false;
