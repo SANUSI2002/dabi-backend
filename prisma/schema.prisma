@@ -161,6 +161,8 @@ model ProfessionalProfile {
   decisionReason       String?                        @map("decision_reason")
   decidedByUserId      String?                        @map("decided_by_user_id")
   decidedAt            DateTime?                      @map("decided_at")
+  // The EMR organization that receives this doctor's completed telehealth visits (UC-2).
+  emrOrganizationId    String?                        @map("emr_organization_id")
   createdAt            DateTime                       @default(now()) @map("created_at")
   updatedAt            DateTime                       @default(now()) @updatedAt @map("updated_at")
   user                 User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1944,4 +1946,28 @@ model EmrDiagnosis {
   @@unique([organizationId, id])
   @@index([organizationId, encounterId, createdAt])
   @@map("emr_diagnoses")
+}
+
+// ---- Cross-module domain events + telehealth handoff (migration 20260929120000) ----
+model DomainEvent {
+  id String @id @default(uuid())
+  type String
+  aggregateType String @map("aggregate_type")
+  aggregateId String @map("aggregate_id")
+  payload Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([type, createdAt])
+  @@map("domain_events")
+}
+
+model EmrTelehealthHandoff {
+  appointmentId String @id @map("appointment_id")
+  eventId String @unique @map("event_id")
+  outcome String
+  organizationId String? @map("organization_id")
+  encounterId String? @map("encounter_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("emr_telehealth_handoffs")
 }

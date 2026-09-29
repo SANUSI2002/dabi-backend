@@ -18,6 +18,7 @@ import patientRoutes from './patients/patients.routes.js';
 import encounterRoutes from './encounters/encounters.routes.js';
 import webhookRoutes from './webhooks/webhooks.routes.js';
 import auditRoutes from './audit/audit.routes.js';
+import telehealthRoutes from './telehealth/telehealth.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -32,6 +33,7 @@ tenant.use('/patients', patientRoutes);
 tenant.use('/encounters', encounterRoutes);
 tenant.use('/webhooks', webhookRoutes);
 tenant.use('/audit-events', auditRoutes);
+tenant.use('/telehealth/designation', telehealthRoutes);
 
 router.use(
   '/organizations/:organizationId',

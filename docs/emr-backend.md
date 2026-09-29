@@ -263,6 +263,7 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `GET` · `POST /encounters/{id}/diagnoses` `{ code (ICD-10), description, rank }` | `clinical.read` · `diagnosis.record` | One active PRIMARY per visit (409 `PRIMARY_DIAGNOSIS_EXISTS`). |
 | `POST /encounters/{id}/diagnoses/{diagnosisId}/entered-in-error` `{ reason }` | `diagnosis.record` | |
 | `GET /audit-events?resourceType&resourceId&cursor&limit` | `audit.view` | Newest first; reading it is audited. |
+| `GET` · `PUT` · `DELETE /telehealth/designation` | DOCTOR role | The doctor designates this hospital to receive their completed telemedicine visits (UC-2). Returns `{ designated, designatedElsewhere }` — never another hospital's id. |
 | `GET /webhooks` · `POST /webhooks` `{ url, eventTypes }` | `emr.webhook.manage` | HTTPS only, max 10 active. The signing `secret` is returned once. |
 | `PATCH /webhooks/{id}` · `POST /webhooks/{id}/rotate-secret` | `emr.webhook.manage` | `If-Match`. Disable with `active: false` (no hard delete). |
 | `GET /webhooks/{id}/deliveries` | `emr.webhook.manage` | Recent delivery attempts. |
@@ -275,12 +276,37 @@ signature, reject timestamps older than 5 minutes, and de-duplicate by `X-Sabi-D
 Failures retry with exponential backoff (30 s doubling, capped at 6 h); after 10 attempts the
 delivery is marked `DEAD`.
 
-## 10. Build status
+## 10. Telemedicine → EMR handoff (UC-2)
+
+```
+doctor completes appointment ──(same tx)──► domain_events: doctor_appointment.completed {appointmentId}
+                                                   │  (telemedicine knows nothing about the EMR)
+EMR worker (EMR_OUTBOX_WORKER) ◄──────────────────┘
+  1. appointment COMPLETED?                 else SKIPPED_NOT_COMPLETED
+  2. for a dependent?                       → SKIPPED_DEPENDENT (dependents can't be linked yet)
+  3. doctor designated an EMR organization? else SKIPPED_NO_DESIGNATED_ORGANIZATION
+  4. still an ACTIVE doctor there?          else SKIPPED_NOT_A_MEMBER
+  5. organization has the EMR entitlement?  else SKIPPED_NO_EMR_ENTITLEMENT
+  6. withTenant(org): patient record linked to the appointment's Sabi account?
+                                            else SKIPPED_NO_LINKED_PATIENT / SKIPPED_PATIENT_INACTIVE
+  7. create FINISHED TELEHEALTH encounter (source TELEMEDICINE, source_reference = appointment id),
+     audit + outbox `encounter.created`
+  8. record the outcome in emr_telehealth_handoffs (one row per appointment)
+```
+
+Exactly once: the outcome table is keyed by appointment and `(organization, source, source_reference)`
+is unique on encounters, so replays and concurrent workers never create a second encounter. No row
+locks are held while working. Outcomes are final: an appointment skipped because the account was
+not linked yet is **not** re-processed automatically once it is (a manual re-run is a later feature).
+`domain_events` has no retention job yet — add one (e.g. delete consumed events after 90 days)
+before it grows large.
+
+## 11. Build status
 
 | Module | Status |
 | --- | --- |
 | Foundation (tenant context, RLS, audit, idempotency, concurrency, rate limit, logging/metrics, outbox, webhooks) | Done — `npm run test:emr` (24 real-DB cases) + 20 fast tests |
 | Patients | Done |
 | Encounters (visits, notes + amendments, vitals, diagnoses) | Done — 14 real-DB cases + 8 fast policy tests |
-| Telemedicine handoff (UC-2) | Next |
+| Telemedicine handoff (UC-2) | Done — 4 real-DB cases (end to end through the telemedicine `complete()`) |
 | Lab, prescriptions, admissions, billing | Later, same pattern |

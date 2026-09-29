@@ -11,6 +11,7 @@ const db = {
   doctorAvailabilitySlot: { findFirst: f(), findMany: f(), create: f(), update: f() },
   doctorAppointment: { findFirst: f(), findMany: f(), count: f(), create: f(), updateMany: f() },
   activityLog: { create: f() },
+  domainEvent: { create: f() },
   $transaction: f(),
 };
 vi.mock('../src/config/db.js', () => ({ default: db }));
@@ -136,6 +137,8 @@ describe('doctor workspace', () => {
     expect(db.doctorAppointment.updateMany.mock.calls.at(-1)[0].data).toEqual({ status: 'DECLINED', decisionReason: 'Fully booked that day' });
     await request(app).post(`/doctor-appointments/practice/appointments/${appt}/complete`).set(auth(doctorUser)).send({});
     expect(db.doctorAppointment.updateMany.mock.calls.at(-1)[0].where).toMatchObject({ status: 'CONFIRMED', startsAt: { lte: expect.any(Date) } });
+    // Completion is published for other modules (the EMR handoff) in the same transaction.
+    expect(db.domainEvent.create).toHaveBeenCalledWith({ data: { type: 'doctor_appointment.completed', aggregateType: 'doctor_appointment', aggregateId: appt } });
   });
 
   it('shows doctors only the minimum identity of their patients', async () => {

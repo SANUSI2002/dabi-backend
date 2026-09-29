@@ -232,12 +232,13 @@ export const practiceQueue = async (userId, q) => {
   return { items: items.map(toDoctorAppointment), total, limit: q.limit, offset: q.offset };
 };
 
-const doctorTransition = (type, buildWhere, buildData) => (userId, id, body = {}) => transaction(async (tx) => {
+const doctorTransition = (type, buildWhere, buildData, after) => (userId, id, body = {}) => transaction(async (tx) => {
   const doctorId = await requireDoctor(tx, userId);
   const exists = await tx.doctorAppointment.findFirst({ where: { id, doctorProfileId: doctorId }, select: { id: true } });
   if (!exists) throw fail('NOT_FOUND');
   changed(await tx.doctorAppointment.updateMany({ where: { id, doctorProfileId: doctorId, ...buildWhere() }, data: buildData(body) }));
   await audit(tx, userId, type, id);
+  if (after) await after(tx, id);
   return toDoctorAppointment(await tx.doctorAppointment.findFirst({ where: { id }, select: doctorView }));
 });
 
@@ -265,4 +266,7 @@ export const complete = doctorTransition(
   'DOCTOR_APPOINTMENT_COMPLETED',
   () => ({ status: 'CONFIRMED', startsAt: { lte: new Date() } }),
   () => ({ status: 'COMPLETED', completedAt: new Date() }),
+  // Published in the same transaction; consumers (e.g. the EMR handoff) pick it up later.
+  // This module does not know who listens. Identifiers only.
+  (tx, id) => tx.domainEvent.create({ data: { type: 'doctor_appointment.completed', aggregateType: 'doctor_appointment', aggregateId: id } }),
 );

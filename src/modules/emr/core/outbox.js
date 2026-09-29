@@ -11,7 +11,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import net from 'node:net';
-import { setInterval, clearInterval } from 'node:timers';
 import { URL } from 'node:url';
 import { withWorker } from './db.js';
 import { decryptSecret } from './secrets.js';
@@ -164,26 +163,3 @@ export async function deliverDue({ limit = 50, fetchImpl = globalThis.fetch, tim
 export async function purgeExpiredIdempotencyKeys({ olderThanMs = 24 * 60 * 60 * 1000 } = {}) {
   return withWorker((tx) => tx.emrIdempotencyKey.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - olderThanMs) } } }));
 }
-
-// ---- in-process worker loop (EMR_OUTBOX_WORKER=true) ----
-let timer = null;
-let running = false;
-export function startEmrWorker({ intervalMs = 5000 } = {}) {
-  if (timer) return;
-  let ticks = 0;
-  timer = setInterval(async () => {
-    if (running) return;
-    running = true;
-    try {
-      await dispatchPending();
-      await deliverDue();
-      if ((ticks += 1) % 720 === 0) await purgeExpiredIdempotencyKeys();
-    } catch (error) {
-      logger.error('emr.worker.tick_failed', { name: error?.name, code: error?.code });
-    } finally {
-      running = false;
-    }
-  }, intervalMs);
-  timer.unref?.();
-}
-export const stopEmrWorker = () => { clearInterval(timer); timer = null; };
