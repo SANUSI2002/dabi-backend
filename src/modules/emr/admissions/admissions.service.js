@@ -15,6 +15,7 @@ import { activeMemberWithRole } from '../core/membership.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
 import { OPEN_STATUSES } from '../encounters/encounters.policy.js';
 import { lockEncounter } from '../encounters/encounters.repository.js';
+import { closeForEncounter } from '../queue/queue.service.js';
 import * as policy from './admissions.policy.js';
 
 const dateOnly = (value) => (value instanceof Date ? value.toISOString().slice(0, 10) : value);
@@ -280,6 +281,7 @@ export async function discharge(context, admissionId, expectedVersion, { disposi
     await setBed(tx, context, bed, { status: 'CLEANING' });
     await updateAdmission(tx, context, admission, { status: 'DISCHARGED', dischargedAt: now, dischargedByUserId: context.userId, dischargeDisposition: disposition, dischargeSummary: summary });
     await setEncounterFromOpen(tx, context, admission.encounterId, { status: 'FINISHED', endedAt: now, ...(encounter.startedAt ? {} : { startedAt: admission.admittedAt }) });
+    await closeForEncounter(tx, context, admission.encounterId);
     if (disposition === 'DECEASED') {
       await tx.emrPatient.updateMany({
         where: { organizationId: context.organizationId, id: admission.patientId, status: 'ACTIVE' },

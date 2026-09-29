@@ -246,7 +246,7 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | Method & path | Permission | Notes |
 | --- | --- | --- |
 | `GET /patients?q&status&limit&cursor` | `patient.read` | Keyset pages: `{ items, nextCursor }`. `status` = `ACTIVE` (default) \| `INACTIVE` \| `ALL`. Legacy `?page=` still returns `nextPage`. Audited (`patient.listed` / `patient.searched`, never the search text). |
-| `POST /patients` | `patient.register` | Optional `Idempotency-Key` (16–128 chars). 201 + `ETag`. 409 `MEDICAL_RECORD_NUMBER_IN_USE` / `NATIONAL_ID_IN_USE`. |
+| `POST /patients` | `patient.register` | Optional `Idempotency-Key` (16–128 chars). `medicalRecordNumber` optional — the server issues the next `MRN-0000001`-style number per organization (skipping any taken by hand-entered numbers). Intake fields: preferredName, payer (OUT_OF_POCKET/GOVERNMENT_SCHEME/NHIS/HMO/CORPORATE), category, hospitalNumber (unique per organization), language, occupation, bloodGroup, addressWard, emergency contact. 201 + `ETag`. 409 `MEDICAL_RECORD_NUMBER_IN_USE` / `NATIONAL_ID_IN_USE` / `HOSPITAL_NUMBER_IN_USE`. |
 | `GET /patients/duplicates?nationalId\|phone\|familyName+dateOfBirth` | `patient.read` or `patient.register` | Up to 10 likely matches in this tenant. |
 | `GET /patients/{id}` | `patient.read` | `ETag: W/"version"`. Audited (`patient.viewed`). |
 | `PATCH /patients/{id}` | `patient.update` | `If-Match` required (428 without, 412 `VERSION_CONFLICT` if stale). 409 `PATIENT_INACTIVE` on an inactive record. |
@@ -254,7 +254,7 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `POST /patients/{id}/reactivate` | `patient.deactivate` | `If-Match`. |
 | `POST /patients/{id}/link-account` `{ userId }` | `patient.update` | `If-Match`. The account must have an ACTIVE enrollment with this hospital; one record per account per tenant. |
 | `GET /encounters?status=ARRIVED,IN_PROGRESS&patientId&class&cursor&limit` | `encounter.read` | Visit list with patient summary (no clinical content). Keyset pages. |
-| `POST /encounters` `{ patientId, class?, reason?, attendingUserId? }` | `encounter.create` | Check-in. Optional `Idempotency-Key`. 409 `ENCOUNTER_ALREADY_OPEN` (one open visit per patient), 409 `PATIENT_INACTIVE` (UC-17). The attending must be an active doctor of the tenant. |
+| `POST /encounters` `{ patientId, class?, reason?, attendingUserId?, station?, priority? }` | `encounter.create` | **Check-in**: also places the patient in the station queue (default `Vital`, `NORMAL`); the response includes `queueEntry`. Check-in. Optional `Idempotency-Key`. 409 `ENCOUNTER_ALREADY_OPEN` (one open visit per patient), 409 `PATIENT_INACTIVE` (UC-17). The attending must be an active doctor of the tenant. |
 | `GET /encounters/{id}` · `PATCH /encounters/{id}` | `encounter.read` · `encounter.update` | `ETag`; PATCH needs `If-Match` and an open visit. |
 | `POST /encounters/{id}/start` · `/finish` · `/cancel` `{ reason }` | `encounter.update` | `If-Match`. ARRIVED → IN_PROGRESS → FINISHED; open visits can be cancelled with a reason. A visit with a current admission cannot be finished or cancelled — discharge (or cancel the admission) closes it. |
 | `GET /encounters/{id}/notes` | `clinical.read` | Notes with their amendments. Audited. |
@@ -312,6 +312,10 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `POST /billing/invoices/{id}/payments` `{ amountMinor, method, reference? }` | `billing.payment.record` | **`Idempotency-Key` required.** Non-cash needs a reference. 409 `OVERPAYMENT` with the balance. Receipt `RCPT-<year>-<nnnnnn>`. |
 | `POST /billing/payments/{id}/reverse` `{ reason }` | `billing.payment.reverse` | Never by the person who recorded the payment. |
 | `GET /billing/patients/{id}/statement` · `GET /billing/reconciliation?cursor&limit` | `billing.read` | Outstanding + unbilled; reconciliation checks each invoice against its charges, posted payments and ledger, one page (≤ 1000) per call, continued with `nextCursor`. |
+| `GET /queue?station&status&limit` | `queue.read` | Open visits in the queue (default WAITING + IN_PROGRESS), most urgent then longest waiting, with minimal patient identity and `waitMinutes`. |
+| `POST /queue/call-next` `{ station }` | `queue.manage` | Takes the most urgent, longest-waiting patient at the station (`FOR UPDATE SKIP LOCKED` — two callers never get the same patient); 404 `NOTHING_WAITING`. |
+| `PATCH /queue/{entryId}` `{ station?, status?, priority? }` | `queue.manage` | Entry `If-Match`. Moving station puts the patient back to WAITING there; IN_PROGRESS assigns the caller. The queue has its own version, so patient flow never conflicts with clinicians editing the visit. |
+| `GET /queue/{entryId}/history` | `queue.read` | Append-only queue events (checked in, called, moved, …). A finished/cancelled visit or a discharge closes the entry. |
 | `GET /audit-events?resourceType&resourceId&cursor&limit` | `audit.view` | Newest first; reading it is audited. |
 | `GET` · `PUT` · `DELETE /telehealth/designation` | DOCTOR role | The doctor designates this hospital to receive their completed telemedicine visits (UC-2). Returns `{ designated, designatedElsewhere }` — never another hospital's id. |
 | `GET /webhooks` · `POST /webhooks` `{ url, eventTypes }` | `emr.webhook.manage` | HTTPS only, max 10 active. The signing `secret` is returned once. |

@@ -12,6 +12,7 @@ import { EmrError, uniqueViolation } from '../core/errors.js';
 import { findPatient } from '../patients/patients.repository.js';
 import * as repo from './encounters.repository.js';
 import * as policy from './encounters.policy.js';
+import { closeForEncounter, createForEncounter } from '../queue/queue.service.js';
 
 const UNIQUE = {
   one_open_per_patient: 'ENCOUNTER_ALREADY_OPEN',
@@ -52,10 +53,12 @@ export async function openEncounter(context, input, { idempotencyKey } = {}) {
     const patient = await findPatient(tx, context.organizationId, input.patientId, { id: true, status: true });
     if (!patient) throw new EmrError('PATIENT_NOT_FOUND');
     if (patient.status !== 'ACTIVE') throw new EmrError('PATIENT_INACTIVE'); // UC-17
-    const row = await tx.emrEncounter.create({
+    const created = await tx.emrEncounter.create({
       data: { organizationId: context.organizationId, patientId: patient.id, class: input.class, reason: input.reason, attendingUserId: input.attendingUserId, createdByUserId: context.userId },
-      select: repo.encounterSelect,
+      select: { id: true, patientId: true },
     });
+    await createForEncounter(tx, context, created, { station: input.station, priority: input.priority, complaint: input.reason });
+    const row = await repo.findEncounter(tx, context.organizationId, created.id);
     await recordAudit(tx, context, { action: 'encounter.created', resourceType: 'encounter', resourceId: row.id });
     await enqueueEvent(tx, context, { type: 'encounter.created', aggregateType: 'encounter', aggregateId: row.id, data: { patientId: patient.id, class: row.class } });
     return { statusCode: 201, body: toEncounter(row) };
@@ -102,6 +105,7 @@ export async function transitionEncounter(context, encounterId, expectedVersion,
       if (admitted) throw new EmrError('INVALID_STATE', { message: 'The patient is admitted on this visit; discharge them (or cancel the admission) first.' });
     }
     const row = await repo.updateEncounter(tx, { organizationId: context.organizationId, id: encounterId, expectedVersion, data: { ...data, updatedByUserId: context.userId } });
+    if (action !== 'start') await closeForEncounter(tx, context, encounterId);
     const type = { start: 'encounter.started', finish: 'encounter.finished', cancel: 'encounter.cancelled' }[action];
     await recordAudit(tx, context, { action: type, resourceType: 'encounter', resourceId: encounterId, changedFields: Object.keys(data) });
     await enqueueEvent(tx, context, { type, aggregateType: 'encounter', aggregateId: encounterId, data: { patientId: current.patientId, status: row.status } });

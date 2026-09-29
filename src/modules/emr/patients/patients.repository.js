@@ -7,10 +7,15 @@ export const patientSelect = {
   id: true, medicalRecordNumber: true, givenName: true, familyName: true, otherNames: true,
   dateOfBirth: true, sex: true, status: true, phone: true, email: true, address: true, state: true,
   lga: true, nationalId: true, nextOfKinName: true, nextOfKinPhone: true, nextOfKinRelationship: true,
-  consentToContact: true, linkedUserId: true, deactivatedAt: true, deactivationReason: true,
+  consentToContact: true, preferredName: true, payer: true, category: true, hospitalNumber: true, language: true,
+  occupation: true, bloodGroup: true, addressWard: true, emergencyContactName: true, emergencyContactPhone: true,
+  emergencyContactRelationship: true, linkedUserId: true, deactivatedAt: true, deactivationReason: true,
   version: true, createdAt: true, updatedAt: true,
 };
-const summarySelect = { id: true, medicalRecordNumber: true, givenName: true, familyName: true, otherNames: true, dateOfBirth: true, sex: true, status: true, version: true, createdAt: true };
+const summarySelect = {
+  id: true, medicalRecordNumber: true, givenName: true, familyName: true, otherNames: true, preferredName: true, dateOfBirth: true, sex: true,
+  status: true, phone: true, nationalId: true, hospitalNumber: true, payer: true, category: true, state: true, lga: true, version: true, createdAt: true,
+};
 
 const statusWhere = (status) => (status === 'ALL' ? {} : { status });
 
@@ -19,6 +24,8 @@ const statusWhere = (status) => (status === 'ALL' ? {} : { status });
 const searchWhere = (q) => (q ? { OR: [
   { medicalRecordNumber: { startsWith: q.toUpperCase() } },
   { nationalId: { startsWith: q.toUpperCase() } },
+  { hospitalNumber: { startsWith: q.toUpperCase() } },
+  { phone: { contains: q } },
   { givenName: { contains: q, mode: 'insensitive' } },
   { familyName: { contains: q, mode: 'insensitive' } },
   { otherNames: { contains: q, mode: 'insensitive' } },

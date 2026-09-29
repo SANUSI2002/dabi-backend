@@ -8,6 +8,7 @@ export const encounterSelect = {
   id: true, patientId: true, class: true, status: true, reason: true, attendingUserId: true, source: true, sourceReference: true,
   arrivedAt: true, startedAt: true, endedAt: true, cancellationReason: true, version: true, createdAt: true, updatedAt: true,
   patient: patientSummary,
+  queueEntry: { select: { id: true, station: true, priority: true, status: true, queuedAt: true, version: true } },
 };
 
 export async function listEncounters(tx, organizationId, { status, patientId, class: encounterClass, limit, after }) {

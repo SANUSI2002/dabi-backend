@@ -1152,6 +1152,17 @@ model EmrPatient {
   nextOfKinPhone String? @map("next_of_kin_phone")
   nextOfKinRelationship String? @map("next_of_kin_relationship")
   consentToContact Boolean? @map("consent_to_contact")
+  preferredName String? @map("preferred_name")
+  payer String?
+  category String?
+  hospitalNumber String? @map("hospital_number")
+  language String?
+  occupation String?
+  bloodGroup String? @map("blood_group")
+  addressWard String? @map("address_ward")
+  emergencyContactName String? @map("emergency_contact_name")
+  emergencyContactPhone String? @map("emergency_contact_phone")
+  emergencyContactRelationship String? @map("emergency_contact_relationship")
   linkedUserId String? @map("linked_user_id")
   deactivatedAt DateTime? @map("deactivated_at")
   deactivationReason String? @map("deactivation_reason")
@@ -1167,6 +1178,7 @@ model EmrPatient {
   allergies EmrPatientAllergy[]
   admissions EmrAdmission[]
   invoices EmrInvoice[]
+  queueEntries EmrQueueEntry[]
 
   @@unique([organizationId, medicalRecordNumber])
   @@unique([organizationId, id])
@@ -1868,6 +1880,7 @@ model EmrEncounter {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  queueEntry EmrQueueEntry?
 
   @@unique([organizationId, id])
   @@unique([organizationId, id, patientId])
@@ -2615,4 +2628,56 @@ model EmrBillingLedger {
 
   @@index([organizationId, invoiceId, createdAt])
   @@map("emr_billing_ledger")
+}
+
+// ---- EMR station queue (migration 20261005090000_emr_intake_queue) ----
+enum EmrQueuePriority {
+  EMERGENCY
+  URGENT
+  NORMAL
+}
+
+enum EmrQueueStatus {
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  REFERRED
+}
+
+model EmrQueueEntry {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  encounterId String @map("encounter_id")
+  patientId String @map("patient_id")
+  station String
+  priority EmrQueuePriority @default(NORMAL)
+  status EmrQueueStatus @default(WAITING)
+  complaint String?
+  queuedAt DateTime @default(now()) @map("queued_at")
+  calledAt DateTime? @map("called_at")
+  assignedToUserId String? @map("assigned_to_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  encounter EmrEncounter @relation(fields: [organizationId, encounterId], references: [organizationId, id], onDelete: Restrict)
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, encounterId])
+  @@map("emr_queue_entries")
+}
+
+model EmrQueueEvent {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  queueEntryId String @map("queue_entry_id")
+  action String
+  station String
+  status EmrQueueStatus
+  priority EmrQueuePriority
+  userId String @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, queueEntryId, createdAt])
+  @@map("emr_queue_events")
 }

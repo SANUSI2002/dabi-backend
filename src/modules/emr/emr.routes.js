@@ -23,6 +23,7 @@ import { labRoutes, encounterLabRoutes } from './lab/lab.routes.js';
 import { pharmacyRoutes, encounterPrescriptionRoutes, patientPharmacyRoutes } from './pharmacy/pharmacy.routes.js';
 import { wardRoutes, bedRoutes, encounterAdmissionRoutes, admissionRoutes } from './admissions/admissions.routes.js';
 import { billingRoutes } from './billing/billing.routes.js';
+import { queueRoutes } from './queue/queue.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -45,6 +46,7 @@ tenant.use('/wards', wardRoutes);
 tenant.use('/beds', bedRoutes);
 tenant.use('/admissions', admissionRoutes);
 tenant.use('/billing', billingRoutes);
+tenant.use('/queue', queueRoutes);
 tenant.use('/webhooks', webhookRoutes);
 tenant.use('/audit-events', auditRoutes);
 tenant.use('/telehealth/designation', telehealthRoutes);

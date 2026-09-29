@@ -5,12 +5,15 @@ import prisma from '../../../config/db.js';
 import { withTenant } from '../core/db.js';
 import { recordAudit, changedFieldNames } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
+import { nextSequence } from '../core/sequence.js';
 import { afterCursor } from '../core/cursor.js';
 import { enqueueEvent } from '../core/outbox.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
 import * as repo from './patients.repository.js';
 
 const UNIQUE = {
+  hospital_number: 'HOSPITAL_NUMBER_IN_USE',
+  hospitalNumber: 'HOSPITAL_NUMBER_IN_USE',
   medical_record_number: 'MEDICAL_RECORD_NUMBER_IN_USE',
   medicalRecordNumber: 'MEDICAL_RECORD_NUMBER_IN_USE',
   national_id: 'NATIONAL_ID_IN_USE',
@@ -26,9 +29,23 @@ const dateOnly = (value) => (value instanceof Date ? value.toISOString().slice(0
 export const toPatient = (row) => ({ ...row, dateOfBirth: dateOnly(row.dateOfBirth) });
 const toDbFields = (input) => ({ ...input, ...(input.dateOfBirth ? { dateOfBirth: new Date(`${input.dateOfBirth}T00:00:00.000Z`) } : {}) });
 
+/**
+ * Next free MRN for the tenant (MRN-0000001, …) from the per-tenant counter, which serialises
+ * concurrent registrations. A number already taken by a hand-entered MRN is skipped.
+ */
+async function issueMrn(tx, context) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const mrn = `MRN-${String(await nextSequence(tx, context, 'mrn')).padStart(7, '0')}`;
+    const taken = await tx.emrPatient.findFirst({ where: { organizationId: context.organizationId, medicalRecordNumber: mrn }, select: { id: true } });
+    if (!taken) return mrn;
+  }
+  throw new Error('Could not find a free MRN after 100 attempts');
+}
+
 export async function registerPatient(context, input, { idempotencyKey } = {}) {
   return mapped(withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: 'patient.register', body: input }, async () => {
-    const row = await repo.createPatient(tx, { ...toDbFields(input), organizationId: context.organizationId, createdByUserId: context.userId });
+    const medicalRecordNumber = input.medicalRecordNumber ?? await issueMrn(tx, context);
+    const row = await repo.createPatient(tx, { ...toDbFields(input), medicalRecordNumber, organizationId: context.organizationId, createdByUserId: context.userId });
     await recordAudit(tx, context, { action: 'patient.registered', resourceType: 'patient', resourceId: row.id });
     await enqueueEvent(tx, context, { type: 'patient.registered', aggregateType: 'patient', aggregateId: row.id });
     return { statusCode: 201, body: toPatient(row) };

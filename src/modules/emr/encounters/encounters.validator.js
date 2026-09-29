@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { VITALS } from './encounters.policy.js';
+import { QUEUE_PRIORITIES, QUEUE_STATIONS } from '../queue/queue.constants.js';
 
 const text = (max) => z.string().trim().min(1).max(max);
 const reason = z.string().trim().min(3).max(500).regex(/^[^\p{Cc}]+$/u, 'Contains control characters');
@@ -33,6 +34,9 @@ export const openEncounter = z.object({
     class: encounterClass.default('OUTPATIENT'),
     reason: text(500).optional(),
     attendingUserId: z.uuid().optional(),
+    // Check-in places the patient in the station queue (Vitals by default).
+    station: z.enum(QUEUE_STATIONS).default('Vital'),
+    priority: z.enum(QUEUE_PRIORITIES).default('NORMAL'),
   }).strict(),
 });
 

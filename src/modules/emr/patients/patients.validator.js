@@ -23,6 +23,17 @@ const demographics = {
   nextOfKinPhone: optional(phone),
   nextOfKinRelationship: optional(plain(40)),
   consentToContact: optional(z.boolean()),
+  preferredName: optional(name),
+  payer: optional(z.enum(['OUT_OF_POCKET', 'GOVERNMENT_SCHEME', 'NHIS', 'HMO', 'CORPORATE'])),
+  category: optional(z.string().trim().toUpperCase().regex(/^[A-Z0-9_-]{1,24}$/, 'Category is a short code')),
+  hospitalNumber: optional(z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9/_-]{0,31}$/, 'Hospital number is letters, digits, / _ -')),
+  language: optional(plain(40)),
+  occupation: optional(plain(80)),
+  bloodGroup: optional(z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])),
+  addressWard: optional(plain(80)),
+  emergencyContactName: optional(plain(120)),
+  emergencyContactPhone: optional(phone),
+  emergencyContactRelationship: optional(plain(40)),
 };
 
 export const organizationParams = z.object({ organizationId: z.uuid() });
@@ -32,7 +43,9 @@ const noQuery = z.object({}).strict();
 export const createPatient = z.object({
   params: organizationParams.strict(),
   query: noQuery,
-  body: z.object({ givenName: name, familyName: name, dateOfBirth: birthDate, sex: sex.default('UNKNOWN'), medicalRecordNumber: mrn, ...demographics }).strict(),
+  // medicalRecordNumber is optional: the server issues the next MRN when it is left out; a hospital
+  // moving existing records over can still supply its own numbers.
+  body: z.object({ givenName: name, familyName: name, dateOfBirth: birthDate, sex: sex.default('UNKNOWN'), medicalRecordNumber: mrn.optional(), ...demographics }).strict(),
 });
 
 export const listPatients = z.object({
