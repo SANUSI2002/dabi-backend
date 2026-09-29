@@ -34,6 +34,8 @@ const demographics = {
   emergencyContactName: optional(plain(120)),
   emergencyContactPhone: optional(phone),
   emergencyContactRelationship: optional(plain(40)),
+  // As told at the desk; unverified and never used by prescribing checks (see emr_allergies).
+  reportedAllergies: optional(plain(300)),
 };
 
 export const organizationParams = z.object({ organizationId: z.uuid() });

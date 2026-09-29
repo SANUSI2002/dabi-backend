@@ -43,10 +43,10 @@ describe('patient intake', () => {
   it('issues consecutive MRNs per organization and stores the full intake form', async () => {
     const first = await as(reception).post('/patients', person({
       preferredName: 'Bimpe', payer: 'NHIS', category: 'ADULT', hospitalNumber: 'old/2019/441', language: 'Yoruba', occupation: 'Trader',
-      bloodGroup: 'O+', addressWard: 'Ward 4', emergencyContactName: 'Tunde Ade', emergencyContactPhone: '+2348030000000', emergencyContactRelationship: 'Brother',
+      bloodGroup: 'O+', addressWard: 'Ward 4', emergencyContactName: 'Tunde Ade', emergencyContactPhone: '+2348030000000', emergencyContactRelationship: 'Brother', reportedAllergies: 'Penicillin (rash)',
     }));
     expect(first.status).toBe(201);
-    expect(first.body.data).toMatchObject({ medicalRecordNumber: 'MRN-0000001', hospitalNumber: 'OLD/2019/441', payer: 'NHIS', bloodGroup: 'O+', emergencyContactName: 'Tunde Ade' });
+    expect(first.body.data).toMatchObject({ medicalRecordNumber: 'MRN-0000001', hospitalNumber: 'OLD/2019/441', payer: 'NHIS', bloodGroup: 'O+', emergencyContactName: 'Tunde Ade', reportedAllergies: 'Penicillin (rash)' });
     const second = await as(reception).post('/patients', person());
     expect(second.body.data.medicalRecordNumber).toBe('MRN-0000002');
     const inB = await as({ ...B }).post('/patients', person());

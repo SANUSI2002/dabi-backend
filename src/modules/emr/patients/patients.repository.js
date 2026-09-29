@@ -9,7 +9,7 @@ export const patientSelect = {
   lga: true, nationalId: true, nextOfKinName: true, nextOfKinPhone: true, nextOfKinRelationship: true,
   consentToContact: true, preferredName: true, payer: true, category: true, hospitalNumber: true, language: true,
   occupation: true, bloodGroup: true, addressWard: true, emergencyContactName: true, emergencyContactPhone: true,
-  emergencyContactRelationship: true, linkedUserId: true, deactivatedAt: true, deactivationReason: true,
+  emergencyContactRelationship: true, reportedAllergies: true, linkedUserId: true, deactivatedAt: true, deactivationReason: true,
   version: true, createdAt: true, updatedAt: true,
 };
 const summarySelect = {

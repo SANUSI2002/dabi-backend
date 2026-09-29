@@ -1163,6 +1163,7 @@ model EmrPatient {
   emergencyContactName String? @map("emergency_contact_name")
   emergencyContactPhone String? @map("emergency_contact_phone")
   emergencyContactRelationship String? @map("emergency_contact_relationship")
+  reportedAllergies String? @map("reported_allergies")
   linkedUserId String? @map("linked_user_id")
   deactivatedAt DateTime? @map("deactivated_at")
   deactivationReason String? @map("deactivation_reason")
