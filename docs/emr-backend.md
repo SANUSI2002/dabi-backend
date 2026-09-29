@@ -193,6 +193,9 @@ Legend: **I** = real-database integration test (RLS on), **U** = unit/route test
 - **UC-5** 10,000 tenants × 100 patients (1,000,000 rows): a tenant's first page of patients,
   a name search and a get-by-id each stay under **50 ms** at the database, and the plan uses the
   tenant index (script `scripts/emr-scale-check.mjs`, run on demand — too slow for every CI run).
+  **Measured 2026-09-29** (1,000,000 rows, 10,000 tenants, RLS on, in-memory PGlite): first page
+  0.44 ms, name search 0.69 ms, get by id 0.09 ms (median of 5); the restricted role sees exactly
+  100 of 1,000,000 rows. Re-run on production-like Postgres before go-live.
 
 ## 7. Non-functional requirements
 
