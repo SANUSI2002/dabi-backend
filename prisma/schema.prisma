@@ -1162,6 +1162,7 @@ model EmrPatient {
   organization IdentityOrganization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   createdBy User @relation("EmrPatientRegistrar", fields: [createdByUserId], references: [id], onDelete: Restrict)
   encounters EmrEncounter[]
+  labOrders EmrLabOrder[]
 
   @@unique([organizationId, medicalRecordNumber])
   @@unique([organizationId, id])
@@ -1970,4 +1971,142 @@ model EmrTelehealthHandoff {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("emr_telehealth_handoffs")
+}
+
+// ---- EMR laboratory (migration 20260930090000_emr_lab) ----
+enum EmrLabPriority {
+  ROUTINE
+  URGENT
+  STAT
+}
+
+enum EmrLabOrderStatus {
+  ORDERED
+  COLLECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum EmrLabItemStatus {
+  PENDING
+  RESULTED
+  VERIFIED
+}
+
+enum EmrLabResultStatus {
+  PRELIMINARY
+  FINAL
+  SUPERSEDED
+}
+
+enum EmrLabFlag {
+  NORMAL
+  LOW
+  HIGH
+  CRITICAL_LOW
+  CRITICAL_HIGH
+  ABNORMAL
+}
+
+model EmrSequence {
+  organizationId String @map("organization_id")
+  name String
+  value BigInt @default(0)
+
+  @@id([organizationId, name])
+  @@map("emr_sequences")
+}
+
+model EmrLabTest {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String
+  name String
+  specimenType String @map("specimen_type")
+  analytes Json
+  active Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([organizationId, code])
+  @@map("emr_lab_tests")
+}
+
+model EmrLabOrder {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  encounterId String @map("encounter_id")
+  patientId String @map("patient_id")
+  status EmrLabOrderStatus @default(ORDERED)
+  priority EmrLabPriority @default(ROUTINE)
+  clinicalNotes String? @map("clinical_notes")
+  accessionNumber String? @map("accession_number")
+  orderedByUserId String @map("ordered_by_user_id")
+  collectedByUserId String? @map("collected_by_user_id")
+  collectedAt DateTime? @map("collected_at")
+  specimenNote String? @map("specimen_note")
+  cancelledByUserId String? @map("cancelled_by_user_id")
+  cancelledAt DateTime? @map("cancelled_at")
+  cancellationReason String? @map("cancellation_reason")
+  completedAt DateTime? @map("completed_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  items EmrLabOrderItem[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, createdAt])
+  @@map("emr_lab_orders")
+}
+
+model EmrLabOrderItem {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  orderId String @map("order_id")
+  testCode String @map("test_code")
+  testName String @map("test_name")
+  specimenType String @map("specimen_type")
+  analytes Json
+  status EmrLabItemStatus @default(PENDING)
+  resultedByUserId String? @map("resulted_by_user_id")
+  resultedAt DateTime? @map("resulted_at")
+  verifiedByUserId String? @map("verified_by_user_id")
+  verifiedAt DateTime? @map("verified_at")
+  amendedAt DateTime? @map("amended_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  order EmrLabOrder @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: Restrict)
+  results EmrLabResult[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, orderId, testCode])
+  @@map("emr_lab_order_items")
+}
+
+model EmrLabResult {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  itemId String @map("item_id")
+  analyteCode String @map("analyte_code")
+  analyteName String @map("analyte_name")
+  valueNumeric Decimal? @map("value_numeric") @db.Decimal(14, 4)
+  valueText String? @map("value_text")
+  unit String?
+  referenceLow Decimal? @map("reference_low") @db.Decimal(14, 4)
+  referenceHigh Decimal? @map("reference_high") @db.Decimal(14, 4)
+  flag EmrLabFlag?
+  status EmrLabResultStatus @default(PRELIMINARY)
+  enteredByUserId String @map("entered_by_user_id")
+  enteredAt DateTime @default(now()) @map("entered_at")
+  amendmentReason String? @map("amendment_reason")
+  supersededByUserId String? @map("superseded_by_user_id")
+  supersededAt DateTime? @map("superseded_at")
+  item EmrLabOrderItem @relation(fields: [organizationId, itemId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, itemId, status])
+  @@map("emr_lab_results")
 }

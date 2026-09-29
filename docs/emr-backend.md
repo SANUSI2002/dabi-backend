@@ -265,6 +265,17 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `POST /encounters/{id}/vitals/{observationId}/entered-in-error` `{ reason }` | `vitals.record` | Values are never edited (column-level grant). |
 | `GET` · `POST /encounters/{id}/diagnoses` `{ code (ICD-10), description, rank }` | `clinical.read` · `diagnosis.record` | One active PRIMARY per visit (409 `PRIMARY_DIAGNOSIS_EXISTS`). |
 | `POST /encounters/{id}/diagnoses/{diagnosisId}/entered-in-error` `{ reason }` | `diagnosis.record` | |
+| `GET /lab/tests?includeInactive` | `lab.order.create` / `lab.order.read` / `lab.catalog.manage` | Tenant catalog; the starter catalog (FBC, MP RDT, FBS, RBS, lipids, E/U/Cr, urinalysis, HIV, HBsAg, pregnancy) is provisioned on first use. Ranges are typical adult values — **each lab must review them**. |
+| `POST /lab/tests` · `PATCH /lab/tests/{code}` | `lab.catalog.manage` | Analytes: `NUMERIC` (unit, low/high, criticalLow/High, female/male ranges), `CHOICE` (options, normal), `TEXT`. `If-Match` on PATCH. |
+| `POST /encounters/{id}/lab-orders` `{ tests, priority, clinicalNotes }` | `lab.order.create` | Open visit only. Optional `Idempotency-Key`. Each test's definition is copied into the order. |
+| `GET /encounters/{id}/lab-orders` | `clinical.read` or `lab.order.read` | Orders with current (non-superseded) results. Audited. |
+| `GET /lab/orders?status&priority&patientId&cursor&limit` | `lab.order.read` | Worklist, oldest first; default ORDERED/COLLECTED/IN_PROGRESS; minimal patient identity only. |
+| `GET /lab/orders/{orderId}` | `lab.order.read` | Full detail including superseded results (amendment history). |
+| `POST /lab/orders/{orderId}/collect` `{ note? }` | `lab.specimen.collect` | `If-Match`. Assigns `LAB-<year>-<nnnnnn>`, unique and consecutive per organization. |
+| `POST /lab/orders/{orderId}/cancel` `{ reason }` | `lab.order.create` or `lab.result.verify` | `If-Match`. Only before any results. |
+| `PUT /lab/orders/{orderId}/items/{itemId}/results` `{ results: [{ analyteCode, value }] }` | `lab.result.create` | Test's `If-Match`. Every analyte, once. Flags computed server-side (sex-specific ranges). Re-entry replaces preliminary values. |
+| `POST /lab/orders/{orderId}/items/{itemId}/verify` | `lab.result.verify` | Test's `If-Match`. Values become FINAL (database-locked); order COMPLETED when every test is verified. Emits `lab.result.released` and, for critical values, `lab.result.critical`. |
+| `POST /lab/orders/{orderId}/items/{itemId}/amend` `{ reason, results }` | `lab.result.verify` | Test's `If-Match`. Old values kept as SUPERSEDED; new FINAL values carry the reason. |
 | `GET /audit-events?resourceType&resourceId&cursor&limit` | `audit.view` | Newest first; reading it is audited. |
 | `GET` · `PUT` · `DELETE /telehealth/designation` | DOCTOR role | The doctor designates this hospital to receive their completed telemedicine visits (UC-2). Returns `{ designated, designatedElsewhere }` — never another hospital's id. |
 | `GET /webhooks` · `POST /webhooks` `{ url, eventTypes }` | `emr.webhook.manage` | HTTPS only, max 10 active. The signing `secret` is returned once. |
@@ -312,4 +323,6 @@ before it grows large.
 | Patients | Done |
 | Encounters (visits, notes + amendments, vitals, diagnoses) | Done — 14 real-DB cases + 8 fast policy tests |
 | Telemedicine handoff (UC-2) | Done — 4 real-DB cases (end to end through the telemedicine `complete()`) |
-| Lab, prescriptions, admissions, billing | Later, same pattern |
+| Laboratory (catalog, orders, specimen/accession, results, verification, amendments, critical alerts) | Done — 7 real-DB cases + 8 fast policy tests |
+| Prescriptions / dispensing | Next |
+| Admissions, billing | Later, same pattern |

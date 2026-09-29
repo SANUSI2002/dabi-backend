@@ -17,6 +17,7 @@ export const EVENT_TYPES = [
   'patient.registered', 'patient.updated', 'patient.deactivated', 'patient.reactivated', 'patient.account_linked',
   'encounter.created', 'encounter.started', 'encounter.finished', 'encounter.cancelled',
   'clinical_note.signed', 'clinical_note.amended', 'vitals.recorded', 'diagnosis.recorded',
+  'lab.ordered', 'lab.order.cancelled', 'lab.result.released', 'lab.result.amended', 'lab.result.critical',
 ];
 const MAX_SUBSCRIPTIONS = 10;
 
