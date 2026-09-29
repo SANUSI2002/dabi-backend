@@ -262,7 +262,7 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `PATCH /encounters/{id}/notes/{noteId}` | `clinical.note.write` | Author only, draft only, `If-Match`. 409 `NOTE_SIGNED`. |
 | `POST /encounters/{id}/notes/{noteId}/sign` | `clinical.note.sign` (any) / `nursing.note.sign` (nursing) | Author only, `If-Match`. The database then refuses any change or delete (UC-16). |
 | `POST /encounters/{id}/notes/{noteId}/amendments` `{ reason, body }` | as signing | Append-only; the original is never modified. |
-| `GET` · `POST /encounters/{id}/vitals` `{ recordedAt?, readings: [{ code, value }] }` | `clinical.read` · `vitals.record` | Units fixed server-side; plausibility ranges; BP needs both values. Open visits only. |
+| `GET` · `POST /encounters/{id}/vitals` `{ recordedAt?, readings: [{ code, value }] }` | `clinical.read` · `vitals.record` | Codes: BP, heart/respiratory rate, temperature, SpO₂, weight, height, glucose, pain score, MUAC. Units fixed server-side; plausibility ranges; BP needs both values. Open visits only. |
 | `POST /encounters/{id}/vitals/{observationId}/entered-in-error` `{ reason }` | `vitals.record` | Values are never edited (column-level grant). |
 | `GET` · `POST /encounters/{id}/diagnoses` `{ code (ICD-10), description, rank }` | `clinical.read` · `diagnosis.record` | One active PRIMARY per visit (409 `PRIMARY_DIAGNOSIS_EXISTS`). |
 | `POST /encounters/{id}/diagnoses/{diagnosisId}/entered-in-error` `{ reason }` | `diagnosis.record` | |

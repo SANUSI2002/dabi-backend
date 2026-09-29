@@ -122,6 +122,9 @@ describe('UC-8: role permissions', () => {
   it('a nurse records vitals and signs nursing notes, but cannot write consultation notes or diagnose', async () => {
     const { visit } = await openVisit();
     expect((await as(nurse).post(`/encounters/${visit.id}/vitals`, { readings: [{ code: 'TEMPERATURE', value: 37.2 }] })).status).toBe(201);
+    const muac = await as(nurse).post(`/encounters/${visit.id}/vitals`, { readings: [{ code: 'MUAC', value: 11.2 }] });
+    expect(muac.body.data.items).toEqual([expect.objectContaining({ code: 'MUAC', unit: 'cm' })]);
+    expect((await as(nurse).post(`/encounters/${visit.id}/vitals`, { readings: [{ code: 'MUAC', value: 90 }] })).status).toBe(400);
     const nursing = await as(nurse).post(`/encounters/${visit.id}/notes`, { kind: 'NURSING', body: 'Patient settled, obs stable.' });
     expect(nursing.status).toBe(201);
     expect((await as(nurse).post(`/encounters/${visit.id}/notes/${nursing.body.data.id}/sign`, {}, { 'If-Match': 'W/"1"' })).status).toBe(200);

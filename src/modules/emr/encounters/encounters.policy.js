@@ -56,6 +56,7 @@ export const VITALS = {
   HEIGHT: { unit: 'cm', min: 20, max: 260 },
   BLOOD_GLUCOSE: { unit: 'mmol/L', min: 0.5, max: 50 },
   PAIN_SCORE: { unit: '{score}', min: 0, max: 10 },
+  MUAC: { unit: 'cm', min: 5, max: 60 },
 };
 
 export function checkVitals(readings) {
