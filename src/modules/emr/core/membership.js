@@ -14,3 +14,12 @@ export async function activeMemberWithPermission(organizationId, userId, permiss
   });
   return !!membership;
 }
+
+/** True when the user has an ACTIVE membership in the organization holding `roleCode`. */
+export async function activeMemberWithRole(organizationId, userId, roleCode) {
+  const membership = await prisma.organizationMembership.findFirst({
+    where: { userId, organizationId, status: 'ACTIVE', user: { accountStatus: 'ACTIVE' }, roles: { some: { roleCode } } },
+    select: { id: true },
+  });
+  return !!membership;
+}

@@ -291,6 +291,17 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `POST /pharmacy/prescriptions/{id}/approve` `{ note? }` · `/reject` `{ reason }` | `prescription.review` | `If-Match`. Reject cancels the lines. |
 | `POST /pharmacy/prescriptions/{id}/dispense` `{ lines: [{ itemId, quantity }], witnessUserId?, note? }` | `prescription.dispense` | **`Idempotency-Key` required.** All-or-nothing, FEFO, partial fills allowed, 409 `INSUFFICIENT_STOCK` with what is available. Controlled lines need a witness: a different, active member with `prescription.dispense`. |
 | `POST /pharmacy/dispenses/{dispenseId}/returns` `{ lines: [{ lineId, quantity }], reason, restock }` | `prescription.dispense` | **`Idempotency-Key` required.** Back to the same batch (RETURN); `restock: false` also writes it off (ADJUSTMENT). Reopens the line. |
+| `GET /wards?includeInactive` · `POST /wards` `{ code, name, kind, genderRestriction, beds? }` · `PATCH /wards/{wardId}` | read: `admission.read`/`ward.manage`; write: `ward.manage` | Bed counts by status and occupancy %. A ward with patients cannot be deactivated or restricted against them. |
+| `GET /wards/{wardId}/beds` · `POST /wards/{wardId}/beds` `{ codes }` | `admission.read`/`ward.manage` · `ward.manage` | Beds with the occupying admission and minimal patient identity. Audited. |
+| `POST /beds/{bedId}/status` `{ status, reason? }` | `bed.manage` | Bed `If-Match`. AVAILABLE ↔ CLEANING ↔ OUT_OF_SERVICE (reason required); OCCUPIED only via admit/transfer/discharge. |
+| `POST /encounters/{id}/admission` `{ bedId, reason, attendingUserId?, expectedDischargeDate? }` | `admission.create` | Open visit, active patient, available bed, ward accepts the patient's sex. Visit becomes INPATIENT / IN_PROGRESS. 409 `BED_NOT_AVAILABLE`, `PATIENT_ALREADY_ADMITTED`, `WARD_RESTRICTED`. |
+| `GET /admissions?status&wardId&patientId&cursor` · `GET /admissions/{id}` | `admission.read` | Census (default ADMITTED) with ward/bed; detail with bed history. |
+| `POST /admissions/{id}/transfer` `{ bedId, note? }` | `admission.transfer` | `If-Match`. Old bed → CLEANING, new → OCCUPIED, history row. |
+| `POST /admissions/{id}/discharge` `{ disposition, summary }` | `admission.discharge` | `If-Match`. Bed → CLEANING, visit FINISHED; `DECEASED` also deactivates the patient. |
+| `POST /admissions/{id}/cancel` `{ reason }` | `admission.create` | `If-Match`. Entered-in-error only, and only if nothing is charted. |
+| `GET /admissions/{id}/mar` | `medication.administer`/`clinical.read`/`prescription.read` | Administrable medicines (approved, active, prescribed in this stay) with last dose, next allowed time, amount in 24 h; all entries. |
+| `POST /admissions/{id}/mar` `{ prescriptionItemId, status: GIVEN\|HELD\|REFUSED\|MISSED, dose?, doseUnit?, route?, administeredAt?, witnessUserId?, reason? }` | `medication.administer` | **`Idempotency-Key` required.** GIVEN passes the administration guard (409 `ADMINISTRATION_NOT_ALLOWED` with `details.rule`: DOSE_UNIT, DOSE_ABOVE_PRESCRIBED, TOO_SOON (+`nextAllowedAt`), DAILY_COUNT, ALREADY_GIVEN, DAILY_MAXIMUM, NOT_ACTIVE). Controlled → witness. Late charting up to 24 h, never before admission or in the future. |
+| `POST /admissions/{id}/mar/{administrationId}/entered-in-error` `{ reason }` | `medication.administer` | Entries are never edited or deleted. |
 | `GET /audit-events?resourceType&resourceId&cursor&limit` | `audit.view` | Newest first; reading it is audited. |
 | `GET` · `PUT` · `DELETE /telehealth/designation` | DOCTOR role | The doctor designates this hospital to receive their completed telemedicine visits (UC-2). Returns `{ designated, designatedElsewhere }` — never another hospital's id. |
 | `GET /webhooks` · `POST /webhooks` `{ url, eventTypes }` | `emr.webhook.manage` | HTTPS only, max 10 active. The signing `secret` is returned once. |
@@ -319,7 +330,25 @@ delivery is marked `DEAD`.
 | Controlled medicines | ≤ 30 days' supply, as-needed quantity stated, witnessed dispensing (different active pharmacy member). |
 | Low stock | `stock.low` emitted once when in-date stock crosses the reorder level. |
 
-## 11. Telemedicine → EMR handoff (UC-2)
+## 11. Admissions and MAR — guarantees
+
+| Risk | Guard |
+| --- | --- |
+| Two patients in one bed | Bed row locked `FOR UPDATE` and status checked; unique index: one ADMITTED admission per bed. |
+| Patient or visit admitted twice | Unique indexes: one ADMITTED admission per patient; one non-cancelled admission per visit. |
+| Deadlocks (transfer vs discharge, bed swaps) | Admission row locked first, then beds in one statement ordered by id — same order everywhere. |
+| Bed/ward mismatch | Composite FK (ward, bed) on admissions and bed history. |
+| Rewriting bed history | Trigger: an assignment can only be closed, once; no deletes. |
+| Dose charted twice (double tap / retry) | `Idempotency-Key` mandatory on MAR entries. |
+| Dose too soon / too many / STAT repeated / PRN over max | Administration guard: half-interval minimum gap (both directions, so late charting is checked too), daily count over a 22 h window (tolerates daily-dose drift), STAT once, PRN ≤ formulary max over 24 h. The prescription line is locked while checking, so two nurses cannot both pass. |
+| Unapproved / stopped / other-visit medicine | Only pharmacist-approved, non-cancelled lines prescribed in the admission's visit. |
+| Controlled drugs | Witness required: a different, active member with `medication.administer`. |
+| Editing the chart | MAR rows append-only; column-level grant allows only the entered-in-error fields. |
+
+Not modelled yet: ward stock / dispensing to the ward is not decremented by MAR entries (the
+pharmacy dispense is the stock event); scheduled dose times (the guard is interval-based).
+
+## 12. Telemedicine → EMR handoff (UC-2)
 
 ```
 doctor completes appointment ──(same tx)──► domain_events: doctor_appointment.completed {appointmentId}
@@ -344,7 +373,7 @@ not linked yet is **not** re-processed automatically once it is (a manual re-run
 `domain_events` has no retention job yet — add one (e.g. delete consumed events after 90 days)
 before it grows large.
 
-## 12. Build status
+## 13. Build status
 
 | Module | Status |
 | --- | --- |
@@ -354,4 +383,5 @@ before it grows large.
 | Telemedicine handoff (UC-2) | Done — 4 real-DB cases (end to end through the telemedicine `complete()`) |
 | Laboratory (catalog, orders, specimen/accession, results, verification, amendments, critical alerts) | Done — 7 real-DB cases + 8 fast policy tests |
 | Prescriptions, allergies, formulary, stock, dispensing, returns | Done — 16 real-DB cases + 11 fast policy tests |
-| Admissions, billing | Later, same pattern |
+| Admissions (wards, beds, admit/transfer/discharge/cancel, census, MAR) | Done — 14 real-DB cases + 10 fast policy tests |
+| Billing | Next |

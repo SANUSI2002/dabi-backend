@@ -21,6 +21,7 @@ import auditRoutes from './audit/audit.routes.js';
 import telehealthRoutes from './telehealth/telehealth.routes.js';
 import { labRoutes, encounterLabRoutes } from './lab/lab.routes.js';
 import { pharmacyRoutes, encounterPrescriptionRoutes, patientPharmacyRoutes } from './pharmacy/pharmacy.routes.js';
+import { wardRoutes, bedRoutes, encounterAdmissionRoutes, admissionRoutes } from './admissions/admissions.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -38,6 +39,10 @@ tenant.use('/encounters/:encounterId/lab-orders', encounterLabRoutes);
 tenant.use('/lab', labRoutes);
 tenant.use('/encounters/:encounterId/prescriptions', encounterPrescriptionRoutes);
 tenant.use('/pharmacy', pharmacyRoutes);
+tenant.use('/encounters/:encounterId/admission', encounterAdmissionRoutes);
+tenant.use('/wards', wardRoutes);
+tenant.use('/beds', bedRoutes);
+tenant.use('/admissions', admissionRoutes);
 tenant.use('/webhooks', webhookRoutes);
 tenant.use('/audit-events', auditRoutes);
 tenant.use('/telehealth/designation', telehealthRoutes);
