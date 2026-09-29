@@ -33,7 +33,18 @@ describe('server-owned EMR entitlement', () => {
     db.platformApplication.findUnique.mockResolvedValue({ status: 'APPROVED', setupCompletedAt: new Date(), packageVersion: { status: 'PUBLISHED', moduleKeys: ['emr'] } });
     const response = await request(app).get(`/organizations/${identityOrganizationId}/emr-access`);
     expect(response.status).toBe(200);
-    expect(response.body.data).toMatchObject({ organizationId: identityOrganizationId, facilityId, clinicalApiConnected: false });
+    expect(response.body.data).toMatchObject({ organizationId: identityOrganizationId, facilityId, clinicalApiConnected: false, patientRegistryEnabled: false });
     expect(response.body.data).not.toHaveProperty('patients');
+  });
+
+  it('reports the EMR API as connected only while its switch is on', async () => {
+    db.platformApplication.findUnique.mockResolvedValue({ status: 'APPROVED', setupCompletedAt: new Date(), packageVersion: { status: 'PUBLISHED', moduleKeys: ['emr'] } });
+    vi.stubEnv('EMR_API_ENABLED', 'true');
+    try {
+      const response = await request(app).get(`/organizations/${identityOrganizationId}/emr-access`);
+      expect(response.body.data).toMatchObject({ clinicalApiConnected: true, patientRegistryEnabled: true });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

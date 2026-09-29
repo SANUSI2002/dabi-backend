@@ -14,7 +14,7 @@ export const patientSelect = {
 };
 const summarySelect = {
   id: true, medicalRecordNumber: true, givenName: true, familyName: true, otherNames: true, preferredName: true, dateOfBirth: true, sex: true,
-  status: true, phone: true, nationalId: true, hospitalNumber: true, payer: true, category: true, state: true, lga: true, version: true, createdAt: true,
+  status: true, phone: true, nationalId: true, hospitalNumber: true, payer: true, category: true, address: true, addressWard: true, state: true, lga: true, version: true, createdAt: true,
 };
 
 const statusWhere = (status) => (status === 'ALL' ? {} : { status });

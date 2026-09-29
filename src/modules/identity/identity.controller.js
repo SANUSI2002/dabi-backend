@@ -57,13 +57,15 @@ export const emrAccess = async (req, res, next) => {
   if (!activePathOrganization(req, res)) return;
   try {
     const context = req.accessContext;
-      if (!await approvedEmrFor(context)) {
-        return res.status(403).json({ status: 'error', error: { code: 'EMR_ACCESS_DENIED', message: 'This organization has no active EMR entitlement.' } });
-      }
+    if (!await approvedEmrFor(context)) {
+      return res.status(403).json({ status: 'error', error: { code: 'EMR_ACCESS_DENIED', message: 'This organization has no active EMR entitlement.' } });
+    }
+    // One switch (EMR_API_ENABLED) opens the whole tenant EMR API: the registry and the clinical modules.
+    const apiEnabled = emrPatientRegistryEnabled();
     return res.set('Cache-Control', 'no-store').json({ status: 'success', data: {
       organizationId: context.organization.id, facilityId: context.organization.facilityId,
       organizationName: context.organization.name, roles: context.roles, permissions: context.permissions,
-        clinicalApiConnected: false, patientRegistryEnabled: emrPatientRegistryEnabled(),
+      clinicalApiConnected: apiEnabled, patientRegistryEnabled: apiEnabled,
     } });
   } catch (error) { return next(error); }
 };
