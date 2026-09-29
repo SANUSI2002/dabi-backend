@@ -21,6 +21,7 @@ export const EVENT_TYPES = [
   'prescription.created', 'prescription.approved', 'prescription.rejected', 'prescription.cancelled',
   'medication.dispensed', 'medication.returned', 'allergy.recorded', 'stock.low',
   'admission.created', 'admission.transferred', 'admission.discharged', 'admission.cancelled', 'medication.administered',
+  'invoice.issued', 'invoice.voided', 'payment.recorded', 'payment.reversed',
 ];
 const MAX_SUBSCRIPTIONS = 10;
 

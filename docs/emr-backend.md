@@ -302,6 +302,15 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `GET /admissions/{id}/mar` | `medication.administer`/`clinical.read`/`prescription.read` | Administrable medicines (approved, active, prescribed in this stay) with last dose, next allowed time, amount in 24 h; all entries. |
 | `POST /admissions/{id}/mar` `{ prescriptionItemId, status: GIVEN\|HELD\|REFUSED\|MISSED, dose?, doseUnit?, route?, administeredAt?, witnessUserId?, reason? }` | `medication.administer` | **`Idempotency-Key` required.** GIVEN passes the administration guard (409 `ADMINISTRATION_NOT_ALLOWED` with `details.rule`: DOSE_UNIT, DOSE_ABOVE_PRESCRIBED, TOO_SOON (+`nextAllowedAt`), DAILY_COUNT, ALREADY_GIVEN, DAILY_MAXIMUM, NOT_ACTIVE). Controlled → witness. Late charting up to 24 h, never before admission or in the future. |
 | `POST /admissions/{id}/mar/{administrationId}/entered-in-error` `{ reason }` | `medication.administer` | Entries are never edited or deleted. |
+| `GET /billing/prices?category&q` · `POST /billing/prices` `{ category, reference, name, unitPriceMinor, taxRateBp?, currency? }` · `PATCH /billing/prices/{id}` | `billing.read`/`billing.price.manage` | Money in **integer minor units** (kobo). References: `CONSULTATION:<visit class>`, `LAB:<test>`, `MEDICATION:<drug>` (per dispense unit), `BED_DAY:<ward code>` then `BED_DAY:<ward kind>`. Price changes never alter existing charges. |
+| `POST /billing/encounters/{id}/capture` | `billing.charge.manage` or `billing.invoice.create` | Creates missing charges from the visit's records, once each (unique source key); returns `{ created, unpriced }` — unpriced items are reported, never charged at zero. |
+| `GET /billing/encounters/{id}/charges` · `POST …/charges` · `POST /billing/charges/{id}/void` `{ reason }` | `billing.read` · `billing.charge.manage` | Manual charge from a price item, or hand-priced PROCEDURE/OTHER. Only unbilled charges can be voided; a voided captured charge is not captured again. |
+| `POST /billing/encounters/{id}/invoices` `{ discountMinor?, discountReason?, dueDate? }` | `billing.invoice.create` (+ `billing.discount` for a discount) | Captures, then claims every unbilled charge (`FOR UPDATE`), numbers `INV-<year>-<nnnnnn>`, writes the ledger. 409 `NOTHING_TO_INVOICE`. |
+| `GET /billing/invoices?status&patientId&cursor` · `GET /billing/invoices/{id}` | `billing.read` | Detail includes charges, payments and the ledger. |
+| `POST /billing/invoices/{id}/void` `{ reason }` | `billing.invoice.void` | `If-Match`. Only with nothing paid; charges return to UNBILLED. |
+| `POST /billing/invoices/{id}/payments` `{ amountMinor, method, reference? }` | `billing.payment.record` | **`Idempotency-Key` required.** Non-cash needs a reference. 409 `OVERPAYMENT` with the balance. Receipt `RCPT-<year>-<nnnnnn>`. |
+| `POST /billing/payments/{id}/reverse` `{ reason }` | `billing.payment.reverse` | Never by the person who recorded the payment. |
+| `GET /billing/patients/{id}/statement` · `GET /billing/reconciliation` | `billing.read` | Outstanding + unbilled; reconciliation checks each invoice against its charges, posted payments and ledger. |
 | `GET /audit-events?resourceType&resourceId&cursor&limit` | `audit.view` | Newest first; reading it is audited. |
 | `GET` · `PUT` · `DELETE /telehealth/designation` | DOCTOR role | The doctor designates this hospital to receive their completed telemedicine visits (UC-2). Returns `{ designated, designatedElsewhere }` — never another hospital's id. |
 | `GET /webhooks` · `POST /webhooks` `{ url, eventTypes }` | `emr.webhook.manage` | HTTPS only, max 10 active. The signing `secret` is returned once. |
@@ -348,7 +357,23 @@ delivery is marked `DEAD`.
 Not modelled yet: ward stock / dispensing to the ward is not decremented by MAR entries (the
 pharmacy dispense is the stock event); scheduled dose times (the guard is interval-based).
 
-## 12. Telemedicine → EMR handoff (UC-2)
+## 12. Billing — guarantees
+
+| Risk | Guard |
+| --- | --- |
+| Rounding / float errors | Integer minor units end to end (BigInt in the service); `CHECK amount = quantity × unit price` and `tax = ROUND(amount × rate)` on every charge; JSON conversion refuses unsafe integers. |
+| Billing a service twice | Unique `(source_type, source_key)` per tenant: visit, lab item, dispense line, admission-night; capture is `ON CONFLICT DO NOTHING`. |
+| Returned medicine still billed | Credit charges for the returned quantity at the unit price originally charged, keyed by cumulative returned. |
+| A charge on two invoices | Charges claimed `FOR UPDATE` + guarded update; concurrent invoices → one wins, the other gets `NOTHING_TO_INVOICE`. |
+| Double payment / overpayment | `Idempotency-Key` mandatory; invoice locked; `CHECK amount_paid <= total`. |
+| Silent edits to money | Column-level grants: charge and invoice amounts cannot be updated by the request role; append-only ledger with running balance; reconciliation endpoint. |
+| Fraudulent reversals | Separate permission (admin) and a database `CHECK` that the reverser is not the recorder. |
+| Silent ₦0 charges | Unpriced items are returned from capture, not charged. |
+
+Not modelled yet: insurance/HMO claims and co-pays, credit notes/refunds of paid invoices beyond
+payment reversal, tenant time zones for bed-day midnights (UTC today), multi-currency invoices.
+
+## 13. Telemedicine → EMR handoff (UC-2)
 
 ```
 doctor completes appointment ──(same tx)──► domain_events: doctor_appointment.completed {appointmentId}
@@ -373,7 +398,7 @@ not linked yet is **not** re-processed automatically once it is (a manual re-run
 `domain_events` has no retention job yet — add one (e.g. delete consumed events after 90 days)
 before it grows large.
 
-## 13. Build status
+## 14. Build status
 
 | Module | Status |
 | --- | --- |
@@ -384,4 +409,4 @@ before it grows large.
 | Laboratory (catalog, orders, specimen/accession, results, verification, amendments, critical alerts) | Done — 7 real-DB cases + 8 fast policy tests |
 | Prescriptions, allergies, formulary, stock, dispensing, returns | Done — 16 real-DB cases + 11 fast policy tests |
 | Admissions (wards, beds, admit/transfer/discharge/cancel, census, MAR) | Done — 14 real-DB cases + 10 fast policy tests |
-| Billing | Next |
+| Billing (price list, capture, charges, invoices, payments, reversals, ledger, statements) | Done — 12 real-DB cases + 10 fast policy tests |

@@ -1166,6 +1166,7 @@ model EmrPatient {
   prescriptions EmrPrescription[]
   allergies EmrPatientAllergy[]
   admissions EmrAdmission[]
+  invoices EmrInvoice[]
 
   @@unique([organizationId, medicalRecordNumber])
   @@unique([organizationId, id])
@@ -2450,4 +2451,168 @@ model EmrMedicationAdministration {
 
   @@index([organizationId, admissionId, administeredAt])
   @@map("emr_medication_administrations")
+}
+
+// ---- EMR billing (migration 20261003090000_emr_billing). Money = integer minor units. ----
+enum EmrChargeCategory {
+  CONSULTATION
+  LAB
+  MEDICATION
+  BED_DAY
+  PROCEDURE
+  OTHER
+}
+
+enum EmrChargeStatus {
+  UNBILLED
+  INVOICED
+  VOIDED
+}
+
+enum EmrInvoiceStatus {
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum EmrPaymentMethod {
+  CASH
+  CARD
+  POS
+  BANK_TRANSFER
+  MOBILE_MONEY
+  CHEQUE
+}
+
+enum EmrPaymentStatus {
+  POSTED
+  REVERSED
+}
+
+enum EmrLedgerKind {
+  INVOICE_ISSUED
+  PAYMENT
+  PAYMENT_REVERSED
+  INVOICE_VOIDED
+}
+
+model EmrPriceItem {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  category EmrChargeCategory
+  reference String
+  name String
+  unitPriceMinor BigInt @map("unit_price_minor")
+  taxRateBp Int @default(0) @map("tax_rate_bp")
+  currency String @default("NGN")
+  active Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, category, reference])
+  @@map("emr_price_items")
+}
+
+model EmrInvoice {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  encounterId String @map("encounter_id")
+  number String
+  status EmrInvoiceStatus @default(ISSUED)
+  currency String
+  subtotalMinor BigInt @map("subtotal_minor")
+  taxMinor BigInt @map("tax_minor")
+  discountMinor BigInt @default(0) @map("discount_minor")
+  discountReason String? @map("discount_reason")
+  totalMinor BigInt @map("total_minor")
+  amountPaidMinor BigInt @default(0) @map("amount_paid_minor")
+  dueDate DateTime? @map("due_date") @db.Date
+  issuedAt DateTime @default(now()) @map("issued_at")
+  issuedByUserId String @map("issued_by_user_id")
+  voidedAt DateTime? @map("voided_at")
+  voidedByUserId String? @map("voided_by_user_id")
+  voidReason String? @map("void_reason")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  charges EmrCharge[]
+  payments EmrPayment[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@map("emr_invoices")
+}
+
+model EmrCharge {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  encounterId String @map("encounter_id")
+  priceItemId String? @map("price_item_id")
+  category EmrChargeCategory
+  description String
+  quantity Int
+  unitPriceMinor BigInt @map("unit_price_minor")
+  taxRateBp Int @default(0) @map("tax_rate_bp")
+  amountMinor BigInt @map("amount_minor")
+  taxMinor BigInt @map("tax_minor")
+  currency String
+  sourceType String @map("source_type")
+  sourceKey String? @map("source_key")
+  serviceAt DateTime @map("service_at")
+  status EmrChargeStatus @default(UNBILLED)
+  invoiceId String? @map("invoice_id")
+  createdByUserId String @map("created_by_user_id")
+  voidedAt DateTime? @map("voided_at")
+  voidedByUserId String? @map("voided_by_user_id")
+  voidReason String? @map("void_reason")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  invoice EmrInvoice? @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, encounterId, status])
+  @@map("emr_charges")
+}
+
+model EmrPayment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  invoiceId String @map("invoice_id")
+  patientId String @map("patient_id")
+  receiptNumber String @map("receipt_number")
+  method EmrPaymentMethod
+  amountMinor BigInt @map("amount_minor")
+  reference String?
+  status EmrPaymentStatus @default(POSTED)
+  receivedByUserId String @map("received_by_user_id")
+  receivedAt DateTime @default(now()) @map("received_at")
+  reversedAt DateTime? @map("reversed_at")
+  reversedByUserId String? @map("reversed_by_user_id")
+  reversalReason String? @map("reversal_reason")
+  invoice EmrInvoice @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@map("emr_payments")
+}
+
+model EmrBillingLedger {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  invoiceId String @map("invoice_id")
+  patientId String @map("patient_id")
+  kind EmrLedgerKind
+  amountMinor BigInt @map("amount_minor")
+  balanceAfterMinor BigInt @map("balance_after_minor")
+  paymentId String? @map("payment_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, invoiceId, createdAt])
+  @@map("emr_billing_ledger")
 }
