@@ -4,6 +4,7 @@ import { withTenant } from '../core/db.js';
 import { recordAudit } from '../core/audit.js';
 import { enqueueEvent } from '../core/outbox.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
+import { markEnteredInError } from '../core/entries.js';
 
 async function requirePatient(tx, context, patientId) {
   const patient = await tx.emrPatient.findFirst({ where: { organizationId: context.organizationId, id: patientId }, select: { id: true } });
@@ -40,13 +41,9 @@ export async function recordAllergy(context, patientId, input) {
 export async function markAllergyError(context, patientId, allergyId, { reason }) {
   return withTenant(context, async (tx) => {
     await requirePatient(tx, context, patientId);
-    const { count } = await tx.emrPatientAllergy.updateMany({
-      where: { organizationId: context.organizationId, patientId, id: allergyId, status: 'ACTIVE' },
-      data: { status: 'ENTERED_IN_ERROR', errorReason: reason, erroredByUserId: context.userId, erroredAt: new Date() },
+    const row = await markEnteredInError(tx.emrPatientAllergy, {
+      where: { organizationId: context.organizationId, patientId, id: allergyId }, userId: context.userId, reason, notFoundCode: 'ALLERGY_NOT_FOUND', label: 'allergy',
     });
-    const row = await tx.emrPatientAllergy.findFirst({ where: { organizationId: context.organizationId, patientId, id: allergyId } });
-    if (!row) throw new EmrError('ALLERGY_NOT_FOUND');
-    if (!count) throw new EmrError('INVALID_STATE', { message: 'This allergy is already marked as entered in error.' });
     await recordAudit(tx, context, { action: 'allergy.entered_in_error', resourceType: 'allergy', resourceId: allergyId });
     return row;
   });

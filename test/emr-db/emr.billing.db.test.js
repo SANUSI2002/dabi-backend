@@ -268,3 +268,73 @@ describe('statements, invariants and isolation', () => {
     expect((await reconciled(bFinance)).invoicesChecked).toBe(0);
   });
 });
+
+describe('billing follows cancellations (review fixes)', () => {
+  const labCharges = async (encounter) => (await charges(encounter)).filter((c) => c.category === 'LAB');
+  const net = (rows) => rows.filter((c) => c.status !== 'VOIDED').reduce((total, c) => total + c.amountMinor, 0);
+  async function collectedFbc(encounter) {
+    const order = (await as(doctor).post(`/encounters/${encounter.id}/lab-orders`, { tests: ['FBC'] })).body.data;
+    await as(nurse).post(`/lab/orders/${order.id}/collect`, {}, ifMatch(1));
+    return order;
+  }
+  const cancelLab = (order) => as(doctor).post(`/lab/orders/${order.id}/cancel`, { reason: 'Specimen haemolysed' }, ifMatch(2));
+
+  it('a cancelled visit is not charged a consultation, but medicine already dispensed is', async () => {
+    const { encounter } = await visit();
+    await dispensed(encounter, 10);
+    expect((await as(doctor).post(`/encounters/${encounter.id}/cancel`, { reason: 'Left after collecting medicine' }, ifMatch(2))).status).toBe(200);
+    await capture(encounter);
+    // 10 tablets at the current amlodipine price (raised to 9,000 kobo by the returns test above).
+    expect((await charges(encounter)).map((c) => [c.category, c.amountMinor])).toEqual([['MEDICATION', 90_000]]);
+  });
+
+  it('a lab test cancelled before invoicing is voided', async () => {
+    const { encounter } = await visit();
+    const order = await collectedFbc(encounter);
+    await capture(encounter);
+    expect((await cancelLab(order)).status).toBe(200);
+    await capture(encounter);
+    expect((await labCharges(encounter)).map((c) => [c.sourceType, c.status])).toEqual([['LAB_ORDER_ITEM', 'VOIDED']]);
+  });
+
+  it('a lab test cancelled after invoicing is credited, and still nets to zero if that invoice is voided later', async () => {
+    const { encounter } = await visit();
+    const order = await collectedFbc(encounter);
+    const first = (await invoice(encounter)).body.data;
+    expect(first.totalMinor).toBe(850_000); // consultation + FBC
+    await cancelLab(order);
+    await capture(encounter);
+    await capture(encounter); // idempotent: no second adjustment
+    let lab = await labCharges(encounter);
+    expect(lab.map((c) => [c.sourceType, c.quantity, c.amountMinor, c.status])).toEqual([
+      ['LAB_ORDER_ITEM', 1, 350_000, 'INVOICED'],
+      ['LAB_CANCELLED', -1, -350_000, 'UNBILLED'],
+    ]);
+    expect(net(lab)).toBe(0);
+
+    await as(supervisor).post(`/billing/invoices/${first.id}/void`, { reason: 'Re-issuing without the cancelled test' }, ifMatch(first.version));
+    await capture(encounter);
+    lab = await labCharges(encounter);
+    expect(net(lab)).toBe(0);
+    expect(lab.every((c) => c.status === 'VOIDED')).toBe(true);
+    expect((await invoice(encounter)).body.data.totalMinor).toBe(500_000); // consultation only
+    expect((await reconciled()).balanced).toBe(true);
+  });
+
+  it('reconciliation checks one bounded page at a time and walks every invoice and batch exactly once', async () => {
+    const walk = async (who, path, key) => {
+      let cursor = null;
+      let checked = 0;
+      do {
+        const pageData = (await as(who).get(`${path}?limit=2${cursor ? `&cursor=${cursor}` : ''}`)).body.data;
+        expect(pageData[key]).toBeLessThanOrEqual(2);
+        expect(pageData.balanced).toBe(true);
+        checked += pageData[key];
+        cursor = pageData.nextCursor;
+      } while (cursor);
+      return checked;
+    };
+    expect(await walk(finance, '/billing/reconciliation', 'invoicesChecked')).toBe(await prisma.emrInvoice.count({ where: { organizationId: A.organizationId } }));
+    expect(await walk(pharmacist, '/pharmacy/stock/reconciliation', 'batchesChecked')).toBe(await prisma.emrStockBatch.count({ where: { organizationId: A.organizationId } }));
+  });
+});

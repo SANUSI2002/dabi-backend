@@ -203,6 +203,7 @@ Legend: **I** = real-database integration test (RLS on), **U** = unit/route test
 | --- | --- |
 | Encryption in transit | TLS at Render/Supabase; HSTS via helmet. |
 | Encryption at rest | Supabase disk encryption. Webhook secrets are stored encrypted (AES-256-GCM, `EMR_SECRET_KEY`). |
+| Webhook SSRF | HTTPS only, no credentials in URLs, redirects not followed, and private/loopback/link-local addresses refused inside the socket's own DNS lookup (no check-then-connect window for DNS rebinding). |
 | Audit | `emr_audit_events`, append-only, tenant-scoped, exported by users with `audit.view`. |
 | Access control | JWT tenant claim + membership + permission codes + RLS. |
 | Observability | Request id (`X-Request-Id`, echoed), structured JSON logs, per-tenant request/error/latency counters. |
@@ -255,7 +256,7 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `GET /encounters?status=ARRIVED,IN_PROGRESS&patientId&class&cursor&limit` | `encounter.read` | Visit list with patient summary (no clinical content). Keyset pages. |
 | `POST /encounters` `{ patientId, class?, reason?, attendingUserId? }` | `encounter.create` | Check-in. Optional `Idempotency-Key`. 409 `ENCOUNTER_ALREADY_OPEN` (one open visit per patient), 409 `PATIENT_INACTIVE` (UC-17). The attending must be an active doctor of the tenant. |
 | `GET /encounters/{id}` · `PATCH /encounters/{id}` | `encounter.read` · `encounter.update` | `ETag`; PATCH needs `If-Match` and an open visit. |
-| `POST /encounters/{id}/start` · `/finish` · `/cancel` `{ reason }` | `encounter.update` | `If-Match`. ARRIVED → IN_PROGRESS → FINISHED; open visits can be cancelled with a reason. |
+| `POST /encounters/{id}/start` · `/finish` · `/cancel` `{ reason }` | `encounter.update` | `If-Match`. ARRIVED → IN_PROGRESS → FINISHED; open visits can be cancelled with a reason. A visit with a current admission cannot be finished or cancelled — discharge (or cancel the admission) closes it. |
 | `GET /encounters/{id}/notes` | `clinical.read` | Notes with their amendments. Audited. |
 | `POST /encounters/{id}/notes` `{ kind, subjective?, objective?, assessment?, plan?, body? }` | `clinical.note.write` | Draft. You may only write a kind you may sign (nurses: `NURSING`). |
 | `PATCH /encounters/{id}/notes/{noteId}` | `clinical.note.write` | Author only, draft only, `If-Match`. 409 `NOTE_SIGNED`. |
@@ -281,7 +282,7 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `GET /pharmacy/stock?q&lowOnly&expiringWithinDays` | `emr.stock.view` | Per drug: in-date on hand, expired on hand, expiring soon, next expiry, batches. |
 | `POST /pharmacy/stock/receipts` `{ formularyCode, batchNumber, expiryDate, quantity, unitCostMinor?, supplier? }` | `emr.stock.manage` | **`Idempotency-Key` required.** Same batch + expiry tops up. Expired stock refused. |
 | `POST /pharmacy/stock/batches/{batchId}/adjust` `{ quantity (signed), reason, note? }` | `emr.stock.manage` | Batch `If-Match`. Reasons: COUNT_CORRECTION, DAMAGED, EXPIRED, LOST, OTHER (note required). Never below zero. |
-| `GET /pharmacy/stock/movements?formularyCode&batchId&cursor` · `GET /pharmacy/stock/reconciliation` | `emr.stock.view` | Append-only ledger; reconciliation proves on-hand = sum of movements for every batch. |
+| `GET /pharmacy/stock/movements?formularyCode&batchId&cursor` · `GET /pharmacy/stock/reconciliation?cursor&limit` | `emr.stock.view` | Append-only ledger; reconciliation proves on-hand = sum of movements, one page of batches (≤ 1000) per call, continued with `nextCursor`. |
 | `GET` · `POST /patients/{id}/allergies` · `POST …/allergies/{allergyId}/entered-in-error` | read: `clinical.read`/`prescription.read`/`allergy.record`; write: `allergy.record` | `substanceCode` is a formulary code or a drug class (e.g. `PENICILLIN`) — what prescribing checks match. One active entry per substance. |
 | `GET /patients/{id}/medications?scope=current\|all` | `prescription.read` | Current medicines across visits (course not yet ended) or full history. |
 | `POST /encounters/{id}/prescriptions` `{ items: [{ drugCode, dose, doseUnit, frequency, route?, durationDays?, quantity?, prn?, prnReason?, instructions? }], notes?, overrides? }` | `prescription.create` | Open visit, active patient. Quantity computed when possible. Safety checks: ALLERGY / MAX_DOSE / DUPLICATE_THERAPY (HIGH — need `overrides: [{ drugCode, type, reason }]`, else 409 `SAFETY_CHECK_REQUIRED` listing them), DUPLICATE_CLASS (MODERATE), CONTROLLED / HIGH_ALERT (INFO). Alerts + overrides stored per line. |
@@ -310,7 +311,7 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `POST /billing/invoices/{id}/void` `{ reason }` | `billing.invoice.void` | `If-Match`. Only with nothing paid; charges return to UNBILLED. |
 | `POST /billing/invoices/{id}/payments` `{ amountMinor, method, reference? }` | `billing.payment.record` | **`Idempotency-Key` required.** Non-cash needs a reference. 409 `OVERPAYMENT` with the balance. Receipt `RCPT-<year>-<nnnnnn>`. |
 | `POST /billing/payments/{id}/reverse` `{ reason }` | `billing.payment.reverse` | Never by the person who recorded the payment. |
-| `GET /billing/patients/{id}/statement` · `GET /billing/reconciliation` | `billing.read` | Outstanding + unbilled; reconciliation checks each invoice against its charges, posted payments and ledger. |
+| `GET /billing/patients/{id}/statement` · `GET /billing/reconciliation?cursor&limit` | `billing.read` | Outstanding + unbilled; reconciliation checks each invoice against its charges, posted payments and ledger, one page (≤ 1000) per call, continued with `nextCursor`. |
 | `GET /audit-events?resourceType&resourceId&cursor&limit` | `audit.view` | Newest first; reading it is audited. |
 | `GET` · `PUT` · `DELETE /telehealth/designation` | DOCTOR role | The doctor designates this hospital to receive their completed telemedicine visits (UC-2). Returns `{ designated, designatedElsewhere }` — never another hospital's id. |
 | `GET /webhooks` · `POST /webhooks` `{ url, eventTypes }` | `emr.webhook.manage` | HTTPS only, max 10 active. The signing `secret` is returned once. |
@@ -345,7 +346,9 @@ delivery is marked `DEAD`.
 | --- | --- |
 | Two patients in one bed | Bed row locked `FOR UPDATE` and status checked; unique index: one ADMITTED admission per bed. |
 | Patient or visit admitted twice | Unique indexes: one ADMITTED admission per patient; one non-cancelled admission per visit. |
-| Deadlocks (transfer vs discharge, bed swaps) | Admission row locked first, then beds in one statement ordered by id — same order everywhere. |
+| Deadlocks (transfer vs discharge, bed swaps) | Lock order everywhere: admission → visit → beds (beds in one statement ordered by id); admit takes visit → beds. |
+| Visit closed under an admission, or admission on a cancelled visit | Visit status changes and admit both lock the visit row; finishing/cancelling a visit with a current admission is refused; discharge only closes a still-open visit. |
+| Dose charted on a discharged stay | Charting holds a `FOR SHARE` lock on the admission while it checks and writes; discharge takes `FOR UPDATE`. |
 | Bed/ward mismatch | Composite FK (ward, bed) on admissions and bed history. |
 | Rewriting bed history | Trigger: an assignment can only be closed, once; no deletes. |
 | Dose charted twice (double tap / retry) | `Idempotency-Key` mandatory on MAR entries. |
@@ -364,6 +367,8 @@ pharmacy dispense is the stock event); scheduled dose times (the guard is interv
 | Rounding / float errors | Integer minor units end to end (BigInt in the service); `CHECK amount = quantity × unit price` and `tax = ROUND(amount × rate)` on every charge; JSON conversion refuses unsafe integers. |
 | Billing a service twice | Unique `(source_type, source_key)` per tenant: visit, lab item, dispense line, admission-night; capture is `ON CONFLICT DO NOTHING`. |
 | Returned medicine still billed | Credit charges for the returned quantity at the unit price originally charged, keyed by cumulative returned. |
+| Cancelled lab test still billed | Capture nets every cancelled test to zero: unbilled charges voided, invoiced ones offset by a `LAB_CANCELLED` adjustment at the price charged (also correct if that invoice is voided later). |
+| Cancelled visit | No consultation fee, but medicine dispensed and samples collected on it are still billed. |
 | A charge on two invoices | Charges claimed `FOR UPDATE` + guarded update; concurrent invoices → one wins, the other gets `NOTHING_TO_INVOICE`. |
 | Double payment / overpayment | `Idempotency-Key` mandatory; invoice locked; `CHECK amount_paid <= total`. |
 | Silent edits to money | Column-level grants: charge and invoice amounts cannot be updated by the request role; append-only ledger with running balance; reconciliation endpoint. |

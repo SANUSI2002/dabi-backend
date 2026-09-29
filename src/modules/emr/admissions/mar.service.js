@@ -11,6 +11,7 @@ import { idempotent } from '../core/idempotency.js';
 import { enqueueEvent } from '../core/outbox.js';
 import { activeMemberWithPermission } from '../core/membership.js';
 import { EmrError } from '../core/errors.js';
+import { markEnteredInError } from '../core/entries.js';
 import * as policy from './admissions.policy.js';
 
 const ADMINISTRABLE = ['APPROVED', 'PARTIALLY_DISPENSED', 'DISPENSED'];
@@ -69,6 +70,11 @@ export async function recordAdministration(context, admissionId, input, { idempo
   if (at.getTime() < Date.now() - LATE_CHARTING_MS) throw new EmrError('VALIDATION_FAILED', { message: 'Doses older than 24 hours cannot be charted here.' });
 
   return withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: `mar:${admissionId}`, body: input }, async () => {
+    // FOR SHARE: many nurses may chart at once, but a discharge (FOR UPDATE) waits for them, and
+    // a chart entry waits for an in-flight discharge — so nothing is charted on a closed stay.
+    const admissionRow = await tx.$queryRaw`
+      SELECT "id" FROM "emr_admissions" WHERE "organization_id" = ${context.organizationId} AND "id" = ${admissionId} FOR SHARE`;
+    if (!admissionRow.length) throw new EmrError('ADMISSION_NOT_FOUND');
     const admission = await loadAdmission(tx, context, admissionId);
     policy.requireAdmitted(admission, 'charted');
     if (at < admission.admittedAt) throw new EmrError('VALIDATION_FAILED', { message: 'A dose cannot predate the admission.' });
@@ -110,13 +116,10 @@ export async function recordAdministration(context, admissionId, input, { idempo
 export async function markAdministrationError(context, admissionId, administrationId, { reason }) {
   return withTenant(context, async (tx) => {
     await loadAdmission(tx, context, admissionId);
-    const { count } = await tx.emrMedicationAdministration.updateMany({
-      where: { organizationId: context.organizationId, admissionId, id: administrationId, entryStatus: 'ACTIVE' },
-      data: { entryStatus: 'ENTERED_IN_ERROR', errorReason: reason, erroredByUserId: context.userId, erroredAt: new Date() },
+    const row = await markEnteredInError(tx.emrMedicationAdministration, {
+      where: { organizationId: context.organizationId, admissionId, id: administrationId }, statusField: 'entryStatus',
+      userId: context.userId, reason, notFoundCode: 'ADMINISTRATION_NOT_FOUND',
     });
-    const row = await tx.emrMedicationAdministration.findFirst({ where: { organizationId: context.organizationId, admissionId, id: administrationId } });
-    if (!row) throw new EmrError('ADMINISTRATION_NOT_FOUND');
-    if (!count) throw new EmrError('INVALID_STATE', { message: 'This entry is already marked as entered in error.' });
     await recordAudit(tx, context, { action: 'medication.entered_in_error', resourceType: 'medication_administration', resourceId: administrationId });
     return toEntry(row);
   });

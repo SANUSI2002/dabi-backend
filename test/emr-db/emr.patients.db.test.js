@@ -265,8 +265,9 @@ describe('audit and events', () => {
     await dispatchPending();
 
     const calls = [];
-    const fetchImpl = async (url, init) => { calls.push({ url, init }); return { status: url.includes('bravo') ? 500 : 204 }; };
-    const result = await deliverDue({ fetchImpl });
+    // Stands in for postWebhook: records the request and answers like the subscriber would.
+    const send = async (url, init) => { calls.push({ url, init }); return { status: url.includes('bravo') ? 500 : 204 }; };
+    const result = await deliverDue({ send });
     expect(result.claimed).toBe(2);
 
     const toA = calls.filter((c) => c.url.includes('alpha'));
@@ -299,12 +300,12 @@ describe('audit and events', () => {
 
     // A subscriber that keeps failing is dead-lettered on its 10th attempt, not before.
     await prisma.emrWebhookDelivery.update({ where: { id: failed.id }, data: { attempts: MAX_ATTEMPTS - 2, nextAttemptAt: new Date(0) } });
-    await deliverDue({ fetchImpl });
+    await deliverDue({ send });
     const ninth = await prisma.emrWebhookDelivery.findUnique({ where: { id: failed.id } });
     expect(ninth.attempts).toBe(MAX_ATTEMPTS - 1);
     expect(ninth.status).toBe('PENDING');
     await prisma.emrWebhookDelivery.update({ where: { id: failed.id }, data: { nextAttemptAt: new Date(0) } });
-    await deliverDue({ fetchImpl });
+    await deliverDue({ send });
     const tenth = await prisma.emrWebhookDelivery.findUnique({ where: { id: failed.id } });
     expect(tenth.attempts).toBe(MAX_ATTEMPTS);
     expect(tenth.status).toBe('DEAD');

@@ -5,6 +5,7 @@ import prisma from '../../../config/db.js';
 import { withTenant } from '../core/db.js';
 import { recordAudit, changedFieldNames } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
+import { afterCursor } from '../core/cursor.js';
 import { enqueueEvent } from '../core/outbox.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
 import * as repo from './patients.repository.js';
@@ -35,8 +36,7 @@ export async function registerPatient(context, input, { idempotencyKey } = {}) {
 }
 
 export async function listPatients(context, query) {
-  const after = query.cursor ? repo.decodeCursor(query.cursor) : null;
-  if (query.cursor && !after) throw new EmrError('VALIDATION_FAILED', { message: 'The cursor is not valid.' });
+  const after = afterCursor('createdAt', query.cursor);
   return withTenant(context, async (tx) => {
     const result = query.page
       ? await repo.listPatientsPage(tx, context.organizationId, query)

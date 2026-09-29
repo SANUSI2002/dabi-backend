@@ -269,3 +269,61 @@ describe('database invariants and isolation', () => {
     expect(charting.body.error.code).toBe('ADMISSION_NOT_FOUND');
   });
 });
+
+describe('visits and admissions stay consistent (review fixes)', () => {
+  let obs;
+  const obsBed = async (code) => {
+    if (!obs) {
+      const ward = (await as(admin).post('/wards', { code: 'OBS', name: 'Observation', kind: 'GENERAL', beds: ['O1', 'O2', 'O3', 'O4'] })).body.data;
+      obs = Object.fromEntries((await as(admin).get(`/wards/${ward.id}/beds`)).body.data.beds.map((b) => [b.code, b]));
+    }
+    return obs[code];
+  };
+
+  it('a visit with a patient still in a bed cannot be finished or cancelled; discharge closes it', async () => {
+    const { encounter } = await visit();
+    const admission = (await as(doctor).post(`/encounters/${encounter.id}/admission`, { bedId: (await obsBed('O1')).id, reason: 'Observation' })).body.data;
+    const { version } = (await as(doctor).get(`/encounters/${encounter.id}`)).body.data;
+    const finish = await as(doctor).post(`/encounters/${encounter.id}/finish`, {}, ifMatch(version));
+    const cancel = await as(doctor).post(`/encounters/${encounter.id}/cancel`, { reason: 'Patient left the ward' }, ifMatch(version));
+    for (const refused of [finish, cancel]) {
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.message).toMatch(/admitted on this visit/);
+    }
+    await as(doctor).post(`/admissions/${admission.id}/discharge`, { disposition: 'HOME', summary: 'Observed overnight, well, discharged home.' }, ifMatch(1));
+    expect((await as(doctor).get(`/encounters/${encounter.id}`)).body.data.status).toBe('FINISHED');
+  });
+
+  it('admitting and cancelling a visit at the same moment never leaves an admission on a cancelled visit', async () => {
+    const { encounter } = await visit();
+    const [admitted, cancelled] = await Promise.all([
+      as(doctor).post(`/encounters/${encounter.id}/admission`, { bedId: (await obsBed('O2')).id, reason: 'Race' }),
+      as(nurse).post(`/encounters/${encounter.id}/cancel`, { reason: 'Patient left before review' }, ifMatch(1)),
+    ]);
+    const final = await prisma.emrEncounter.findUnique({ where: { id: encounter.id } });
+    const open = await prisma.emrAdmission.count({ where: { encounterId: encounter.id, status: 'ADMITTED' } });
+    if (admitted.status === 201) {
+      expect([409, 412]).toContain(cancelled.status);
+      expect([final.status, open]).toEqual(['IN_PROGRESS', 1]);
+    } else {
+      expect(cancelled.status).toBe(200);
+      expect(admitted.status).toBe(409);
+      expect([final.status, open]).toEqual(['CANCELLED', 0]);
+    }
+  });
+
+  it('no dose is charted on a discharged stay, even when both happen at once', async () => {
+    const { encounter } = await visit();
+    const admission = (await as(doctor).post(`/encounters/${encounter.id}/admission`, { bedId: (await obsBed('O3')).id, reason: 'Chest infection' })).body.data;
+    const line = await approvedLine(encounter, { drugCode: 'AMOX500', dose: 500, doseUnit: 'mg', frequency: 'TDS', durationDays: 5 });
+    const [charted, discharged] = await Promise.all([
+      chart(admission, given(line)),
+      as(doctor).post(`/admissions/${admission.id}/discharge`, { disposition: 'HOME', summary: 'Improving, completing antibiotics at home.' }, ifMatch(1)),
+    ]);
+    expect(discharged.status).toBe(200);
+    expect([201, 409]).toContain(charted.status); // before the discharge, or refused — never a 500
+    const late = await chart(admission, given(line));
+    expect(late.status).toBe(409);
+    expect(late.body.error.message).toMatch(/discharged/);
+  });
+});

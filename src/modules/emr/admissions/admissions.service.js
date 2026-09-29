@@ -1,11 +1,12 @@
 // Wards, beds and admissions (admit → transfer → discharge, or cancel if entered in error).
 //
-// Locking: every admission change locks the admission row first, then the bed rows it touches
-// (one statement, ordered by id). The same order everywhere means concurrent transfers and
-// discharges queue instead of deadlocking, and a bed can never be given to two patients —
-// backed by unique indexes (one current admission per bed / patient / visit).
-import { Buffer } from 'node:buffer';
+// Locking: an admission change locks the admission row first, then (discharge) the visit, then
+// the bed rows it touches in one statement ordered by id; admit locks visit → beds. Everyone
+// takes locks in that order, so concurrent admits, transfers and discharges queue instead of
+// deadlocking, and a bed can never be given to two patients — backed by unique indexes (one
+// current admission per bed / patient / visit).
 import { withTenant } from '../core/db.js';
+import { afterCursor, page } from '../core/cursor.js';
 import { recordAudit, changedFieldNames } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
 import { enqueueEvent } from '../core/outbox.js';
@@ -13,12 +14,22 @@ import { etagFor, updateVersioned } from '../core/concurrency.js';
 import { activeMemberWithRole } from '../core/membership.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
 import { OPEN_STATUSES } from '../encounters/encounters.policy.js';
+import { lockEncounter } from '../encounters/encounters.repository.js';
 import * as policy from './admissions.policy.js';
 
 const dateOnly = (value) => (value instanceof Date ? value.toISOString().slice(0, 10) : value);
 const patientSummary = { select: { id: true, medicalRecordNumber: true, givenName: true, familyName: true, dateOfBirth: true, sex: true } };
 const toPatient = (patient) => (patient ? { ...patient, dateOfBirth: dateOnly(patient.dateOfBirth) } : patient);
 const toAdmission = (row) => ({ ...row, expectedDischargeDate: dateOnly(row.expectedDischargeDate), ...(row.patient ? { patient: toPatient(row.patient) } : {}) });
+
+/** Updates a visit only while it is still open; anything else means the invariant broke. */
+async function setEncounterFromOpen(tx, context, encounterId, data) {
+  const { count } = await tx.emrEncounter.updateMany({
+    where: { organizationId: context.organizationId, id: encounterId, status: { in: OPEN_STATUSES } },
+    data: { ...data, updatedByUserId: context.userId, version: { increment: 1 } },
+  });
+  if (count !== 1) throw new EmrError('INVALID_STATE', { message: 'The visit for this admission is no longer open.' });
+}
 
 const UNIQUE = {
   one_per_bed: 'BED_NOT_AVAILABLE',
@@ -141,16 +152,15 @@ export async function admit(context, encounterId, input, { idempotencyKey } = {}
   await requireAttending(context, input.attendingUserId);
   try {
     return await withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: `admission:${encounterId}`, body: input }, async () => {
-      const encounter = await tx.emrEncounter.findFirst({
-        where: { organizationId: context.organizationId, id: encounterId },
-        select: { id: true, status: true, startedAt: true, patientId: true, patient: { select: { status: true, sex: true } } },
-      });
+      // Lock the visit first (as visit status changes do), so a concurrent cancel cannot slip in.
+      const encounter = await lockEncounter(tx, context.organizationId, encounterId);
       if (!encounter) throw new EmrError('ENCOUNTER_NOT_FOUND');
       if (!OPEN_STATUSES.includes(encounter.status)) throw new EmrError('INVALID_STATE', { message: 'Only an open visit can lead to an admission.' });
-      if (encounter.patient.status !== 'ACTIVE') throw new EmrError('PATIENT_INACTIVE');
+      const patient = await tx.emrPatient.findFirst({ where: { organizationId: context.organizationId, id: encounter.patientId }, select: { status: true, sex: true } });
+      if (patient.status !== 'ACTIVE') throw new EmrError('PATIENT_INACTIVE');
 
       const [bed] = await lockBeds(tx, context, [input.bedId]);
-      policy.requireWardAccepts(bed.ward, encounter.patient.sex);
+      policy.requireWardAccepts(bed.ward, patient.sex);
       policy.requireBedAvailable(bed);
       const now = new Date();
       const admission = await tx.emrAdmission.create({
@@ -163,10 +173,7 @@ export async function admit(context, encounterId, input, { idempotencyKey } = {}
       await tx.emrBedAssignment.create({ data: { organizationId: context.organizationId, admissionId: admission.id, wardId: bed.wardId, bedId: bed.id, reason: 'ADMISSION', assignedByUserId: context.userId, startedAt: now } });
       await setBed(tx, context, bed, { status: 'OCCUPIED' });
       // The visit becomes an inpatient stay (and is in progress from admission).
-      await tx.emrEncounter.updateMany({
-        where: { organizationId: context.organizationId, id: encounterId },
-        data: { class: 'INPATIENT', status: 'IN_PROGRESS', ...(encounter.startedAt ? {} : { startedAt: now }), updatedByUserId: context.userId, version: { increment: 1 } },
-      });
+      await setEncounterFromOpen(tx, context, encounterId, { class: 'INPATIENT', status: 'IN_PROGRESS', ...(encounter.startedAt ? {} : { startedAt: now }) });
       await recordAudit(tx, context, { action: 'admission.created', resourceType: 'admission', resourceId: admission.id });
       await enqueueEvent(tx, context, { type: 'admission.created', aggregateType: 'admission', aggregateId: admission.id, data: { patientId: encounter.patientId, encounterId, wardId: bed.wardId } });
       return { statusCode: 201, body: toAdmission({ ...admission, ward: { code: bed.ward.code, name: bed.ward.name }, bed: { code: bed.code } }) };
@@ -174,14 +181,6 @@ export async function admit(context, encounterId, input, { idempotencyKey } = {}
   } catch (error) {
     throw uniqueViolation(error, UNIQUE) ?? error;
   }
-}
-
-const cursorOf = (row) => Buffer.from(`${row.admittedAt.toISOString()}|${row.id}`).toString('base64url');
-function parseCursor(cursor) {
-  const [admittedAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-  const date = new Date(admittedAt);
-  if (!id || Number.isNaN(date.getTime()) || !/^[0-9a-f-]{36}$/i.test(id)) throw new EmrError('VALIDATION_FAILED', { message: 'The cursor is not valid.' });
-  return { admittedAt: date, id };
 }
 
 async function withPlaces(tx, context, admissions) {
@@ -194,20 +193,21 @@ async function withPlaces(tx, context, admissions) {
 
 /** Census (default: currently admitted), newest admission first. */
 export async function listAdmissions(context, { status, wardId, patientId, cursor, limit }) {
-  const after = cursor ? parseCursor(cursor) : null;
+  const after = afterCursor('admittedAt', cursor, 'desc');
   return withTenant(context, async (tx) => {
     const rows = await tx.emrAdmission.findMany({
       where: {
         organizationId: context.organizationId, status: status ?? 'ADMITTED',
         ...(wardId ? { wardId } : {}), ...(patientId ? { patientId } : {}),
-        ...(after ? { OR: [{ admittedAt: { lt: after.admittedAt } }, { admittedAt: after.admittedAt, id: { lt: after.id } }] } : {}),
+        ...after,
       },
       include: { patient: patientSummary },
       orderBy: [{ admittedAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
     await recordAudit(tx, context, { action: 'admission.listed', resourceType: 'admission' });
-    return { items: await withPlaces(tx, context, rows.slice(0, limit)), nextCursor: rows.length > limit ? cursorOf(rows[limit - 1]) : null };
+    const result = page(rows, limit, 'admittedAt');
+    return { ...result, items: await withPlaces(tx, context, result.items) };
   });
 }
 
@@ -272,16 +272,14 @@ export async function discharge(context, admissionId, expectedVersion, { disposi
   return withTenant(context, async (tx) => {
     const admission = await lockAdmission(tx, context, admissionId, expectedVersion);
     policy.requireAdmitted(admission, 'discharged');
+    // Lock order everywhere: admission → visit → beds (admit takes visit → beds), so no cycle.
+    const encounter = await lockEncounter(tx, context.organizationId, admission.encounterId);
     const [bed] = await lockBeds(tx, context, [admission.bedId]);
     const now = new Date();
     await closeAssignment(tx, context, admissionId, now);
     await setBed(tx, context, bed, { status: 'CLEANING' });
     await updateAdmission(tx, context, admission, { status: 'DISCHARGED', dischargedAt: now, dischargedByUserId: context.userId, dischargeDisposition: disposition, dischargeSummary: summary });
-    const encounter = await tx.emrEncounter.findFirst({ where: { organizationId: context.organizationId, id: admission.encounterId }, select: { startedAt: true } });
-    await tx.emrEncounter.updateMany({
-      where: { organizationId: context.organizationId, id: admission.encounterId },
-      data: { status: 'FINISHED', endedAt: now, ...(encounter.startedAt ? {} : { startedAt: admission.admittedAt }), updatedByUserId: context.userId, version: { increment: 1 } },
-    });
+    await setEncounterFromOpen(tx, context, admission.encounterId, { status: 'FINISHED', endedAt: now, ...(encounter.startedAt ? {} : { startedAt: admission.admittedAt }) });
     if (disposition === 'DECEASED') {
       await tx.emrPatient.updateMany({
         where: { organizationId: context.organizationId, id: admission.patientId, status: 'ACTIVE' },

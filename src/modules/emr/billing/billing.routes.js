@@ -7,20 +7,12 @@
 import express from 'express';
 import { requireEmrPermission as allow } from '../core/context.js';
 import { handle, validateEmr as check } from '../core/validate.js';
-import { etagFor, requireVersion } from '../core/concurrency.js';
+import { requireVersion } from '../core/concurrency.js';
+import { send, sendResult } from '../core/http.js';
 import { readIdempotencyKey } from '../core/idempotency.js';
 import * as v from './billing.validator.js';
 import * as billing from './billing.service.js';
 import { captureCharges } from './capture.service.js';
-
-const send = (res, data, status = 200) => {
-  if (data?.version) res.set('ETag', etagFor(data.version));
-  res.status(status).json({ status: 'success', data });
-};
-const sendResult = (res, result) => {
-  if (result.replayed) res.set('Idempotent-Replayed', 'true');
-  send(res, result.body, result.statusCode);
-};
 
 export const billingRoutes = express.Router({ mergeParams: true });
 
@@ -55,5 +47,5 @@ billingRoutes.post('/payments/:paymentId/reverse', check(v.reversePayment), allo
 
 billingRoutes.get('/patients/:patientId/statement', check(v.statement), allow('billing.read'),
   handle(async (req, res) => res.json({ status: 'success', data: await billing.patientStatement(req.emr, req.params.patientId) })));
-billingRoutes.get('/reconciliation', check(v.orgOnly), allow('billing.read'),
-  handle(async (req, res) => res.json({ status: 'success', data: await billing.reconciliation(req.emr) })));
+billingRoutes.get('/reconciliation', check(v.reconciliation), allow('billing.read'),
+  handle(async (req, res) => send(res, await billing.reconciliation(req.emr, req.query))));

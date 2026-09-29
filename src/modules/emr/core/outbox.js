@@ -8,8 +8,11 @@
 //               transaction (a slow subscriber never holds a connection or a lock), then records
 //               the outcome. Failures back off exponentially; after MAX_ATTEMPTS a delivery is DEAD.
 // Payloads carry identifiers and codes only — never names, dates of birth or clinical text.
+import { Buffer } from 'node:buffer';
 import { createHmac, randomUUID } from 'node:crypto';
-import { lookup } from 'node:dns/promises';
+import dns from 'node:dns';
+import http from 'node:http';
+import https from 'node:https';
 import net from 'node:net';
 import { URL } from 'node:url';
 import { withWorker } from './db.js';
@@ -38,7 +41,7 @@ export async function enqueueEvent(tx, context, { type, aggregateType, aggregate
 export const signPayload = (secret, timestamp, body) => createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
 
 // ---- SSRF protection: subscribers must be public HTTPS endpoints ----
-const privateAddress = (address) => {
+export const privateAddress = (address) => {
   if (net.isIPv4(address)) {
     const [a, b] = address.split('.').map(Number);
     return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
@@ -58,11 +61,49 @@ export function validateWebhookUrl(raw) {
   return null;
 }
 
-async function resolvesPublic(hostname) {
-  if (allowLocalWebhooks()) return true;
-  if (net.isIP(hostname)) return !privateAddress(hostname);
-  const addresses = await lookup(hostname, { all: true });
-  return addresses.length > 0 && addresses.every(({ address }) => !privateAddress(address));
+/**
+ * A dns.lookup-compatible resolver that refuses private addresses. It is passed as the socket's
+ * own `lookup`, so the address that is checked is exactly the address connected to — a hostname
+ * cannot answer "public" to a pre-check and "internal" to the connection (DNS rebinding).
+ */
+export function checkedLookup(resolve = dns.lookup) {
+  return (hostname, options, callback) => {
+    resolve(hostname, { ...options, all: true }, (error, addresses) => {
+      if (error) return callback(error);
+      if (!addresses.length || (!allowLocalWebhooks() && addresses.some(({ address }) => privateAddress(address)))) {
+        return callback(Object.assign(new Error('Subscriber resolves to a private address'), { code: 'EPRIVATEADDRESS' }));
+      }
+      return options.all ? callback(null, addresses) : callback(null, addresses[0].address, addresses[0].family);
+    });
+  };
+}
+
+/**
+ * POSTs a webhook body. Redirects are not followed (any 3xx is a failure) and IP-literal hosts are
+ * checked directly, since no DNS lookup happens for them. Resolves to { status }.
+ */
+export function postWebhook(url, { headers, body, timeoutMs }) {
+  const target = new URL(url);
+  const host = target.hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(host) && privateAddress(host) && !allowLocalWebhooks()) {
+    return Promise.reject(new Error('Subscriber resolves to a private address'));
+  }
+  const client = target.protocol === 'https:' ? https : http;
+  return new Promise((resolve, reject) => {
+    const request = client.request(target, {
+      method: 'POST',
+      headers: { ...headers, 'content-length': Buffer.byteLength(body) },
+      lookup: checkedLookup(),
+      timeout: timeoutMs,
+    }, (response) => {
+      response.resume(); // the body is not needed; drain it so the socket is released
+      response.on('end', () => resolve({ status: response.statusCode }));
+      response.on('error', reject);
+    });
+    request.on('timeout', () => request.destroy(new Error(`Timed out after ${timeoutMs} ms`)));
+    request.on('error', reject);
+    request.end(body);
+  });
 }
 
 // ---- worker steps ----
@@ -114,7 +155,8 @@ async function record(deliveryId, outcome) {
   await withWorker((tx) => tx.emrWebhookDelivery.update({ where: { id: deliveryId }, data: outcome }));
 }
 
-export async function deliverDue({ limit = 50, fetchImpl = globalThis.fetch, timeoutMs = 10_000 } = {}) {
+// `send` is injectable for tests; production uses postWebhook with its SSRF-safe lookup.
+export async function deliverDue({ limit = 50, send = postWebhook, timeoutMs = 10_000 } = {}) {
   const claimed = await claimDue(limit);
   let delivered = 0;
   for (const { delivery, subscription, event } of claimed) {
@@ -127,12 +169,8 @@ export async function deliverDue({ limit = 50, fetchImpl = globalThis.fetch, tim
     let statusCode = null;
     let errorText = null;
     try {
-      const { hostname } = new URL(subscription.url);
-      if (!await resolvesPublic(hostname)) throw new Error('Subscriber resolves to a private address');
-      const response = await fetchImpl(subscription.url, {
-        method: 'POST',
-        redirect: 'manual',
-        signal: globalThis.AbortSignal.timeout(timeoutMs),
+      const response = await send(subscription.url, {
+        timeoutMs,
         headers: {
           'content-type': 'application/json',
           'user-agent': 'Sabi-EMR-Webhooks/1',

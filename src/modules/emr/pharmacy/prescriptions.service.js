@@ -7,8 +7,8 @@
 // Safety checks run on the server at prescribing time (allergy incl. drug class, maximum dose,
 // duplicate therapy). HIGH alerts block unless the prescriber sends an override reason; the
 // alerts and overrides are stored on each line for the pharmacist and the audit trail.
-import { Buffer } from 'node:buffer';
 import { withTenant } from '../core/db.js';
+import { afterCursor, page } from '../core/cursor.js';
 import { recordAudit } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
 import { enqueueEvent } from '../core/outbox.js';
@@ -117,37 +117,30 @@ export async function getPrescription(context, prescriptionId) {
   });
 }
 
-const cursorOf = (row) => Buffer.from(`${row.createdAt.toISOString()}|${row.id}`).toString('base64url');
-function parseCursor(cursor) {
-  const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-  const date = new Date(createdAt);
-  if (!id || Number.isNaN(date.getTime()) || !/^[0-9a-f-]{36}$/i.test(id)) throw new EmrError('VALIDATION_FAILED', { message: 'The cursor is not valid.' });
-  return { createdAt: date, id };
-}
-
 /** Pharmacy queue, oldest first. Flags lines with overridden safety alerts for extra attention. */
 export async function queue(context, { status, patientId, limit, cursor }) {
-  const after = cursor ? parseCursor(cursor) : null;
+  const after = afterCursor('createdAt', cursor, 'asc');
   return withTenant(context, async (tx) => {
     const rows = await tx.emrPrescription.findMany({
       where: {
         organizationId: context.organizationId,
         status: { in: status ?? ['PENDING_REVIEW', 'APPROVED', 'PARTIALLY_DISPENSED'] },
         ...(patientId ? { patientId } : {}),
-        ...(after ? { OR: [{ createdAt: { gt: after.createdAt } }, { createdAt: after.createdAt, id: { gt: after.id } }] } : {}),
+        ...after,
       },
       include: { patient: pharmacyPatient, items: ITEM_ORDER },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: limit + 1,
     });
     await recordAudit(tx, context, { action: 'pharmacy_queue.viewed', resourceType: 'prescription' });
+    const result = page(rows, limit, 'createdAt');
     return {
-      items: rows.slice(0, limit).map((row) => ({
+      ...result,
+      items: result.items.map((row) => ({
         ...toPrescription(row),
         overriddenAlerts: row.items.flatMap((i) => i.safetyAlerts).filter((a) => a.overrideReason).length,
         controlled: row.items.some((i) => i.controlled),
       })),
-      nextCursor: rows.length > limit ? cursorOf(rows[limit - 1]) : null,
     };
   });
 }

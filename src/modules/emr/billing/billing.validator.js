@@ -80,4 +80,7 @@ export const recordPayment = z.object({
 });
 export const reversePayment = z.object({ params: z.object({ ...org, paymentId: z.uuid() }).strict(), query: noQuery, body: z.object({ reason }).strict() });
 export const statement = z.object({ params: z.object({ ...org, patientId: z.uuid() }).strict(), query: noQuery });
-export const orgOnly = z.object({ params: z.object(org).strict(), query: noQuery });
+export const reconciliation = z.object({
+  params: z.object(org).strict(),
+  query: z.object({ cursor: z.uuid().optional(), limit: z.coerce.number().int().min(1).max(1000).default(500) }).strict(),
+});

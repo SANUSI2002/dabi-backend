@@ -57,7 +57,6 @@ export const movements = z.object({
   params: z.object(org).strict(),
   query: z.object({ formularyCode: formularyCode.optional(), batchId: z.uuid().optional(), ...cursorQuery }).strict(),
 });
-export const orgOnly = z.object({ params: z.object(org).strict(), query: noQuery });
 
 // ---- allergies ----
 const patientParams = { ...org, patientId: z.uuid() };
@@ -131,4 +130,8 @@ export const returnDispense = z.object({
     reason,
     restock: z.boolean(),
   }).strict(),
+});
+export const reconciliation = z.object({
+  params: z.object(org).strict(),
+  query: z.object({ cursor: z.uuid().optional(), limit: z.coerce.number().int().min(1).max(1000).default(500) }).strict(),
 });

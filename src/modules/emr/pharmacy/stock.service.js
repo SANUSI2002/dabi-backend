@@ -1,8 +1,8 @@
 // Formulary and pharmacy stock: receipts, adjustments, the movement ledger and reconciliation.
 // Stock quantities only ever change through moveStock(), which writes the ledger row in the same
 // transaction — so the ledger always explains the balance (see reconciliation()).
-import { Buffer } from 'node:buffer';
 import { withTenant } from '../core/db.js';
+import { afterCursor, page } from '../core/cursor.js';
 import { recordAudit, changedFieldNames } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
 import { etagFor, updateVersioned } from '../core/concurrency.js';
@@ -139,16 +139,8 @@ export async function stockLevels(context, { q, lowOnly, expiringWithinDays }) {
   });
 }
 
-const cursorOf = (row) => Buffer.from(`${row.createdAt.toISOString()}|${row.id}`).toString('base64url');
-function parseCursor(cursor) {
-  const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-  const date = new Date(createdAt);
-  if (!id || Number.isNaN(date.getTime()) || !/^[0-9a-f-]{36}$/i.test(id)) throw new EmrError('VALIDATION_FAILED', { message: 'The cursor is not valid.' });
-  return { createdAt: date, id };
-}
-
 export async function movements(context, { formularyCode, batchId, cursor, limit }) {
-  const after = cursor ? parseCursor(cursor) : null;
+  const after = afterCursor('createdAt', cursor, 'desc');
   return withTenant(context, async (tx) => {
     const drug = formularyCode ? await drugByCode(tx, context, formularyCode) : null;
     const rows = await tx.emrStockMovement.findMany({
@@ -156,26 +148,33 @@ export async function movements(context, { formularyCode, batchId, cursor, limit
         organizationId: context.organizationId,
         ...(drug ? { formularyItemId: drug.id } : {}),
         ...(batchId ? { batchId } : {}),
-        ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}),
+        ...after,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
-    return { items: rows.slice(0, limit), nextCursor: rows.length > limit ? cursorOf(rows[limit - 1]) : null };
+    return page(rows, limit, 'createdAt');
   });
 }
 
-/** Proves the ledger explains every balance: on-hand must equal the sum of its movements. */
-export async function reconciliation(context) {
+/**
+ * Proves the ledger explains every balance: on-hand must equal the sum of its movements. Checks
+ * one page of batches (in id order) per call — `nextCursor` continues — so the work per request
+ * stays bounded however large the pharmacy is.
+ */
+export async function reconciliation(context, { cursor = null, limit }) {
   return withTenant(context, async (tx) => {
     const rows = await tx.$queryRaw`
       SELECT b."id" AS "batchId", b."batch_number" AS "batchNumber", b."quantity_on_hand" AS "onHand",
              COALESCE(SUM(m."quantity"), 0)::int AS "ledger"
       FROM "emr_stock_batches" b
       LEFT JOIN "emr_stock_movements" m ON m."organization_id" = b."organization_id" AND m."batch_id" = b."id"
-      WHERE b."organization_id" = ${context.organizationId}
-      GROUP BY b."id", b."batch_number", b."quantity_on_hand"`;
-    const discrepancies = rows.filter((r) => Number(r.onHand) !== Number(r.ledger)).map((r) => ({ ...r, onHand: Number(r.onHand), ledger: Number(r.ledger) }));
-    return { batchesChecked: rows.length, balanced: discrepancies.length === 0, discrepancies };
+      WHERE b."organization_id" = ${context.organizationId} AND (${cursor}::text IS NULL OR b."id" > ${cursor})
+      GROUP BY b."id", b."batch_number", b."quantity_on_hand"
+      ORDER BY b."id"
+      LIMIT ${limit + 1}`;
+    const checked = rows.slice(0, limit);
+    const discrepancies = checked.filter((r) => Number(r.onHand) !== Number(r.ledger)).map((r) => ({ ...r, onHand: Number(r.onHand), ledger: Number(r.ledger) }));
+    return { batchesChecked: checked.length, balanced: discrepancies.length === 0, discrepancies, nextCursor: rows.length > limit ? checked[limit - 1].batchId : null };
   });
 }

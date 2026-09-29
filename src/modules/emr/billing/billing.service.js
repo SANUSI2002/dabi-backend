@@ -5,8 +5,8 @@
 // transaction, and reconciliation() checks invoices against their charges, payments and ledger.
 // Invoices and payments lock the invoice row (FOR UPDATE) first; issuing an invoice claims its
 // charges with a guarded UPDATE, so each charge lands on exactly one invoice.
-import { Buffer } from 'node:buffer';
 import { withTenant } from '../core/db.js';
+import { afterCursor, page } from '../core/cursor.js';
 import { recordAudit, changedFieldNames } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
 import { enqueueEvent } from '../core/outbox.js';
@@ -185,30 +185,23 @@ export async function createInvoice(context, encounterId, input, { idempotencyKe
   }));
 }
 
-const cursorOf = (row) => Buffer.from(`${row.issuedAt.toISOString()}|${row.id}`).toString('base64url');
-function parseCursor(cursor) {
-  const [issuedAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-  const date = new Date(issuedAt);
-  if (!id || Number.isNaN(date.getTime()) || !/^[0-9a-f-]{36}$/i.test(id)) throw new EmrError('VALIDATION_FAILED', { message: 'The cursor is not valid.' });
-  return { issuedAt: date, id };
-}
-
 export async function listInvoices(context, { status, patientId, cursor, limit }) {
-  const after = cursor ? parseCursor(cursor) : null;
+  const after = afterCursor('issuedAt', cursor, 'desc');
   return withTenant(context, async (tx) => {
     const rows = await tx.emrInvoice.findMany({
       where: {
         organizationId: context.organizationId,
         ...(status ? { status: { in: status } } : {}),
         ...(patientId ? { patientId } : {}),
-        ...(after ? { OR: [{ issuedAt: { lt: after.issuedAt } }, { issuedAt: after.issuedAt, id: { lt: after.id } }] } : {}),
+        ...after,
       },
       include: { patient: patientSummary },
       orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
     await recordAudit(tx, context, { action: 'invoice.listed', resourceType: 'invoice' });
-    return { items: rows.slice(0, limit).map(toInvoice), nextCursor: rows.length > limit ? cursorOf(rows[limit - 1]) : null };
+    const result = page(rows, limit, 'issuedAt');
+    return { ...result, items: result.items.map(toInvoice) };
   });
 }
 
@@ -323,8 +316,12 @@ export async function patientStatement(context, patientId) {
   });
 }
 
-/** Every invoice must agree with its charges, its posted payments and its ledger. */
-export async function reconciliation(context) {
+/**
+ * Every invoice must agree with its charges, its posted payments and its ledger. Checks one page
+ * of invoices (in id order) per call — `nextCursor` continues — so the work per request stays
+ * bounded however many invoices the hospital has.
+ */
+export async function reconciliation(context, { cursor = null, limit }) {
   return withTenant(context, async (tx) => {
     const rows = await tx.$queryRaw`
       SELECT i."id", i."number", i."status", i."subtotal_minor" AS "subtotal", i."tax_minor" AS "tax",
@@ -333,9 +330,13 @@ export async function reconciliation(context) {
              (SELECT COALESCE(SUM(c."tax_minor"), 0) FROM "emr_charges" c WHERE c."organization_id" = i."organization_id" AND c."invoice_id" = i."id") AS "chargesTax",
              (SELECT COALESCE(SUM(p."amount_minor"), 0) FROM "emr_payments" p WHERE p."organization_id" = i."organization_id" AND p."invoice_id" = i."id" AND p."status" = 'POSTED') AS "postedPayments",
              (SELECT COALESCE(SUM(l."amount_minor"), 0) FROM "emr_billing_ledger" l WHERE l."organization_id" = i."organization_id" AND l."invoice_id" = i."id") AS "ledgerBalance"
-      FROM "emr_invoices" i WHERE i."organization_id" = ${context.organizationId}`;
+      FROM "emr_invoices" i
+      WHERE i."organization_id" = ${context.organizationId} AND (${cursor}::text IS NULL OR i."id" > ${cursor})
+      ORDER BY i."id"
+      LIMIT ${limit + 1}`;
+    const checked = rows.slice(0, limit);
     const discrepancies = [];
-    for (const r of rows) {
+    for (const r of checked) {
       const n = (v) => BigInt(v);
       const balance = r.status === 'VOID' ? 0n : n(r.total) - n(r.paid);
       const problems = [];
@@ -344,6 +345,6 @@ export async function reconciliation(context) {
       if (n(r.ledgerBalance) !== balance) problems.push('LEDGER');
       if (problems.length) discrepancies.push({ invoiceId: r.id, number: r.number, problems });
     }
-    return { invoicesChecked: rows.length, balanced: discrepancies.length === 0, discrepancies };
+    return { invoicesChecked: checked.length, balanced: discrepancies.length === 0, discrepancies, nextCursor: rows.length > limit ? checked[limit - 1].id : null };
   });
 }

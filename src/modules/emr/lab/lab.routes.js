@@ -10,20 +10,16 @@
 import express from 'express';
 import { requireEmrPermission as allow } from '../core/context.js';
 import { handle, validateEmr as check } from '../core/validate.js';
-import { etagFor, requireVersion } from '../core/concurrency.js';
+import { requireVersion } from '../core/concurrency.js';
+import { send, sendItems, sendResult } from '../core/http.js';
 import { readIdempotencyKey } from '../core/idempotency.js';
 import * as v from './lab.validator.js';
 import * as service from './lab.service.js';
 
-const send = (res, data, status = 200) => {
-  if (data?.version) res.set('ETag', etagFor(data.version));
-  res.status(status).json({ status: 'success', data });
-};
-
 export const labRoutes = express.Router({ mergeParams: true });
 
 labRoutes.get('/tests', check(v.listTests), allow('lab.order.create', 'lab.order.read', 'lab.catalog.manage'),
-  handle(async (req, res) => res.json({ status: 'success', data: { items: await service.listTests(req.emr, req.query) } })));
+  handle(async (req, res) => sendItems(res, await service.listTests(req.emr, req.query))));
 labRoutes.post('/tests', check(v.createTest), allow('lab.catalog.manage'),
   handle(async (req, res) => send(res, await service.createTest(req.emr, req.body), 201)));
 labRoutes.patch('/tests/:code', check(v.updateTest), allow('lab.catalog.manage'),
@@ -49,9 +45,6 @@ labRoutes.post('/orders/:orderId/items/:itemId/amend', check(v.amend), allow('la
 export const encounterLabRoutes = express.Router({ mergeParams: true });
 
 encounterLabRoutes.get('/', check(v.encounterOrders), allow('clinical.read', 'lab.order.read'),
-  handle(async (req, res) => res.json({ status: 'success', data: { items: await service.listEncounterOrders(req.emr, req.params.encounterId) } })));
-encounterLabRoutes.post('/', check(v.orderTests), allow('lab.order.create'), handle(async (req, res) => {
-  const result = await service.orderTests(req.emr, req.params.encounterId, req.body, { idempotencyKey: readIdempotencyKey(req) });
-  if (result.replayed) res.set('Idempotent-Replayed', 'true');
-  send(res, result.body, result.statusCode);
-}));
+  handle(async (req, res) => sendItems(res, await service.listEncounterOrders(req.emr, req.params.encounterId))));
+encounterLabRoutes.post('/', check(v.orderTests), allow('lab.order.create'), 
+  handle(async (req, res) => sendResult(res, await service.orderTests(req.emr, req.params.encounterId, req.body, { idempotencyKey: readIdempotencyKey(req) }))));

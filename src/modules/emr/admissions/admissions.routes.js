@@ -12,20 +12,12 @@
 import express from 'express';
 import { requireEmrPermission as allow } from '../core/context.js';
 import { handle, validateEmr as check } from '../core/validate.js';
-import { etagFor, requireVersion } from '../core/concurrency.js';
+import { requireVersion } from '../core/concurrency.js';
+import { send, sendResult } from '../core/http.js';
 import { readIdempotencyKey } from '../core/idempotency.js';
 import * as v from './admissions.validator.js';
 import * as admissions from './admissions.service.js';
 import * as mar from './mar.service.js';
-
-const send = (res, data, status = 200) => {
-  if (data?.version) res.set('ETag', etagFor(data.version));
-  res.status(status).json({ status: 'success', data });
-};
-const sendResult = (res, result) => {
-  if (result.replayed) res.set('Idempotent-Replayed', 'true');
-  send(res, result.body, result.statusCode);
-};
 
 export const wardRoutes = express.Router({ mergeParams: true });
 wardRoutes.get('/', check(v.listWards), allow('admission.read', 'ward.manage'),

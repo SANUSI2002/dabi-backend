@@ -5,8 +5,8 @@
 // Concurrency: every result change first locks its ORDER row (FOR UPDATE). Two scientists
 // verifying different tests of one order therefore run one after the other, so exactly one of
 // them sees "all tests verified" and completes the order. The lock is per order, never wider.
-import { Buffer } from 'node:buffer';
 import { withTenant } from '../core/db.js';
+import { afterCursor, page } from '../core/cursor.js';
 import { recordAudit, changedFieldNames } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
 import { enqueueEvent } from '../core/outbox.js';
@@ -120,17 +120,9 @@ export async function listEncounterOrders(context, encounterId) {
   });
 }
 
-const cursorOf = (row) => Buffer.from(`${row.createdAt.toISOString()}|${row.id}`).toString('base64url');
-function parseCursor(cursor) {
-  const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-  const date = new Date(createdAt);
-  if (!id || Number.isNaN(date.getTime()) || !/^[0-9a-f-]{36}$/i.test(id)) throw new EmrError('VALIDATION_FAILED', { message: 'The cursor is not valid.' });
-  return { createdAt: date, id };
-}
-
 /** Lab worklist, oldest first (first in, first out); STAT/URGENT can be filtered for. */
 export async function worklist(context, { status, priority, patientId, limit, cursor }) {
-  const after = cursor ? parseCursor(cursor) : null;
+  const after = afterCursor('createdAt', cursor, 'asc');
   return withTenant(context, async (tx) => {
     const rows = await tx.emrLabOrder.findMany({
       where: {
@@ -138,14 +130,15 @@ export async function worklist(context, { status, priority, patientId, limit, cu
         status: { in: status ?? ['ORDERED', 'COLLECTED', 'IN_PROGRESS'] },
         ...(priority ? { priority } : {}),
         ...(patientId ? { patientId } : {}),
-        ...(after ? { OR: [{ createdAt: { gt: after.createdAt } }, { createdAt: after.createdAt, id: { gt: after.id } }] } : {}),
+        ...after,
       },
       include: { patient: labPatient, items: { select: { id: true, testCode: true, testName: true, specimenType: true, status: true }, orderBy: { testCode: 'asc' } } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: limit + 1,
     });
     await recordAudit(tx, context, { action: 'lab_worklist.viewed', resourceType: 'lab_order' });
-    return { items: rows.slice(0, limit).map(toOrder), nextCursor: rows.length > limit ? cursorOf(rows[limit - 1]) : null };
+    const result = page(rows, limit, 'createdAt');
+    return { ...result, items: result.items.map(toOrder) };
   });
 }
 

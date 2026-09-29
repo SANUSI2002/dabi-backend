@@ -5,6 +5,8 @@ import prisma from '../../../config/db.js';
 import { withTenant } from '../core/db.js';
 import { recordAudit, changedFieldNames } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
+import { afterCursor } from '../core/cursor.js';
+import { markEnteredInError } from '../core/entries.js';
 import { enqueueEvent } from '../core/outbox.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
 import { findPatient } from '../patients/patients.repository.js';
@@ -61,8 +63,7 @@ export async function openEncounter(context, input, { idempotencyKey } = {}) {
 }
 
 export async function listEncounters(context, query) {
-  const after = query.cursor ? repo.decodeCursor(query.cursor) : null;
-  if (query.cursor && !after) throw new EmrError('VALIDATION_FAILED', { message: 'The cursor is not valid.' });
+  const after = afterCursor('createdAt', query.cursor);
   return withTenant(context, async (tx) => {
     const result = await repo.listEncounters(tx, context.organizationId, { ...query, after });
     await recordAudit(tx, context, { action: 'encounter.listed', resourceType: 'encounter' });
@@ -92,8 +93,14 @@ export async function updateEncounter(context, encounterId, expectedVersion, cha
 
 export async function transitionEncounter(context, encounterId, expectedVersion, action, input = {}) {
   return withTenant(context, async (tx) => {
-    const current = await loadEncounter(tx, context, encounterId);
+    const current = await repo.lockEncounter(tx, context.organizationId, encounterId);
+    if (!current) throw new EmrError('ENCOUNTER_NOT_FOUND');
     const data = policy.transitionData(action, current, input);
+    if (action !== 'start') {
+      // An inpatient stay is closed by discharge (or cancelling the admission), never around it.
+      const admitted = await tx.emrAdmission.count({ where: { organizationId: context.organizationId, encounterId, status: 'ADMITTED' } });
+      if (admitted) throw new EmrError('INVALID_STATE', { message: 'The patient is admitted on this visit; discharge them (or cancel the admission) first.' });
+    }
     const row = await repo.updateEncounter(tx, { organizationId: context.organizationId, id: encounterId, expectedVersion, data: { ...data, updatedByUserId: context.userId } });
     const type = { start: 'encounter.started', finish: 'encounter.finished', cancel: 'encounter.cancelled' }[action];
     await recordAudit(tx, context, { action: type, resourceType: 'encounter', resourceId: encounterId, changedFields: Object.keys(data) });
@@ -204,8 +211,9 @@ export async function recordVitals(context, encounterId, { recordedAt, readings 
 export async function markVitalError(context, encounterId, observationId, { reason }) {
   return withTenant(context, async (tx) => {
     await loadEncounter(tx, context, encounterId);
-    const { row, error } = await repo.markEnteredInError(tx.emrObservation, { organizationId: context.organizationId, encounterId, id: observationId, userId: context.userId, reason, notFoundCode: 'OBSERVATION_NOT_FOUND' });
-    if (error) throw new EmrError(error, error === 'INVALID_STATE' ? { message: 'This reading is already marked as entered in error.' } : undefined);
+    const row = await markEnteredInError(tx.emrObservation, {
+      where: { organizationId: context.organizationId, encounterId, id: observationId }, userId: context.userId, reason, notFoundCode: 'OBSERVATION_NOT_FOUND', label: 'reading',
+    });
     await recordAudit(tx, context, { action: 'vitals.entered_in_error', resourceType: 'observation', resourceId: observationId });
     return toObservation(row);
   });
@@ -237,8 +245,9 @@ export async function recordDiagnosis(context, encounterId, input) {
 export async function markDiagnosisError(context, encounterId, diagnosisId, { reason }) {
   return withTenant(context, async (tx) => {
     await loadEncounter(tx, context, encounterId);
-    const { row, error } = await repo.markEnteredInError(tx.emrDiagnosis, { organizationId: context.organizationId, encounterId, id: diagnosisId, userId: context.userId, reason, notFoundCode: 'DIAGNOSIS_NOT_FOUND' });
-    if (error) throw new EmrError(error, error === 'INVALID_STATE' ? { message: 'This diagnosis is already marked as entered in error.' } : undefined);
+    const row = await markEnteredInError(tx.emrDiagnosis, {
+      where: { organizationId: context.organizationId, encounterId, id: diagnosisId }, userId: context.userId, reason, notFoundCode: 'DIAGNOSIS_NOT_FOUND', label: 'diagnosis',
+    });
     await recordAudit(tx, context, { action: 'diagnosis.entered_in_error', resourceType: 'diagnosis', resourceId: diagnosisId });
     return row;
   });

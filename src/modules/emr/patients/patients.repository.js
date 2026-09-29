@@ -1,7 +1,7 @@
 // Patient data access. Every function takes the tenant transaction from withTenant; the explicit
 // organizationId filters are defence in depth on top of row-level security.
-import { Buffer } from 'node:buffer';
 import { updateVersioned } from '../core/concurrency.js';
+import { page } from '../core/cursor.js';
 
 export const patientSelect = {
   id: true, medicalRecordNumber: true, givenName: true, familyName: true, otherNames: true,
@@ -24,22 +24,12 @@ const searchWhere = (q) => (q ? { OR: [
   { otherNames: { contains: q, mode: 'insensitive' } },
 ] } : {});
 
-export const encodeCursor = (row) => Buffer.from(`${row.createdAt.toISOString()}|${row.id}`).toString('base64url');
-export const decodeCursor = (cursor) => {
-  const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
-  const date = new Date(createdAt);
-  if (!id || Number.isNaN(date.getTime()) || !/^[0-9a-f-]{36}$/i.test(id)) return null;
-  return { createdAt: date, id };
-};
-
 /** Keyset page ordered newest first — constant cost regardless of how deep the client pages. */
 export async function listPatients(tx, organizationId, { q, status, limit, after }) {
-  const where = {
-    organizationId, ...statusWhere(status), ...searchWhere(q),
-    ...(after ? { AND: [{ OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] }] } : {}),
-  };
+  // `after` (from afterCursor) is an OR clause, as is the search: combine them with AND.
+  const where = { organizationId, ...statusWhere(status), ...searchWhere(q), AND: [after] };
   const rows = await tx.emrPatient.findMany({ where, select: summarySelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit + 1 });
-  return { items: rows.slice(0, limit), nextCursor: rows.length > limit ? encodeCursor(rows[limit - 1]) : null };
+  return page(rows, limit, 'createdAt');
 }
 
 /** Legacy offset paging (page ≤ 100). */
