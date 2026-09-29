@@ -20,6 +20,7 @@ import webhookRoutes from './webhooks/webhooks.routes.js';
 import auditRoutes from './audit/audit.routes.js';
 import telehealthRoutes from './telehealth/telehealth.routes.js';
 import { labRoutes, encounterLabRoutes } from './lab/lab.routes.js';
+import { pharmacyRoutes, encounterPrescriptionRoutes, patientPharmacyRoutes } from './pharmacy/pharmacy.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -31,9 +32,12 @@ router.get('/internal/metrics', protect, requirePlatform, (req, res) => {
 
 const tenant = express.Router({ mergeParams: true });
 tenant.use('/patients', patientRoutes);
+tenant.use('/patients/:patientId', patientPharmacyRoutes);
 tenant.use('/encounters', encounterRoutes);
 tenant.use('/encounters/:encounterId/lab-orders', encounterLabRoutes);
 tenant.use('/lab', labRoutes);
+tenant.use('/encounters/:encounterId/prescriptions', encounterPrescriptionRoutes);
+tenant.use('/pharmacy', pharmacyRoutes);
 tenant.use('/webhooks', webhookRoutes);
 tenant.use('/audit-events', auditRoutes);
 tenant.use('/telehealth/designation', telehealthRoutes);

@@ -276,6 +276,21 @@ organization claim equals `{organizationId}`. Errors: `{ status: "error", error:
 | `PUT /lab/orders/{orderId}/items/{itemId}/results` `{ results: [{ analyteCode, value }] }` | `lab.result.create` | Test's `If-Match`. Every analyte, once. Flags computed server-side (sex-specific ranges). Re-entry replaces preliminary values. |
 | `POST /lab/orders/{orderId}/items/{itemId}/verify` | `lab.result.verify` | Test's `If-Match`. Values become FINAL (database-locked); order COMPLETED when every test is verified. Emits `lab.result.released` and, for critical values, `lab.result.critical`. |
 | `POST /lab/orders/{orderId}/items/{itemId}/amend` `{ reason, results }` | `lab.result.verify` | Test's `If-Match`. Old values kept as SUPERSEDED; new FINAL values carry the reason. |
+| `GET /pharmacy/formulary?q&includeInactive` | `emr.stock.view` / `prescription.create` / `prescription.read` | Tenant formulary with in-date stock; starter formulary (~20 essential medicines) provisioned on first use. Doses are typical adult values — **the hospital must review them**. |
+| `POST /pharmacy/formulary` · `PATCH /pharmacy/formulary/{code}` | `emr.formulary.manage` | Dose unit, dispense unit, dose per unit, max daily dose, route, drug classes, controlled, high-alert, reorder level. `If-Match` on PATCH. |
+| `GET /pharmacy/stock?q&lowOnly&expiringWithinDays` | `emr.stock.view` | Per drug: in-date on hand, expired on hand, expiring soon, next expiry, batches. |
+| `POST /pharmacy/stock/receipts` `{ formularyCode, batchNumber, expiryDate, quantity, unitCostMinor?, supplier? }` | `emr.stock.manage` | **`Idempotency-Key` required.** Same batch + expiry tops up. Expired stock refused. |
+| `POST /pharmacy/stock/batches/{batchId}/adjust` `{ quantity (signed), reason, note? }` | `emr.stock.manage` | Batch `If-Match`. Reasons: COUNT_CORRECTION, DAMAGED, EXPIRED, LOST, OTHER (note required). Never below zero. |
+| `GET /pharmacy/stock/movements?formularyCode&batchId&cursor` · `GET /pharmacy/stock/reconciliation` | `emr.stock.view` | Append-only ledger; reconciliation proves on-hand = sum of movements for every batch. |
+| `GET` · `POST /patients/{id}/allergies` · `POST …/allergies/{allergyId}/entered-in-error` | read: `clinical.read`/`prescription.read`/`allergy.record`; write: `allergy.record` | `substanceCode` is a formulary code or a drug class (e.g. `PENICILLIN`) — what prescribing checks match. One active entry per substance. |
+| `GET /patients/{id}/medications?scope=current\|all` | `prescription.read` | Current medicines across visits (course not yet ended) or full history. |
+| `POST /encounters/{id}/prescriptions` `{ items: [{ drugCode, dose, doseUnit, frequency, route?, durationDays?, quantity?, prn?, prnReason?, instructions? }], notes?, overrides? }` | `prescription.create` | Open visit, active patient. Quantity computed when possible. Safety checks: ALLERGY / MAX_DOSE / DUPLICATE_THERAPY (HIGH — need `overrides: [{ drugCode, type, reason }]`, else 409 `SAFETY_CHECK_REQUIRED` listing them), DUPLICATE_CLASS (MODERATE), CONTROLLED / HIGH_ALERT (INFO). Alerts + overrides stored per line. |
+| `GET /encounters/{id}/prescriptions` · `POST /encounters/{id}/prescriptions/{rxId}/cancel` `{ reason }` | `prescription.read` · `prescription.create` | Cancel keeps what was dispensed; `If-Match`. |
+| `GET /pharmacy/prescriptions?status&patientId&cursor` | `prescription.review` or `prescription.dispense` | Queue, oldest first; flags controlled lines and overridden alerts. |
+| `GET /pharmacy/prescriptions/{id}` | `prescription.read` | Minimal identity, active allergies, lines with in-date stock, dispenses with batch numbers. |
+| `POST /pharmacy/prescriptions/{id}/approve` `{ note? }` · `/reject` `{ reason }` | `prescription.review` | `If-Match`. Reject cancels the lines. |
+| `POST /pharmacy/prescriptions/{id}/dispense` `{ lines: [{ itemId, quantity }], witnessUserId?, note? }` | `prescription.dispense` | **`Idempotency-Key` required.** All-or-nothing, FEFO, partial fills allowed, 409 `INSUFFICIENT_STOCK` with what is available. Controlled lines need a witness: a different, active member with `prescription.dispense`. |
+| `POST /pharmacy/dispenses/{dispenseId}/returns` `{ lines: [{ lineId, quantity }], reason, restock }` | `prescription.dispense` | **`Idempotency-Key` required.** Back to the same batch (RETURN); `restock: false` also writes it off (ADJUSTMENT). Reopens the line. |
 | `GET /audit-events?resourceType&resourceId&cursor&limit` | `audit.view` | Newest first; reading it is audited. |
 | `GET` · `PUT` · `DELETE /telehealth/designation` | DOCTOR role | The doctor designates this hospital to receive their completed telemedicine visits (UC-2). Returns `{ designated, designatedElsewhere }` — never another hospital's id. |
 | `GET /webhooks` · `POST /webhooks` `{ url, eventTypes }` | `emr.webhook.manage` | HTTPS only, max 10 active. The signing `secret` is returned once. |
@@ -290,7 +305,21 @@ signature, reject timestamps older than 5 minutes, and de-duplicate by `X-Sabi-D
 Failures retry with exponential backoff (30 s doubling, capped at 6 h); after 10 attempts the
 delivery is marked `DEAD`.
 
-## 10. Telemedicine → EMR handoff (UC-2)
+## 10. Prescriptions and dispensing — guarantees
+
+| Risk | Guard |
+| --- | --- |
+| Double dispense / double receipt on retry | `Idempotency-Key` mandatory; claimed in the same transaction as the stock movement. |
+| Overselling the last pack | Prescription row + all batches of the drugs locked `FOR UPDATE` before quantities are read; `CHECK (quantity_on_hand >= 0)`. |
+| Deadlocks between dispenses sharing drugs | Batches always locked by one statement ordered by (drug, expiry, id). |
+| Untracked stock changes | Quantities change only via `moveStock()` which writes the append-only ledger row (with `balance_after`) in the same transaction; column-level grants stop the request role editing anything else; `/stock/reconciliation` checks it. |
+| Dispensing expired stock | FEFO over batches with `expiry_date > today` only. |
+| Dispensed > prescribed, returned > dispensed | Database `CHECK` constraints on items and dispense lines. |
+| Unsafe prescribing | Server-side allergy (drug and class), max-dose, duplicate-therapy checks; HIGH alerts need a stored override reason; dose must be in the formulary's unit. |
+| Controlled medicines | ≤ 30 days' supply, as-needed quantity stated, witnessed dispensing (different active pharmacy member). |
+| Low stock | `stock.low` emitted once when in-date stock crosses the reorder level. |
+
+## 11. Telemedicine → EMR handoff (UC-2)
 
 ```
 doctor completes appointment ──(same tx)──► domain_events: doctor_appointment.completed {appointmentId}
@@ -315,7 +344,7 @@ not linked yet is **not** re-processed automatically once it is (a manual re-run
 `domain_events` has no retention job yet — add one (e.g. delete consumed events after 90 days)
 before it grows large.
 
-## 11. Build status
+## 12. Build status
 
 | Module | Status |
 | --- | --- |
@@ -324,5 +353,5 @@ before it grows large.
 | Encounters (visits, notes + amendments, vitals, diagnoses) | Done — 14 real-DB cases + 8 fast policy tests |
 | Telemedicine handoff (UC-2) | Done — 4 real-DB cases (end to end through the telemedicine `complete()`) |
 | Laboratory (catalog, orders, specimen/accession, results, verification, amendments, critical alerts) | Done — 7 real-DB cases + 8 fast policy tests |
-| Prescriptions / dispensing | Next |
+| Prescriptions, allergies, formulary, stock, dispensing, returns | Done — 16 real-DB cases + 11 fast policy tests |
 | Admissions, billing | Later, same pattern |
