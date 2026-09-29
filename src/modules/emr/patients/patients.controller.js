@@ -26,5 +26,8 @@ export const reactivate = async (req, res) =>
 export const linkAccount = async (req, res) =>
   send(res, await service.linkPatientAccount(req.emr, req.params.patientId, requireVersion(req), req.body));
 
+export const duplicatePairs = async (req, res) =>
+  sendItems(res, await service.duplicatePairs(req.emr, req.query));
+
 export const duplicates = async (req, res) =>
   sendItems(res, await service.findDuplicates(req.emr, req.query));

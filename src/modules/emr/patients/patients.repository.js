@@ -39,6 +39,38 @@ export async function listPatients(tx, organizationId, { q, status, limit, after
   return page(rows, limit, 'createdAt');
 }
 
+export const countPatients = (tx, organizationId, { q, status }) =>
+  tx.emrPatient.count({ where: { organizationId, ...statusWhere(status), ...searchWhere(q) } });
+
+/**
+ * Pairs of active patients in one hospital sharing a phone number, or the same full name and date
+ * of birth — for staff review (records are never merged automatically).
+ */
+export async function duplicatePairs(tx, organizationId, limit) {
+  const rows = await tx.$queryRaw`
+    SELECT a."id" AS "leftId", b."id" AS "rightId",
+           (a."phone" IS NOT NULL AND a."phone" = b."phone") AS "samePhone",
+           (lower(a."family_name") = lower(b."family_name") AND lower(a."given_name") = lower(b."given_name")
+             AND a."date_of_birth" = b."date_of_birth") AS "sameNameDob"
+    FROM "emr_patients" a
+    JOIN "emr_patients" b ON b."organization_id" = a."organization_id" AND a."id" < b."id"
+      AND ((a."phone" IS NOT NULL AND b."phone" = a."phone")
+        OR (lower(b."family_name") = lower(a."family_name") AND lower(b."given_name") = lower(a."given_name")
+          AND b."date_of_birth" = a."date_of_birth"))
+    WHERE a."organization_id" = ${organizationId} AND a."status" = 'ACTIVE' AND b."status" = 'ACTIVE'
+    ORDER BY a."id", b."id"
+    LIMIT ${limit}`;
+  if (!rows.length) return [];
+  const ids = [...new Set(rows.flatMap((r) => [r.leftId, r.rightId]))];
+  const patients = await tx.emrPatient.findMany({ where: { organizationId, id: { in: ids } }, select: summarySelect });
+  const byId = new Map(patients.map((p) => [p.id, p]));
+  return rows.map((r) => ({
+    left: byId.get(r.leftId),
+    right: byId.get(r.rightId),
+    reasons: [...(r.samePhone ? ['SAME_PHONE'] : []), ...(r.sameNameDob ? ['SAME_NAME_AND_DATE_OF_BIRTH'] : [])],
+  }));
+}
+
 /** Legacy offset paging (page ≤ 100). */
 export async function listPatientsPage(tx, organizationId, { q, status, limit, page }) {
   const rows = await tx.emrPatient.findMany({
@@ -66,6 +98,9 @@ export async function findDuplicates(tx, organizationId, { givenName, familyName
       dateOfBirth: new Date(`${dateOfBirth}T00:00:00.000Z`),
       ...(givenName ? { givenName: { startsWith: givenName.slice(0, 1), mode: 'insensitive' } } : {}),
     });
+  } else if (familyName && givenName) {
+    // Same full name before a date of birth is typed: a weaker hint shown while the form is filled in.
+    OR.push({ familyName: { equals: familyName, mode: 'insensitive' }, givenName: { equals: givenName, mode: 'insensitive' } });
   }
   return tx.emrPatient.findMany({ where: { organizationId, OR }, select: summarySelect, orderBy: { createdAt: 'desc' }, take: 10 });
 }

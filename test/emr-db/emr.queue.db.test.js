@@ -61,6 +61,33 @@ describe('patient intake', () => {
     expect(found.body.data.items.map((p) => p.id)).toEqual([first.body.data.id]);
   });
 
+  it('reports totals, pairs likely duplicates, and matches a full name before a birth date is typed', async () => {
+    const tenant = await createTenant('queueD');
+    const clerk = await member(tenant, ['RECEPTIONIST']);
+    const one = (await as(clerk).post('/patients', { givenName: 'Ada', familyName: 'Obi', dateOfBirth: '1990-01-01', sex: 'FEMALE', phone: '+2348011111111' })).body.data;
+    const two = (await as(clerk).post('/patients', { givenName: 'ada', familyName: 'OBI', dateOfBirth: '1990-01-01', sex: 'FEMALE' })).body.data;
+    const three = (await as(clerk).post('/patients', { givenName: 'Kemi', familyName: 'Bello', dateOfBirth: '1970-05-05', sex: 'FEMALE', phone: '+2348011111111' })).body.data;
+    await as(clerk).post('/patients', { givenName: 'Solo', familyName: 'Person', dateOfBirth: '2000-02-02', sex: 'MALE' });
+
+    const list = (await as(clerk).get('/patients?limit=1')).body.data;
+    expect(list.items).toHaveLength(1);
+    expect(list.total).toBe(4);
+    const pairsResponse = await as(clerk).get('/patients/duplicate-pairs');
+    expect(pairsResponse.status).toBe(200);
+    const pairs = pairsResponse.body.data.items;
+    const key = (p) => [p.left.id, p.right.id].sort().join();
+    expect(Object.fromEntries(pairs.map((p) => [key(p), p.reasons]))).toEqual({
+      [[one.id, two.id].sort().join()]: ['SAME_NAME_AND_DATE_OF_BIRTH'],
+      [[one.id, three.id].sort().join()]: ['SAME_PHONE'],
+    });
+    const elsewhere = (await as(bNurse).get('/patients/duplicate-pairs')).body.data.items; // another hospital's own review
+    expect(elsewhere.flatMap((p) => [p.left.id, p.right.id])).not.toContain(one.id);
+
+    const byName = (await as(clerk).get('/patients/duplicates?givenName=ADA&familyName=obi')).body.data.items.map((p) => p.id);
+    expect(byName.sort()).toEqual([one.id, two.id].sort());
+    expect((await as(clerk).get('/patients/duplicates?familyName=Obi')).status).toBe(400);
+  });
+
   it('skips an MRN already taken by a hand-entered number', async () => {
     const tenant = await createTenant('queueC');
     const clerk = await member(tenant, ['RECEPTIONIST']);
@@ -91,9 +118,27 @@ describe('station queue', () => {
       order.push(called.body.data.encounterId);
     }
     expect(order).toEqual([emergency, urgent, normal].map((v) => v.encounter.id));
+    const listed = (await as(nurse).get('/queue?status=IN_PROGRESS')).body.data.items.find((e) => e.encounterId === normal.encounter.id);
+    expect(listed.assignedToName).toEqual(expect.any(String));
     const none = await as(nurse).post('/queue/call-next', { station });
     expect(none.status).toBe(404);
     expect(none.body.error.code).toBe('NOTHING_WAITING');
+  });
+
+  it('call-next without a station takes the most urgent patient anywhere in the hospital', async () => {
+    const tenant = await createTenant('queueE');
+    const clerk = await member(tenant, ['RECEPTIONIST']);
+    const who = await member(tenant, ['NURSE']);
+    const visit = async (station, priority) => {
+      const patient = (await as(clerk).post('/patients', person())).body.data;
+      return (await as(clerk).post('/encounters', { patientId: patient.id, station, priority })).body.data;
+    };
+    await visit('Vital', 'NORMAL');
+    const urgent = await visit('Lab', 'URGENT');
+    const called = await as(who).post('/queue/call-next', {});
+    expect(called.status).toBe(200);
+    expect(called.body.data).toMatchObject({ encounterId: urgent.id, station: 'Lab', assignedToUserId: who.userId });
+    expect(called.body.data.assignedToName).toEqual(expect.any(String));
   });
 
   it('two nurses pressing call-next at once always get different patients', async () => {

@@ -50,6 +50,14 @@ export async function closeForEncounter(tx, context, encounterId) {
   await event(tx, context, { ...entry, status: 'COMPLETED' }, 'CLOSED');
 }
 
+/** Adds each assignee's display name (the request role may read users' id and full_name only). */
+async function withAssignees(tx, rows) {
+  const ids = [...new Set(rows.map((row) => row.assignedToUserId).filter(Boolean))];
+  const users = ids.length ? await tx.$queryRaw`SELECT "id", "full_name" AS "name" FROM "users" WHERE "id" = ANY(${ids}::text[])` : [];
+  const names = new Map(users.map((user) => [user.id, user.name]));
+  return rows.map((row) => ({ ...row, assignedToName: names.get(row.assignedToUserId) ?? null }));
+}
+
 export async function listQueue(context, { station, status, limit }) {
   return withTenant(context, async (tx) => {
     const rows = await tx.emrQueueEntry.findMany({
@@ -65,16 +73,17 @@ export async function listQueue(context, { station, status, limit }) {
     });
     await recordAudit(tx, context, { action: 'queue.viewed', resourceType: 'queue' });
     const now = Date.now();
-    return rows.map((row) => toEntry(row, now));
+    return (await withAssignees(tx, rows)).map((row) => toEntry(row, now));
   });
 }
 
-export async function callNext(context, { station }) {
+/** Most urgent, longest-waiting patient — at one station, or across every station when none is given. */
+export async function callNext(context, { station = null }) {
   return withTenant(context, async (tx) => {
     const [next] = await tx.$queryRaw`
       SELECT q."id" FROM "emr_queue_entries" q
       JOIN "emr_encounters" e ON e."organization_id" = q."organization_id" AND e."id" = q."encounter_id"
-      WHERE q."organization_id" = ${context.organizationId} AND q."station" = ${station} AND q."status" = 'WAITING'
+      WHERE q."organization_id" = ${context.organizationId} AND (${station}::text IS NULL OR q."station" = ${station}) AND q."status" = 'WAITING'
         AND e."status" IN ('ARRIVED', 'IN_PROGRESS')
       ORDER BY q."priority", q."queued_at", q."id"
       LIMIT 1
@@ -87,7 +96,7 @@ export async function callNext(context, { station }) {
     const entry = await tx.emrQueueEntry.findFirst({ where: { organizationId: context.organizationId, id: next.id }, select: entrySelect });
     await event(tx, context, entry, 'CALLED');
     await recordAudit(tx, context, { action: 'queue.called', resourceType: 'queue_entry', resourceId: entry.id });
-    return toEntry(entry);
+    return toEntry((await withAssignees(tx, [entry]))[0]);
   });
 }
 

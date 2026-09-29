@@ -23,7 +23,7 @@ const list = z.object({
     limit: z.coerce.number().int().min(1).max(500).default(200),
   }).strict(),
 });
-const callNext = z.object({ params: z.object(org).strict(), query: z.object({}).strict(), body: z.object({ station }).strict() });
+const callNext = z.object({ params: z.object(org).strict(), query: z.object({}).strict(), body: z.object({ station: station.optional() }).strict() });
 const update = z.object({
   params: entryParams, query: z.object({}).strict(),
   body: z.object({ station: station.optional(), status: status.optional(), priority: priority.optional() })

@@ -60,7 +60,7 @@ export async function listPatients(context, query) {
       : await repo.listPatients(tx, context.organizationId, { ...query, after });
     // HIPAA access log: record that the registry was read/searched (never the search text).
     await recordAudit(tx, context, { action: query.q ? 'patient.searched' : 'patient.listed', resourceType: 'patient' });
-    return { ...result, items: result.items.map(toPatient) };
+    return { ...result, total: await repo.countPatients(tx, context.organizationId, query), items: result.items.map(toPatient) };
   });
 }
 
@@ -122,6 +122,14 @@ export async function linkPatientAccount(context, patientId, expectedVersion, { 
       if (current.linkedUserId && current.linkedUserId !== userId) throw new EmrError('PATIENT_ALREADY_LINKED', { message: 'This record is already linked to a different account.' });
       return { linkedUserId: userId };
     },
+  });
+}
+
+export async function duplicatePairs(context, { limit }) {
+  return withTenant(context, async (tx) => {
+    const pairs = await repo.duplicatePairs(tx, context.organizationId, limit);
+    await recordAudit(tx, context, { action: 'patient.duplicate_review', resourceType: 'patient' });
+    return pairs.map((pair) => ({ ...pair, left: toPatient(pair.left), right: toPatient(pair.right) }));
   });
 }
 

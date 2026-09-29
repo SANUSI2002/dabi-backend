@@ -10,6 +10,7 @@ const router = express.Router({ mergeParams: true });
 
 router.get('/', validateEmr(v.listPatients), requireEmrPermission('patient.read'), handle(c.list));
 router.post('/', validateEmr(v.createPatient), requireEmrPermission('patient.register'), handle(c.register));
+router.get('/duplicate-pairs', validateEmr(v.duplicatePairs), requireEmrPermission('patient.read'), handle(c.duplicatePairs));
 router.get('/duplicates', validateEmr(v.duplicateCheck), requireEmrPermission('patient.read', 'patient.register'), handle(c.duplicates));
 router.get('/:patientId', validateEmr(v.getPatient), requireEmrPermission('patient.read'), handle(c.get));
 router.patch('/:patientId', validateEmr(v.updatePatient), requireEmrPermission('patient.update'), handle(c.update));

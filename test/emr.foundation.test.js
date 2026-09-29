@@ -11,7 +11,7 @@ const patientId = '33333333-3333-4333-8333-333333333333';
 
 const tx = vi.hoisted(() => ({
   $executeRawUnsafe: vi.fn(), $executeRaw: vi.fn(), $queryRaw: vi.fn(),
-  emrPatient: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+  emrPatient: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
   emrAuditEvent: { create: vi.fn() },
   emrOutboxEvent: { create: vi.fn() },
 }));
@@ -55,6 +55,7 @@ beforeEach(() => {
   db.platformApplication.findUnique.mockResolvedValue(approved);
   db.$transaction.mockImplementation((work) => work(tx));
   tx.emrPatient.findMany.mockResolvedValue([]);
+  tx.emrPatient.count.mockResolvedValue(0);
   process.env.EMR_API_ENABLED = 'true';
 });
 afterEach(() => {

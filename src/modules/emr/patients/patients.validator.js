@@ -82,5 +82,13 @@ export const duplicateCheck = z.object({
     dateOfBirth: birthDate.optional(),
     nationalId: nationalId.optional(),
     phone: phone.optional(),
-  }).strict().refine((query) => query.nationalId || query.phone || (query.familyName && query.dateOfBirth), 'Send nationalId, phone, or familyName with dateOfBirth'),
+  }).strict().refine(
+    (query) => query.nationalId || query.phone || (query.familyName && (query.dateOfBirth || query.givenName)),
+    'Send nationalId, phone, or familyName with dateOfBirth or givenName',
+  ),
+});
+
+export const duplicatePairs = z.object({
+  params: organizationParams.strict(),
+  query: z.object({ limit: z.coerce.number().int().min(1).max(200).default(100) }).strict(),
 });
