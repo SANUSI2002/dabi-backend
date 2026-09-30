@@ -1875,6 +1875,8 @@ model EmrEncounter {
   startedAt DateTime? @map("started_at")
   endedAt DateTime? @map("ended_at")
   cancellationReason String? @map("cancellation_reason")
+  visitType String? @map("visit_type")
+  nhmisIndicators String[] @default([]) @map("nhmis_indicators")
   version Int @default(1)
   createdByUserId String @map("created_by_user_id")
   updatedByUserId String? @map("updated_by_user_id")
@@ -1901,6 +1903,9 @@ model EmrClinicalNote {
   assessment String?
   plan String?
   body String?
+  examination Json?
+  followUp String? @map("follow_up")
+  patientInstructions String? @map("patient_instructions")
   authorUserId String @map("author_user_id")
   signedByUserId String? @map("signed_by_user_id")
   signedAt DateTime? @map("signed_at")
@@ -1953,8 +1958,10 @@ model EmrDiagnosis {
   encounterId String @map("encounter_id")
   patientId String @map("patient_id")
   code String
+  codeSystem String @default("ICD10") @map("code_system")
   description String
   rank EmrDiagnosisRank @default(SECONDARY)
+  onProblemList Boolean @default(false) @map("on_problem_list")
   status EmrEntryStatus @default(ACTIVE)
   recordedByUserId String @map("recorded_by_user_id")
   errorReason String? @map("error_reason")
@@ -2041,6 +2048,7 @@ model EmrLabTest {
   organizationId String @map("organization_id")
   code String
   name String
+  section String @default("General")
   specimenType String @map("specimen_type")
   analytes Json
   active Boolean @default(true)

@@ -175,6 +175,8 @@ export async function admit(context, encounterId, input, { idempotencyKey } = {}
       await setBed(tx, context, bed, { status: 'OCCUPIED' });
       // The visit becomes an inpatient stay (and is in progress from admission).
       await setEncounterFromOpen(tx, context, encounterId, { class: 'INPATIENT', status: 'IN_PROGRESS', ...(encounter.startedAt ? {} : { startedAt: now }) });
+      // The ward takes over from the outpatient station queue (queue row last, as discharge does).
+      await closeForEncounter(tx, context, encounterId);
       await recordAudit(tx, context, { action: 'admission.created', resourceType: 'admission', resourceId: admission.id });
       await enqueueEvent(tx, context, { type: 'admission.created', aggregateType: 'admission', aggregateId: admission.id, data: { patientId: encounter.patientId, encounterId, wardId: bed.wardId } });
       return { statusCode: 201, body: toAdmission({ ...admission, ward: { code: bed.ward.code, name: bed.ward.name }, bed: { code: bed.code } }) };

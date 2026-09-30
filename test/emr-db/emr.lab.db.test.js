@@ -53,6 +53,8 @@ describe('test catalog', () => {
     expect(first.status).toBe(200);
     const codes = first.body.data.items.map((t) => t.code);
     expect(codes).toEqual(expect.arrayContaining(['FBC', 'MP_RDT', 'FBS', 'EUCR', 'UA', 'PREG']));
+    const sectionOf = Object.fromEntries(first.body.data.items.map((t) => [t.code, t.section]));
+    expect(sectionOf).toMatchObject({ FBC: 'Haematology', MP_RDT: 'Parasitology', EUCR: 'Clinical Chemistry', UA: 'Urinalysis', PREG: 'Serology' });
     expect((await as(scientist).get('/lab/tests')).body.data.items).toHaveLength(codes.length);
     expect((await as(reception).get('/lab/tests')).status).toBe(403);
 
@@ -60,7 +62,9 @@ describe('test catalog', () => {
     expect(bad.status).toBe(400);
     const crp = await as(scientist).post('/lab/tests', { code: 'crp', name: 'C-reactive protein', specimenType: 'Serum', analytes: [{ code: 'CRP', name: 'CRP', kind: 'NUMERIC', unit: 'mg/L', high: 5 }] });
     expect(crp.status).toBe(201);
-    expect(crp.body.data.code).toBe('CRP');
+    expect(crp.body.data).toMatchObject({ code: 'CRP', section: 'General' });
+    const moved = await as(scientist).patch('/lab/tests/CRP', { section: 'Clinical Chemistry' }, { 'If-Match': `W/"${crp.body.data.version}"` });
+    expect(moved.body.data.section).toBe('Clinical Chemistry');
     expect((await as(scientist).post('/lab/tests', { code: 'CRP', name: 'Again', specimenType: 'Serum', analytes: [{ code: 'CRP', name: 'CRP', kind: 'TEXT' }] })).status).toBe(409);
 
     const inB = (await as(bScientist).get('/lab/tests')).body.data.items.map((t) => t.code);

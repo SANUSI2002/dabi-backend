@@ -248,3 +248,52 @@ describe('vitals and diagnoses', () => {
     expect((await as(doctor).post(url, { code: 'R51', description: 'Headache', rank: 'PRIMARY' })).status).toBe(201);
   });
 });
+
+describe('consultation record', () => {
+  it('accepts ICD-11 codes (checked against their own format) and flags problem-list diagnoses', async () => {
+    const { visit } = await openVisit();
+    const url = `/encounters/${visit.id}/diagnoses`;
+    const malaria = await as(doctor).post(url, { codeSystem: 'ICD11', code: '1f40', description: 'Malaria, uncomplicated', rank: 'PRIMARY' });
+    expect(malaria.status).toBe(201);
+    expect(malaria.body.data).toMatchObject({ codeSystem: 'ICD11', code: '1F40', onProblemList: false });
+    const hypertension = await as(doctor).post(url, { codeSystem: 'ICD11', code: 'BA00', description: 'Essential hypertension', onProblemList: true });
+    expect(hypertension.body.data).toMatchObject({ codeSystem: 'ICD11', onProblemList: true });
+    expect((await as(doctor).post(url, { codeSystem: 'ICD11', code: 'G44.2', description: 'ICD-10 code sent as ICD-11' })).status).toBe(400);
+    expect((await as(doctor).post(url, { codeSystem: 'ICD11', code: '1I40', description: 'I is never used in ICD-11' })).status).toBe(400);
+    expect((await as(doctor).post(url, { code: '1F40', description: 'ICD-11 code sent as ICD-10' })).status).toBe(400);
+    const listed = (await as(doctor).get(url)).body.data.items;
+    expect(listed.map((d) => [d.codeSystem, d.code])).toEqual([['ICD11', '1F40'], ['ICD11', 'BA00']]);
+  });
+
+  it('keeps the structured examination, follow-up and patient instructions with the note, locked once signed', async () => {
+    const { visit } = await openVisit();
+    const examination = [
+      { system: 'general', status: 'Normal' },
+      { system: 'respiratory', status: 'Abnormal', findings: { Auscultation: 'Coarse crepitations right base' }, laterality: 'Right' },
+    ];
+    const created = await as(doctor).post(`/encounters/${visit.id}/notes`, {
+      kind: 'CONSULTATION', subjective: 'Cough for 5 days', assessment: 'Community-acquired pneumonia',
+      examination, followUp: 'Review in 3 days', patientInstructions: 'Complete the full antibiotic course',
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.data).toMatchObject({ examination, followUp: 'Review in 3 days', patientInstructions: 'Complete the full antibiotic course' });
+    const duplicated = [{ system: 'general', status: 'Normal' }, { system: 'general', status: 'Abnormal' }];
+    expect((await as(doctor).patch(`/encounters/${visit.id}/notes/${created.body.data.id}`, { examination: duplicated }, { 'If-Match': 'W/"1"' })).status).toBe(400);
+    expect((await as(doctor).patch(`/encounters/${visit.id}/notes/${created.body.data.id}`, { examination: [{ system: 'liver', status: 'Normal' }] }, { 'If-Match': 'W/"1"' })).status).toBe(400);
+    const edited = await as(doctor).patch(`/encounters/${visit.id}/notes/${created.body.data.id}`, { followUp: 'Review in 2 days' }, { 'If-Match': 'W/"1"' });
+    expect(edited.body.data.followUp).toBe('Review in 2 days');
+    await as(doctor).post(`/encounters/${visit.id}/notes/${created.body.data.id}/sign`, {}, { 'If-Match': 'W/"2"' });
+    expect((await as(doctor).patch(`/encounters/${visit.id}/notes/${created.body.data.id}`, { followUp: 'changed' }, { 'If-Match': 'W/"3"' })).status).toBe(409);
+    await expect(withTenant({ organizationId: A.organizationId, userId: doctor.userId }, (tx) => tx.emrClinicalNote.updateMany({
+      where: { organizationId: A.organizationId, id: created.body.data.id }, data: { patientInstructions: 'rewritten' },
+    }))).rejects.toThrow();
+  });
+
+  it('records the visit type and NHMIS indicators on the visit while it is open', async () => {
+    const { visit } = await openVisit();
+    const updated = await as(doctor).patch(`/encounters/${visit.id}`, { visitType: 'Follow-up', nhmisIndicators: ['Presented with fever', 'Tested by RDT'] }, { 'If-Match': `W/"${visit.version}"` });
+    expect(updated.status).toBe(200);
+    expect(updated.body.data).toMatchObject({ visitType: 'Follow-up', nhmisIndicators: ['Presented with fever', 'Tested by RDT'] });
+    expect((await as(doctor).patch(`/encounters/${visit.id}`, { nhmisIndicators: ['Same', 'Same'] }, { 'If-Match': `W/"${updated.body.data.version}"` })).status).toBe(400);
+  });
+});

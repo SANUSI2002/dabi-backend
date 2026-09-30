@@ -100,6 +100,7 @@ describe('admit, transfer, discharge', () => {
     expect(admission).toMatchObject({ status: 'ADMITTED', patientId: patient.id, ward: { code: 'GEN' }, bed: { code: 'G1' } });
     const visitNow = (await as(doctor).get(`/encounters/${encounter.id}`)).body.data;
     expect(visitNow).toMatchObject({ class: 'INPATIENT', status: 'IN_PROGRESS' });
+    expect(visitNow.queueEntry.status).toBe('COMPLETED'); // the ward takes over from the station queue
     expect((await refreshBeds()).G1.status).toBe('OCCUPIED');
 
     const { encounter: other } = await visit();

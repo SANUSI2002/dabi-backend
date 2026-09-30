@@ -6,7 +6,7 @@ import { page } from '../core/cursor.js';
 const patientSummary = { select: { id: true, medicalRecordNumber: true, givenName: true, familyName: true, dateOfBirth: true, sex: true, status: true } };
 export const encounterSelect = {
   id: true, patientId: true, class: true, status: true, reason: true, attendingUserId: true, source: true, sourceReference: true,
-  arrivedAt: true, startedAt: true, endedAt: true, cancellationReason: true, version: true, createdAt: true, updatedAt: true,
+  arrivedAt: true, startedAt: true, endedAt: true, cancellationReason: true, visitType: true, nhmisIndicators: true, version: true, createdAt: true, updatedAt: true,
   patient: patientSummary,
   queueEntry: { select: { id: true, station: true, priority: true, status: true, queuedAt: true, version: true } },
 };

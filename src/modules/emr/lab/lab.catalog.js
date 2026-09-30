@@ -40,7 +40,7 @@ const dipstick = ['NEGATIVE', 'TRACE', '1+', '2+', '3+'];
 
 export const DEFAULT_TESTS = [
   {
-    code: 'FBC', name: 'Full blood count', specimenType: 'Whole blood (EDTA)',
+    code: 'FBC', section: 'Haematology', name: 'Full blood count', specimenType: 'Whole blood (EDTA)',
     analytes: [
       numeric('HB', 'Haemoglobin', 'g/dL', { low: 12, high: 17, criticalLow: 7, criticalHigh: 20, female: { low: 12, high: 15.5 }, male: { low: 13.5, high: 17.5 } }),
       numeric('PCV', 'Packed cell volume', '%', { low: 36, high: 50, female: { low: 36, high: 46 }, male: { low: 40, high: 52 } }),
@@ -48,11 +48,11 @@ export const DEFAULT_TESTS = [
       numeric('PLT', 'Platelets', 'x10^9/L', { low: 150, high: 400, criticalLow: 50, criticalHigh: 1000 }),
     ],
   },
-  { code: 'MP_RDT', name: 'Malaria parasite (RDT)', specimenType: 'Whole blood', analytes: [choice('MP', 'Malaria antigen', ['NEGATIVE', 'POSITIVE'], ['NEGATIVE'])] },
-  { code: 'FBS', name: 'Fasting blood glucose', specimenType: 'Plasma (fluoride)', analytes: [numeric('GLU', 'Glucose', 'mmol/L', { low: 3.9, high: 5.5, criticalLow: 2.5, criticalHigh: 25 })] },
-  { code: 'RBS', name: 'Random blood glucose', specimenType: 'Plasma (fluoride)', analytes: [numeric('GLU', 'Glucose', 'mmol/L', { low: 3.9, high: 7.8, criticalLow: 2.5, criticalHigh: 25 })] },
+  { code: 'MP_RDT', section: 'Parasitology', name: 'Malaria parasite (RDT)', specimenType: 'Whole blood', analytes: [choice('MP', 'Malaria antigen', ['NEGATIVE', 'POSITIVE'], ['NEGATIVE'])] },
+  { code: 'FBS', section: 'Clinical Chemistry', name: 'Fasting blood glucose', specimenType: 'Plasma (fluoride)', analytes: [numeric('GLU', 'Glucose', 'mmol/L', { low: 3.9, high: 5.5, criticalLow: 2.5, criticalHigh: 25 })] },
+  { code: 'RBS', section: 'Clinical Chemistry', name: 'Random blood glucose', specimenType: 'Plasma (fluoride)', analytes: [numeric('GLU', 'Glucose', 'mmol/L', { low: 3.9, high: 7.8, criticalLow: 2.5, criticalHigh: 25 })] },
   {
-    code: 'LIPID', name: 'Lipid profile', specimenType: 'Serum',
+    code: 'LIPID', section: 'Clinical Chemistry', name: 'Lipid profile', specimenType: 'Serum',
     analytes: [
       numeric('CHOL', 'Total cholesterol', 'mmol/L', { high: 5.2 }),
       numeric('TG', 'Triglycerides', 'mmol/L', { high: 1.7 }),
@@ -61,7 +61,7 @@ export const DEFAULT_TESTS = [
     ],
   },
   {
-    code: 'EUCR', name: 'Electrolytes, urea & creatinine', specimenType: 'Serum',
+    code: 'EUCR', section: 'Clinical Chemistry', name: 'Electrolytes, urea & creatinine', specimenType: 'Serum',
     analytes: [
       numeric('NA', 'Sodium', 'mmol/L', { low: 135, high: 145, criticalLow: 120, criticalHigh: 160 }),
       numeric('K', 'Potassium', 'mmol/L', { low: 3.5, high: 5.1, criticalLow: 2.5, criticalHigh: 6.5 }),
@@ -72,13 +72,13 @@ export const DEFAULT_TESTS = [
     ],
   },
   {
-    code: 'UA', name: 'Urinalysis (dipstick)', specimenType: 'Urine',
+    code: 'UA', section: 'Urinalysis', name: 'Urinalysis (dipstick)', specimenType: 'Urine',
     analytes: [choice('PROT', 'Protein', dipstick, ['NEGATIVE']), choice('UGLU', 'Glucose', dipstick, ['NEGATIVE']), choice('BLD', 'Blood', dipstick, ['NEGATIVE'])],
   },
-  { code: 'HIV_RDT', name: 'HIV 1/2 (rapid)', specimenType: 'Whole blood', analytes: [choice('HIV', 'HIV 1/2 antibody', ['NON_REACTIVE', 'REACTIVE'], ['NON_REACTIVE'])] },
-  { code: 'HBSAG', name: 'Hepatitis B surface antigen', specimenType: 'Serum', analytes: [choice('HBSAG', 'HBsAg', ['NON_REACTIVE', 'REACTIVE'], ['NON_REACTIVE'])] },
+  { code: 'HIV_RDT', section: 'Serology', name: 'HIV 1/2 (rapid)', specimenType: 'Whole blood', analytes: [choice('HIV', 'HIV 1/2 antibody', ['NON_REACTIVE', 'REACTIVE'], ['NON_REACTIVE'])] },
+  { code: 'HBSAG', section: 'Serology', name: 'Hepatitis B surface antigen', specimenType: 'Serum', analytes: [choice('HBSAG', 'HBsAg', ['NON_REACTIVE', 'REACTIVE'], ['NON_REACTIVE'])] },
   // Pregnancy: no "normal" answer, so no flag is raised either way.
-  { code: 'PREG', name: 'Pregnancy test (urine hCG)', specimenType: 'Urine', analytes: [choice('HCG', 'hCG', ['NEGATIVE', 'POSITIVE'])] },
+  { code: 'PREG', section: 'Serology', name: 'Pregnancy test (urine hCG)', specimenType: 'Urine', analytes: [choice('HCG', 'hCG', ['NEGATIVE', 'POSITIVE'])] },
 ];
 
 // The starter catalog must itself be valid (checked at module load, so a bad edit fails fast).
