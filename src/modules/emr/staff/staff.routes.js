@@ -9,7 +9,7 @@ import { sendItems } from '../core/http.js';
 import { activeMembersWithPermission } from '../core/membership.js';
 
 // Only capabilities a picker needs; the query cannot be used to map the organization's roles.
-const PICKABLE = ['lab.order.create', 'diagnosis.record', 'prescription.review', 'prescription.dispense', 'vitals.record'];
+const PICKABLE = ['lab.order.create', 'diagnosis.record', 'prescription.review', 'prescription.dispense', 'medication.administer', 'vitals.record'];
 
 const list = z.object({
   params: z.object({ organizationId: z.uuid() }).strict(),

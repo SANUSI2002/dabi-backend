@@ -389,5 +389,9 @@ describe('ward details and nursing flowsheet', () => {
     expect((await chart(admission, given(item))).status).toBe(201);
     const view = (await as(nurse).get(`/admissions/${admission.id}/mar`)).body.data;
     expect(view.entries[0]).toMatchObject({ status: 'GIVEN', administeredByName: await nameOf(nurse), witnessName: null });
+    // Witnesses for controlled doses are colleagues who may administer medicines.
+    const witnesses = (await as(nurse).get('/staff?permission=medication.administer')).body.data.items.map((s) => s.userId);
+    expect(witnesses).toEqual(expect.arrayContaining([nurse.userId, nurse2.userId, doctor.userId]));
+    expect(witnesses).not.toContain(pharmacist.userId);
   });
 });
