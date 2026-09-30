@@ -12,6 +12,7 @@ import { enqueueEvent } from '../core/outbox.js';
 import { activeMemberWithPermission } from '../core/membership.js';
 import { EmrError } from '../core/errors.js';
 import { markEnteredInError } from '../core/entries.js';
+import { userNameMap } from '../core/people.js';
 import * as policy from './admissions.policy.js';
 
 const ADMINISTRABLE = ['APPROVED', 'PARTIALLY_DISPENSED', 'DISPENSED'];
@@ -53,7 +54,11 @@ export async function marView(context, admissionId) {
       };
     });
     await recordAudit(tx, context, { action: 'mar.viewed', resourceType: 'admission', resourceId: admissionId });
-    return { admissionId, status: admission.status, medicines, entries: entries.map(toEntry) };
+    const names = await userNameMap(tx, entries.flatMap((e) => [e.administeredByUserId, e.witnessUserId]));
+    return {
+      admissionId, status: admission.status, medicines,
+      entries: entries.map((e) => ({ ...toEntry(e), administeredByName: names.get(e.administeredByUserId) ?? null, witnessName: e.witnessUserId ? names.get(e.witnessUserId) ?? null : null })),
+    };
   });
 }
 

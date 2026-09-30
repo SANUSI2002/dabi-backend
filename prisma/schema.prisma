@@ -2442,6 +2442,11 @@ model EmrAdmission {
   cancelledAt DateTime? @map("cancelled_at")
   cancelledByUserId String? @map("cancelled_by_user_id")
   cancellationReason String? @map("cancellation_reason")
+  admittingDiagnosis String? @map("admitting_diagnosis")
+  service String?
+  isolation String?
+  dischargeReady Boolean @default(false) @map("discharge_ready")
+  dischargeDestination String? @map("discharge_destination")
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
@@ -2467,6 +2472,25 @@ model EmrBedAssignment {
   admission EmrAdmission @relation(fields: [organizationId, admissionId], references: [organizationId, id], onDelete: Restrict)
 
   @@map("emr_bed_assignments")
+}
+
+model EmrNursingAssessment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  admissionId String @map("admission_id")
+  patientId String @map("patient_id")
+  recordedAt DateTime @map("recorded_at")
+  fluidIntakeMl Int? @map("fluid_intake_ml")
+  fluidOutputMl Int? @map("fluid_output_ml")
+  mobility String?
+  fallsRisk String? @map("falls_risk")
+  pressureRisk String? @map("pressure_risk")
+  note String?
+  recordedByUserId String @map("recorded_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, admissionId, recordedAt])
+  @@map("emr_nursing_assessments")
 }
 
 model EmrMedicationAdministration {

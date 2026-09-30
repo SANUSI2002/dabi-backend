@@ -17,13 +17,13 @@ import { EmrError } from '../core/errors.js';
 import { activeMemberWithPermission } from '../core/membership.js';
 import { updateVersioned } from '../core/concurrency.js';
 import * as policy from './pharmacy.policy.js';
-import { inDateTotal, lockBatches, moveStock, signalLowStock, toItem, todayUtc } from './pharmacy.shared.js';
+import { LINE_ORDER, inDateTotal, lockBatches, moveStock, signalLowStock, toItem, todayUtc } from './pharmacy.shared.js';
 
 async function lockPrescription(tx, context, prescriptionId) {
   const locked = await tx.$queryRaw`
     SELECT "id" FROM "emr_prescriptions" WHERE "organization_id" = ${context.organizationId} AND "id" = ${prescriptionId} FOR UPDATE`;
   if (!locked.length) throw new EmrError('PRESCRIPTION_NOT_FOUND');
-  return tx.emrPrescription.findFirst({ where: { organizationId: context.organizationId, id: prescriptionId }, include: { items: { orderBy: { createdAt: 'asc' } } } });
+  return tx.emrPrescription.findFirst({ where: { organizationId: context.organizationId, id: prescriptionId }, include: { items: { orderBy: LINE_ORDER } } });
 }
 
 async function requireWitness(context, witnessUserId) {
@@ -102,7 +102,7 @@ export async function dispense(context, prescriptionId, input, { idempotencyKey 
     });
 
     const batchInfo = new Map(batches.map((b) => [b.id, { batchNumber: b.batchNumber, expiryDate: policy.toDateString(b.expiryDate) }]));
-    const items = await tx.emrPrescriptionItem.findMany({ where: { organizationId: context.organizationId, prescriptionId }, orderBy: { createdAt: 'asc' } });
+    const items = await tx.emrPrescriptionItem.findMany({ where: { organizationId: context.organizationId, prescriptionId }, orderBy: LINE_ORDER });
     return {
       statusCode: 201,
       body: { ...record, prescriptionStatus: status, lines: lines.map((l) => ({ ...l, ...batchInfo.get(l.batchId) })), items: items.map(toItem) },
@@ -136,7 +136,7 @@ export async function closeItem(context, prescriptionId, itemId, expectedVersion
     });
     await recordAudit(tx, context, { action: 'prescription.item_closed', resourceType: 'prescription_item', resourceId: itemId, changedFields: [outcome] });
     await enqueueEvent(tx, context, { type: 'prescription.item_closed', aggregateType: 'prescription', aggregateId: prescriptionId, data: { patientId: prescription.patientId, itemId, outcome, status } });
-    const fresh = await tx.emrPrescription.findFirst({ where: { organizationId: context.organizationId, id: prescriptionId }, include: { items: { orderBy: { createdAt: 'asc' } } } });
+    const fresh = await tx.emrPrescription.findFirst({ where: { organizationId: context.organizationId, id: prescriptionId }, include: { items: { orderBy: LINE_ORDER } } });
     return { ...fresh, items: fresh.items.map(toItem) };
   });
 }

@@ -13,7 +13,7 @@ import express from 'express';
 import { requireEmrPermission as allow } from '../core/context.js';
 import { handle, validateEmr as check } from '../core/validate.js';
 import { requireVersion } from '../core/concurrency.js';
-import { send, sendResult } from '../core/http.js';
+import { send, sendItems, sendResult } from '../core/http.js';
 import { readIdempotencyKey } from '../core/idempotency.js';
 import * as v from './admissions.validator.js';
 import * as admissions from './admissions.service.js';
@@ -44,6 +44,12 @@ admissionRoutes.get('/', check(v.listAdmissions), allow('admission.read'),
   handle(async (req, res) => res.json({ status: 'success', data: await admissions.listAdmissions(req.emr, req.query) })));
 admissionRoutes.get('/:admissionId', check(v.oneAdmission), allow('admission.read'),
   handle(async (req, res) => send(res, await admissions.getAdmission(req.emr, req.params.admissionId))));
+admissionRoutes.patch('/:admissionId', check(v.updateAdmission), allow('admission.create', 'admission.transfer'),
+  handle(async (req, res) => send(res, await admissions.updateStay(req.emr, req.params.admissionId, requireVersion(req), req.body))));
+admissionRoutes.get('/:admissionId/nursing', check(v.oneAdmission), allow('clinical.read', 'medication.administer'),
+  handle(async (req, res) => sendItems(res, await admissions.nursingFlowsheet(req.emr, req.params.admissionId))));
+admissionRoutes.post('/:admissionId/nursing', check(v.recordNursing), allow('vitals.record'),
+  handle(async (req, res) => send(res, await admissions.recordNursing(req.emr, req.params.admissionId, req.body), 201)));
 admissionRoutes.post('/:admissionId/transfer', check(v.transfer), allow('admission.transfer'),
   handle(async (req, res) => send(res, await admissions.transfer(req.emr, req.params.admissionId, requireVersion(req), req.body))));
 admissionRoutes.post('/:admissionId/discharge', check(v.discharge), allow('admission.discharge'),

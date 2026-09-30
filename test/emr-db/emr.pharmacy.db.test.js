@@ -358,7 +358,8 @@ describe('pharmacy desk', () => {
     await receive('PARA500', 100);
     const { visit } = await openVisit();
     const rx = await approved(visit, [para(), { drugCode: 'METF500', dose: 500, doseUnit: 'mg', frequency: 'BD', durationDays: 30 }]);
-    const [paraItem, metformin] = rx.items;
+    const paraItem = rx.items.find((i) => i.drugCode === 'PARA500');
+    const metformin = rx.items.find((i) => i.drugCode === 'METF500');
     const close = (itemId, body, version, who = pharmacist) => as(who).post(`/pharmacy/prescriptions/${rx.id}/items/${itemId}/close`, body, ifMatch(version));
 
     expect((await close(metformin.id, { outcome: 'OUTSOURCED', reason: 'x' }, rx.version)).status).toBe(400);
@@ -370,6 +371,7 @@ describe('pharmacy desk', () => {
     expect((await close(metformin.id, { outcome: 'NOT_DISPENSED', reason: 'Again please' }, outsourced.body.data.version)).status).toBe(409);
 
     const dispensed = await as(pharmacist).post(`/pharmacy/prescriptions/${rx.id}/dispense`, { lines: [{ itemId: paraItem.id, quantity: paraItem.quantityPrescribed }] }, key());
+    expect(dispensed.status, JSON.stringify(dispensed.body.error)).toBe(201);
     expect(dispensed.body.data.prescriptionStatus).toBe('DISPENSED');
   });
 

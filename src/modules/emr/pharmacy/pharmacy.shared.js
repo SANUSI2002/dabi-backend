@@ -18,6 +18,9 @@ export const toPrescription = (row) => ({
   ...(row.patient ? { patient: toPatientSummary(row.patient) } : {}),
 });
 
+/** Lines in the order prescribed; drug codes are unique per prescription, so the order is stable. */
+export const LINE_ORDER = [{ createdAt: 'asc' }, { drugCode: 'asc' }];
+
 // Minimum identity the pharmacy needs to label and hand over medicines.
 export const pharmacyPatient = { select: { id: true, medicalRecordNumber: true, givenName: true, familyName: true, dateOfBirth: true, sex: true } };
 

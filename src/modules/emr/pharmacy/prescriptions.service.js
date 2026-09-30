@@ -17,9 +17,9 @@ import { EmrError } from '../core/errors.js';
 import { userNameMap } from '../core/people.js';
 import { requireOpen } from '../encounters/encounters.policy.js';
 import * as policy from './pharmacy.policy.js';
-import { ensureFormulary, inDateTotal, pharmacyPatient, toItem, toPrescription, todayUtc } from './pharmacy.shared.js';
+import { LINE_ORDER, ensureFormulary, inDateTotal, pharmacyPatient, toItem, toPrescription, todayUtc } from './pharmacy.shared.js';
 
-const ITEM_ORDER = { orderBy: { createdAt: 'asc' } };
+const ITEM_ORDER = { orderBy: LINE_ORDER };
 
 /** The patient's current medicines (other prescriptions), with drug classes for class checks. */
 async function currentItems(tx, context, patientId) {

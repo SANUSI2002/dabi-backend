@@ -16,6 +16,7 @@ import { EmrError, uniqueViolation } from '../core/errors.js';
 import { OPEN_STATUSES } from '../encounters/encounters.policy.js';
 import { lockEncounter } from '../encounters/encounters.repository.js';
 import { closeForEncounter } from '../queue/queue.service.js';
+import { userNameMap } from '../core/people.js';
 import * as policy from './admissions.policy.js';
 
 const dateOnly = (value) => (value instanceof Date ? value.toISOString().slice(0, 10) : value);
@@ -168,6 +169,7 @@ export async function admit(context, encounterId, input, { idempotencyKey } = {}
         data: {
           organizationId: context.organizationId, encounterId, patientId: encounter.patientId, wardId: bed.wardId, bedId: bed.id,
           reason: input.reason, admittedAt: now, admittedByUserId: context.userId, attendingUserId: input.attendingUserId ?? null,
+          admittingDiagnosis: input.admittingDiagnosis ?? null, service: input.service ?? null, isolation: input.isolation ?? null,
           expectedDischargeDate: input.expectedDischargeDate ? new Date(`${input.expectedDischargeDate}T00:00:00.000Z`) : null,
         },
       });
@@ -186,12 +188,24 @@ export async function admit(context, encounterId, input, { idempotencyKey } = {}
   }
 }
 
+const ADMISSION_PEOPLE = ['admittedByUserId', 'attendingUserId', 'dischargedByUserId'];
+
+/** Adds the ward/bed, the staff names behind the stay, and its bed history (oldest first). */
 async function withPlaces(tx, context, admissions) {
-  const beds = await tx.emrBed.findMany({ where: { organizationId: context.organizationId, id: { in: [...new Set(admissions.map((a) => a.bedId))] } }, include: { ward: { select: { code: true, name: true } } } });
-  return admissions.map((a) => {
-    const bed = beds.find((b) => b.id === a.bedId);
-    return toAdmission({ ...a, ward: bed.ward, bed: { code: bed.code } });
+  const assignments = await tx.emrBedAssignment.findMany({
+    where: { organizationId: context.organizationId, admissionId: { in: admissions.map((a) => a.id) } },
+    orderBy: { startedAt: 'asc' },
   });
+  const bedIds = [...new Set([...admissions.map((a) => a.bedId), ...assignments.map((a) => a.bedId)])];
+  const beds = await tx.emrBed.findMany({ where: { organizationId: context.organizationId, id: { in: bedIds } }, include: { ward: { select: { code: true, name: true } } } });
+  const place = (bedId) => { const bed = beds.find((b) => b.id === bedId); return { ward: bed.ward, bed: { code: bed.code } }; };
+  const names = await userNameMap(tx, admissions.flatMap((a) => ADMISSION_PEOPLE.map((f) => a[f])));
+  return admissions.map((a) => toAdmission({
+    ...a,
+    ...place(a.bedId),
+    ...Object.fromEntries(ADMISSION_PEOPLE.map((f) => [f.replace(/UserId$/, 'Name'), a[f] ? names.get(a[f]) ?? null : null])),
+    assignments: assignments.filter((s) => s.admissionId === a.id).map((s) => ({ ...s, ...place(s.bedId) })),
+  }));
 }
 
 /** Census (default: currently admitted), newest admission first. */
@@ -271,7 +285,7 @@ export async function transfer(context, admissionId, expectedVersion, { bedId, n
 }
 
 /** Ends the stay: bed to cleaning, visit finished; a death also closes the patient record. */
-export async function discharge(context, admissionId, expectedVersion, { disposition, summary }) {
+export async function discharge(context, admissionId, expectedVersion, { disposition, summary, destination }) {
   return withTenant(context, async (tx) => {
     const admission = await lockAdmission(tx, context, admissionId, expectedVersion);
     policy.requireAdmitted(admission, 'discharged');
@@ -281,7 +295,10 @@ export async function discharge(context, admissionId, expectedVersion, { disposi
     const now = new Date();
     await closeAssignment(tx, context, admissionId, now);
     await setBed(tx, context, bed, { status: 'CLEANING' });
-    await updateAdmission(tx, context, admission, { status: 'DISCHARGED', dischargedAt: now, dischargedByUserId: context.userId, dischargeDisposition: disposition, dischargeSummary: summary });
+    await updateAdmission(tx, context, admission, {
+      status: 'DISCHARGED', dischargedAt: now, dischargedByUserId: context.userId, dischargeDisposition: disposition, dischargeSummary: summary,
+      dischargeDestination: destination ?? null, dischargeReady: false,
+    });
     await setEncounterFromOpen(tx, context, admission.encounterId, { status: 'FINISHED', endedAt: now, ...(encounter.startedAt ? {} : { startedAt: admission.admittedAt }) });
     await closeForEncounter(tx, context, admission.encounterId);
     if (disposition === 'DECEASED') {
@@ -293,6 +310,53 @@ export async function discharge(context, admissionId, expectedVersion, { disposi
     await recordAudit(tx, context, { action: 'admission.discharged', resourceType: 'admission', resourceId: admissionId, changedFields: ['status', 'dischargeDisposition'] });
     await enqueueEvent(tx, context, { type: 'admission.discharged', aggregateType: 'admission', aggregateId: admissionId, data: { patientId: admission.patientId, encounterId: admission.encounterId, disposition } });
     return (await withPlaces(tx, context, [await tx.emrAdmission.findFirst({ where: { organizationId: context.organizationId, id: admissionId } })]))[0];
+  });
+}
+
+/** Ward details of a current stay: diagnosis, service, isolation, attending, discharge readiness. */
+export async function updateStay(context, admissionId, expectedVersion, changes) {
+  if (changes.attendingUserId) await requireAttending(context, changes.attendingUserId);
+  return withTenant(context, async (tx) => {
+    const admission = await lockAdmission(tx, context, admissionId, expectedVersion);
+    policy.requireAdmitted(admission, 'updated');
+    const data = {
+      ...changes,
+      ...(changes.expectedDischargeDate !== undefined
+        ? { expectedDischargeDate: changes.expectedDischargeDate ? new Date(`${changes.expectedDischargeDate}T00:00:00.000Z`) : null }
+        : {}),
+    };
+    await updateAdmission(tx, context, admission, data);
+    await recordAudit(tx, context, { action: 'admission.updated', resourceType: 'admission', resourceId: admissionId, changedFields: changedFieldNames(admission, changes) });
+    return (await withPlaces(tx, context, [await tx.emrAdmission.findFirst({ where: { organizationId: context.organizationId, id: admissionId } })]))[0];
+  });
+}
+
+/** The stay's nursing assessments (fluids, mobility, risks, notes), newest first, with who recorded them. */
+export async function nursingFlowsheet(context, admissionId) {
+  return withTenant(context, async (tx) => {
+    const admission = await tx.emrAdmission.findFirst({ where: { organizationId: context.organizationId, id: admissionId }, select: { id: true } });
+    if (!admission) throw new EmrError('ADMISSION_NOT_FOUND');
+    const rows = await tx.emrNursingAssessment.findMany({ where: { organizationId: context.organizationId, admissionId }, orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }] });
+    const names = await userNameMap(tx, rows.map((r) => r.recordedByUserId));
+    await recordAudit(tx, context, { action: 'nursing_flowsheet.viewed', resourceType: 'admission', resourceId: admissionId });
+    return rows.map((r) => ({ ...r, recordedByName: names.get(r.recordedByUserId) ?? null }));
+  });
+}
+
+/** Records one round of nursing findings for a current stay (never edited afterwards). */
+export async function recordNursing(context, admissionId, { recordedAt, ...findings }) {
+  const when = recordedAt ? new Date(recordedAt) : new Date();
+  if (when.getTime() > Date.now() + 5 * 60_000) throw new EmrError('VALIDATION_FAILED', { message: 'Findings cannot be recorded in the future.' });
+  return withTenant(context, async (tx) => {
+    const admission = await tx.emrAdmission.findFirst({ where: { organizationId: context.organizationId, id: admissionId } });
+    if (!admission) throw new EmrError('ADMISSION_NOT_FOUND');
+    policy.requireAdmitted(admission, 'charted');
+    if (when < admission.admittedAt) throw new EmrError('VALIDATION_FAILED', { message: 'Findings cannot predate the admission.' });
+    const row = await tx.emrNursingAssessment.create({
+      data: { ...findings, organizationId: context.organizationId, admissionId, patientId: admission.patientId, recordedAt: when, recordedByUserId: context.userId },
+    });
+    await recordAudit(tx, context, { action: 'nursing_assessment.recorded', resourceType: 'admission', resourceId: admissionId, changedFields: Object.keys(findings) });
+    return row;
   });
 }
 

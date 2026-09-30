@@ -9,6 +9,14 @@ const reason = z.string().trim().min(3).max(500).regex(/^[^\p{Cc}]+$/u, 'Contain
 const code = z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_-]{0,15}$/, 'Codes are 1-16 letters, digits, _ or -');
 const bedCodes = z.array(code).min(1).max(200).refine((codes) => new Set(codes).size === codes.length, 'Bed codes must be unique');
 const today = () => new Date().toISOString().slice(0, 10);
+const optionalText = (max) => text(max).nullable().optional();
+const RISK = z.enum(['Low', 'Moderate', 'High']);
+// How the ward describes the stay (not used by any rule; shown on the census and handover).
+const stayDetails = {
+  admittingDiagnosis: optionalText(300),
+  service: optionalText(80),
+  isolation: optionalText(120),
+};
 
 // ---- wards and beds ----
 export const listWards = z.object({ params: z.object(org).strict(), query: z.object({ includeInactive: z.enum(['true', 'false']).optional() }).strict() });
@@ -38,6 +46,7 @@ export const admit = z.object({
     reason: text(500),
     attendingUserId: z.uuid().optional(),
     expectedDischargeDate: z.iso.date().refine((d) => d >= today(), 'Must not be in the past').optional(),
+    ...stayDetails,
   }).strict(),
 });
 export const listAdmissions = z.object({
@@ -52,12 +61,35 @@ export const listAdmissions = z.object({
 });
 const admissionParams = z.object({ ...org, admissionId: z.uuid() }).strict();
 export const oneAdmission = z.object({ params: admissionParams, query: noQuery });
+export const updateAdmission = z.object({
+  params: admissionParams, query: noQuery,
+  body: z.object({
+    ...stayDetails,
+    dischargeReady: z.boolean().optional(),
+    attendingUserId: z.uuid().nullable().optional(),
+    expectedDischargeDate: z.iso.date().refine((d) => d >= today(), 'Must not be in the past').nullable().optional(),
+  }).strict().refine((body) => Object.values(body).some((value) => value !== undefined), 'Send at least one field to change'),
+});
 export const transfer = z.object({ params: admissionParams, query: noQuery, body: z.object({ bedId: z.uuid(), note: text(300).optional() }).strict() });
 export const discharge = z.object({
   params: admissionParams, query: noQuery,
-  body: z.object({ disposition: z.enum(DISPOSITIONS), summary: z.string().trim().min(10).max(20_000) }).strict(),
+  body: z.object({ disposition: z.enum(DISPOSITIONS), summary: z.string().trim().min(10).max(20_000), destination: optionalText(200) }).strict(),
 });
 export const cancelAdmission = z.object({ params: admissionParams, query: noQuery, body: z.object({ reason }).strict() });
+
+// ---- nursing flowsheet ----
+export const recordNursing = z.object({
+  params: admissionParams, query: noQuery,
+  body: z.object({
+    recordedAt: z.iso.datetime({ offset: true }).optional(),
+    fluidIntakeMl: z.number().int().min(0).max(20_000).optional(),
+    fluidOutputMl: z.number().int().min(0).max(20_000).optional(),
+    mobility: text(60).optional(),
+    fallsRisk: RISK.optional(),
+    pressureRisk: RISK.optional(),
+    note: z.string().trim().min(1).max(2000).optional(),
+  }).strict().refine((body) => Object.entries(body).some(([key, value]) => key !== 'recordedAt' && value !== undefined), 'Record at least one finding'),
+});
 
 // ---- MAR ----
 export const recordAdministration = z.object({

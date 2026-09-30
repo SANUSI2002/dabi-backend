@@ -328,3 +328,64 @@ describe('visits and admissions stay consistent (review fixes)', () => {
     expect(late.body.error.message).toMatch(/discharged/);
   });
 });
+
+describe('ward details and nursing flowsheet', () => {
+  let obsBeds;
+  const nameOf = async (who) => (await prisma.user.findUnique({ where: { id: who.userId }, select: { full_name: true } })).full_name;
+  async function admitToObs(code, extra = {}) {
+    const { patient, encounter } = await visit('MALE');
+    const response = await as(doctor).post(`/encounters/${encounter.id}/admission`, { bedId: obsBeds[code].id, reason: 'Needs IV antibiotics', attendingUserId: doctor.userId, ...extra });
+    expect(response.status).toBe(201);
+    return { patient, encounter, admission: response.body.data };
+  }
+  beforeAll(async () => {
+    const ward = (await as(admin).post('/wards', { code: 'STEP', name: 'Step-down', kind: 'GENERAL', beds: ['S1', 'S2', 'S3', 'S4'] })).body.data;
+    obsBeds = Object.fromEntries((await as(admin).get(`/wards/${ward.id}/beds`)).body.data.beds.map((bed) => [bed.code, bed]));
+  });
+
+  it('keeps diagnosis, service, isolation and discharge readiness with the stay, and names the staff', async () => {
+    const { admission } = await admitToObs('S1', { admittingDiagnosis: 'Community-acquired pneumonia', service: 'General Medicine', isolation: 'Droplet precautions' });
+    expect(admission).toMatchObject({ admittingDiagnosis: 'Community-acquired pneumonia', service: 'General Medicine', isolation: 'Droplet precautions', dischargeReady: false });
+    const ready = await as(nurse).patch(`/admissions/${admission.id}`, { dischargeReady: true, isolation: null }, ifMatch(admission.version));
+    expect(ready.body.data).toMatchObject({ dischargeReady: true, isolation: null });
+    expect((await as(reception).patch(`/admissions/${admission.id}`, { dischargeReady: false }, ifMatch(ready.body.data.version))).status).toBe(403);
+    expect((await as(nurse).patch(`/admissions/${admission.id}`, { attendingUserId: nurse.userId }, ifMatch(ready.body.data.version))).status).toBe(400);
+
+    const census = (await as(nurse).get('/admissions?limit=200')).body.data.items.find((a) => a.id === admission.id);
+    expect(census).toMatchObject({ attendingName: await nameOf(doctor), admittedByName: await nameOf(doctor), ward: { code: 'STEP' }, bed: { code: 'S1' } });
+    expect(census.assignments).toEqual([expect.objectContaining({ reason: 'ADMISSION', bed: { code: 'S1' } })]);
+
+    const moved = await as(nurse).post(`/admissions/${admission.id}/transfer`, { bedId: obsBeds.S2.id, note: 'Closer to the nursing station' }, ifMatch(ready.body.data.version));
+    expect(moved.body.data.assignments.map((s) => [s.reason, s.bed.code])).toEqual([['ADMISSION', 'S1'], ['TRANSFER', 'S2']]);
+    const discharged = await as(doctor).post(`/admissions/${admission.id}/discharge`, { disposition: 'HOME', summary: 'Improved on antibiotics, home on oral course.', destination: 'Home with family' }, ifMatch(moved.body.data.version));
+    expect(discharged.body.data).toMatchObject({ status: 'DISCHARGED', dischargeDestination: 'Home with family', dischargeReady: false, dischargedByName: await nameOf(doctor) });
+    expect((await as(nurse).patch(`/admissions/${admission.id}`, { dischargeReady: true }, ifMatch(discharged.body.data.version))).status).toBe(409);
+  });
+
+  it('records nursing findings beside vitals, newest first, never edited, only during the stay', async () => {
+    const { admission } = await admitToObs('S3');
+    const url = `/admissions/${admission.id}/nursing`;
+    expect((await as(nurse).post(url, {})).status).toBe(400);
+    expect((await as(nurse).post(url, { fallsRisk: 'Very high' })).status).toBe(400);
+    expect((await as(reception).post(url, { note: 'x' })).status).toBe(403);
+    const first = await as(nurse).post(url, { fluidIntakeMl: 1200, fluidOutputMl: 800, mobility: 'Assistance of 1', fallsRisk: 'High', pressureRisk: 'Low', note: 'Settled overnight' });
+    expect(first.status).toBe(201);
+    await as(nurse2).post(url, { note: 'Tolerating oral fluids' });
+    const sheet = (await as(doctor).get(url)).body.data.items;
+    expect(sheet.map((r) => r.note)).toEqual(['Tolerating oral fluids', 'Settled overnight']);
+    expect(sheet[1]).toMatchObject({ fluidIntakeMl: 1200, fallsRisk: 'High', recordedByName: await nameOf(nurse) });
+    expect((await as(nurse).post(url, { note: 'Before admission', recordedAt: ago(48) })).status).toBe(400);
+    await expect(withTenant({ organizationId: A.organizationId, userId: nurse.userId }, (tx) => tx.emrNursingAssessment.updateMany({
+      where: { organizationId: A.organizationId, id: first.body.data.id }, data: { note: 'rewritten' },
+    }))).rejects.toThrow();
+    expect((await as(bDoctor).get(url)).status).toBe(404);
+  });
+
+  it('the medication chart names who gave each dose', async () => {
+    const { encounter, admission } = await admitToObs('S4');
+    const item = await approvedLine(encounter, { drugCode: 'PARA500', dose: 1000, doseUnit: 'mg', frequency: 'QDS', durationDays: 3 });
+    expect((await chart(admission, given(item))).status).toBe(201);
+    const view = (await as(nurse).get(`/admissions/${admission.id}/mar`)).body.data;
+    expect(view.entries[0]).toMatchObject({ status: 'GIVEN', administeredByName: await nameOf(nurse), witnessName: null });
+  });
+});
