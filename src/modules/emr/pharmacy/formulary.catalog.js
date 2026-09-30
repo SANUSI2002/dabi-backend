@@ -23,6 +23,13 @@ export const formularyFields = {
   controlled: z.boolean().optional(),
   highAlert: z.boolean().optional(),
   reorderLevel: z.number().int().min(0).max(1e6).optional(),
+  // Catalogue details (not used by prescribing checks).
+  category: label(60).nullable().optional(),
+  manufacturer: label(120).nullable().optional(),
+  prescriptionRequired: z.boolean().optional(),
+  minStock: z.number().int().min(0).max(1e6).optional(),
+  patientDescription: z.string().trim().max(1000).nullable().optional(),
+  pharmacistNotes: z.string().trim().max(1000).nullable().optional(),
 };
 export const formularyCode = code;
 

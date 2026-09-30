@@ -90,6 +90,9 @@ describe('statuses and current medicines', () => {
     expect(prescriptionStatusFor([item(0), item(0)])).toBe('APPROVED');
     expect(prescriptionStatusFor([item(10), item(3)])).toBe('PARTIALLY_DISPENSED');
     expect(prescriptionStatusFor([item(10), item(0, 10, 'CANCELLED')])).toBe('DISPENSED');
+    // every line closed: finished if anything was handed over, otherwise cancelled
+    expect(prescriptionStatusFor([item(4, 10, 'CANCELLED'), item(0, 10, 'CANCELLED')])).toBe('DISPENSED');
+    expect(prescriptionStatusFor([item(0, 10, 'CANCELLED')])).toBe('CANCELLED');
   });
 
   it('keeps a course current until its duration ends', () => {

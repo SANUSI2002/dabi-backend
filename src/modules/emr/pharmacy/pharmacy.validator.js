@@ -109,10 +109,16 @@ export const queue = z.object({
     status: z.string().optional().transform((value) => (value ? value.split(',') : undefined))
       .pipe(z.array(z.enum(['PENDING_REVIEW', 'APPROVED', 'PARTIALLY_DISPENSED', 'DISPENSED', 'REJECTED', 'CANCELLED'])).max(6).optional()),
     patientId: z.uuid().optional(),
+    // oldest first (default) is the pharmacy's working order; newest first suits history
+    sort: z.enum(['oldest', 'newest']).default('oldest'),
     ...cursorQuery,
   }).strict(),
 });
 export const onePrescription = z.object({ params: prescriptionParams, query: noQuery });
+export const closeItem = z.object({
+  params: z.object({ ...org, prescriptionId: z.uuid(), itemId: z.uuid() }).strict(), query: noQuery,
+  body: z.object({ outcome: z.enum(['OUTSOURCED', 'NOT_DISPENSED']), reason }).strict(),
+});
 export const approve = z.object({ params: prescriptionParams, query: noQuery, body: z.object({ note: text(500).optional() }).strict() });
 export const reject = z.object({ params: prescriptionParams, query: noQuery, body: z.object({ reason }).strict() });
 export const dispense = z.object({

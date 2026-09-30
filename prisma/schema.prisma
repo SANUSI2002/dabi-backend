@@ -2191,6 +2191,12 @@ model EmrFormularyItem {
   controlled Boolean @default(false)
   highAlert Boolean @default(false) @map("high_alert")
   reorderLevel Int @default(0) @map("reorder_level")
+  category String?
+  manufacturer String?
+  prescriptionRequired Boolean @default(true) @map("prescription_required")
+  minStock Int @default(0) @map("min_stock")
+  patientDescription String? @map("patient_description")
+  pharmacistNotes String? @map("pharmacist_notes")
   active Boolean @default(true)
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at")
@@ -2272,6 +2278,10 @@ model EmrPrescriptionItem {
   status EmrPrescriptionItemStatus @default(ACTIVE)
   controlled Boolean @default(false)
   safetyAlerts Json @default("[]") @map("safety_alerts")
+  closeOutcome String? @map("close_outcome")
+  closeReason String? @map("close_reason")
+  closedByUserId String? @map("closed_by_user_id")
+  closedAt DateTime? @map("closed_at")
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")

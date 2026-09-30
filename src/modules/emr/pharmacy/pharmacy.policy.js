@@ -131,6 +131,8 @@ export const itemStatusFor = (item) => {
 export function prescriptionStatusFor(items) {
   const live = items.filter((i) => i.status !== 'CANCELLED');
   const anyDispensed = items.some((i) => i.quantityDispensed > 0);
+  // Every line closed: finished if anything was handed over, otherwise nothing will be.
+  if (!live.length) return anyDispensed ? 'DISPENSED' : 'CANCELLED';
   if (live.length && live.every((i) => i.quantityDispensed >= i.quantityPrescribed)) return 'DISPENSED';
   return anyDispensed ? 'PARTIALLY_DISPENSED' : 'APPROVED';
 }

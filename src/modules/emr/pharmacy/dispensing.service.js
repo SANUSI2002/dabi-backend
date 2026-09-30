@@ -15,6 +15,7 @@ import { idempotent } from '../core/idempotency.js';
 import { enqueueEvent } from '../core/outbox.js';
 import { EmrError } from '../core/errors.js';
 import { activeMemberWithPermission } from '../core/membership.js';
+import { updateVersioned } from '../core/concurrency.js';
 import * as policy from './pharmacy.policy.js';
 import { inDateTotal, lockBatches, moveStock, signalLowStock, toItem, todayUtc } from './pharmacy.shared.js';
 
@@ -107,6 +108,37 @@ export async function dispense(context, prescriptionId, input, { idempotencyKey 
       body: { ...record, prescriptionStatus: status, lines: lines.map((l) => ({ ...l, ...batchInfo.get(l.batchId) })), items: items.map(toItem) },
     };
   }));
+}
+
+/**
+ * The pharmacy closes a line it will not dispense: sent out to be bought elsewhere (OUTSOURCED) or
+ * not dispensed (NOT_DISPENSED), with the reason. What was already handed over stays on record.
+ * Takes the prescription's version (If-Match); the prescription status follows its lines.
+ */
+export async function closeItem(context, prescriptionId, itemId, expectedVersion, { outcome, reason }) {
+  return withTenant(context, async (tx) => {
+    const prescription = await lockPrescription(tx, context, prescriptionId);
+    policy.requirePrescriptionStatus(prescription, policy.DISPENSABLE, 'closed at the pharmacy');
+    const item = prescription.items.find((i) => i.id === itemId);
+    if (!item) throw new EmrError('PRESCRIPTION_ITEM_NOT_FOUND');
+    if (item.status !== 'ACTIVE') throw new EmrError('INVALID_STATE', { message: `${item.drugName} is ${item.status.toLowerCase()}; there is nothing left to close.` });
+    const now = new Date();
+    const { count } = await tx.emrPrescriptionItem.updateMany({
+      where: { organizationId: context.organizationId, id: itemId, version: item.version },
+      data: { status: 'CANCELLED', closeOutcome: outcome, closeReason: reason, closedByUserId: context.userId, closedAt: now, version: { increment: 1 } },
+    });
+    if (count !== 1) throw new Error('Prescription item changed while its prescription was locked');
+    const items = prescription.items.map((i) => (i.id === itemId ? { ...i, status: 'CANCELLED' } : i));
+    const status = policy.prescriptionStatusFor(items);
+    await updateVersioned(tx.emrPrescription, {
+      organizationId: context.organizationId, id: prescriptionId, expectedVersion, notFoundCode: 'PRESCRIPTION_NOT_FOUND',
+      data: { status, ...(status === 'CANCELLED' ? { cancelledAt: now, cancelledByUserId: context.userId, cancellationReason: `Not dispensed at the pharmacy: ${reason}` } : {}) },
+    });
+    await recordAudit(tx, context, { action: 'prescription.item_closed', resourceType: 'prescription_item', resourceId: itemId, changedFields: [outcome] });
+    await enqueueEvent(tx, context, { type: 'prescription.item_closed', aggregateType: 'prescription', aggregateId: prescriptionId, data: { patientId: prescription.patientId, itemId, outcome, status } });
+    const fresh = await tx.emrPrescription.findFirst({ where: { organizationId: context.organizationId, id: prescriptionId }, include: { items: { orderBy: { createdAt: 'asc' } } } });
+    return { ...fresh, items: fresh.items.map(toItem) };
+  });
 }
 
 /**

@@ -8,7 +8,8 @@ import { idempotent } from '../core/idempotency.js';
 import { etagFor, updateVersioned } from '../core/concurrency.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
 import { toDateString } from './pharmacy.policy.js';
-import { ensureFormulary, inDateTotal, lockBatches, moveStock, signalLowStock, toBatch, toFormulary, todayUtc } from './pharmacy.shared.js';
+import { userNameMap } from '../core/people.js';
+import { ensureFormulary, inDateTotal, lockBatches, moveStock, pharmacyPatient, signalLowStock, toBatch, toFormulary, toPatientSummary, todayUtc } from './pharmacy.shared.js';
 
 // ---------------------------------------------------------------------------------------------
 // Formulary
@@ -139,6 +140,10 @@ export async function stockLevels(context, { q, lowOnly, expiringWithinDays }) {
   });
 }
 
+/**
+ * The stock ledger, newest first, with who made each movement and — for dispenses — the patient
+ * and the witness (the controlled-medicine register reads this).
+ */
 export async function movements(context, { formularyCode, batchId, cursor, limit }) {
   const after = afterCursor('createdAt', cursor, 'desc');
   return withTenant(context, async (tx) => {
@@ -153,7 +158,26 @@ export async function movements(context, { formularyCode, batchId, cursor, limit
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
-    return page(rows, limit, 'createdAt');
+    const result = page(rows, limit, 'createdAt');
+    const dispenseIds = [...new Set(result.items.map((m) => m.dispenseId).filter(Boolean))];
+    const dispenses = dispenseIds.length ? await tx.emrDispense.findMany({
+      where: { organizationId: context.organizationId, id: { in: dispenseIds } },
+      select: { id: true, witnessUserId: true, prescription: { select: { patient: pharmacyPatient } } },
+    }) : [];
+    const byDispense = new Map(dispenses.map((d) => [d.id, d]));
+    const names = await userNameMap(tx, [...result.items.map((m) => m.userId), ...dispenses.map((d) => d.witnessUserId)]);
+    return {
+      ...result,
+      items: result.items.map((m) => {
+        const dispense = m.dispenseId ? byDispense.get(m.dispenseId) : null;
+        return {
+          ...m,
+          userName: names.get(m.userId) ?? null,
+          witnessName: dispense?.witnessUserId ? names.get(dispense.witnessUserId) ?? null : null,
+          patient: dispense ? toPatientSummary(dispense.prescription.patient) : null,
+        };
+      }),
+    };
   });
 }
 

@@ -14,6 +14,7 @@ import { idempotent } from '../core/idempotency.js';
 import { enqueueEvent } from '../core/outbox.js';
 import { updateVersioned } from '../core/concurrency.js';
 import { EmrError } from '../core/errors.js';
+import { userNameMap } from '../core/people.js';
 import { requireOpen } from '../encounters/encounters.policy.js';
 import * as policy from './pharmacy.policy.js';
 import { ensureFormulary, inDateTotal, pharmacyPatient, toItem, toPrescription, todayUtc } from './pharmacy.shared.js';
@@ -117,9 +118,47 @@ export async function getPrescription(context, prescriptionId) {
   });
 }
 
-/** Pharmacy queue, oldest first. Flags lines with overridden safety alerts for extra attention. */
-export async function queue(context, { status, patientId, limit, cursor }) {
-  const after = afterCursor('createdAt', cursor, 'asc');
+const PRESCRIPTION_PEOPLE = ['prescriberUserId', 'reviewedByUserId', 'cancelledByUserId'];
+const nameField = (field) => field.replace(/UserId$/, 'Name');
+
+/**
+ * The pharmacy's view of each prescription: staff names beside every id, dispensing records, and
+ * the patient's active allergies (the pharmacist checks them before handing anything over).
+ */
+async function forPharmacy(tx, context, rows) {
+  const dispenses = await tx.emrDispense.findMany({
+    where: { organizationId: context.organizationId, prescriptionId: { in: rows.map((r) => r.id) } },
+    include: { lines: true },
+    orderBy: { dispensedAt: 'asc' },
+  });
+  const allergies = await tx.emrPatientAllergy.findMany({
+    where: { organizationId: context.organizationId, patientId: { in: [...new Set(rows.map((r) => r.patientId))] }, status: 'ACTIVE' },
+    select: { patientId: true, substance: true, substanceCode: true, reaction: true, severity: true },
+  });
+  const names = await userNameMap(tx, [
+    ...rows.flatMap((r) => [...PRESCRIPTION_PEOPLE.map((f) => r[f]), ...r.items.map((i) => i.closedByUserId)]),
+    ...dispenses.flatMap((d) => [d.dispensedByUserId, d.witnessUserId]),
+  ]);
+  const name = (id) => (id ? names.get(id) ?? null : null);
+  return rows.map((row) => ({
+    ...toPrescription(row),
+    ...Object.fromEntries(PRESCRIPTION_PEOPLE.map((f) => [nameField(f), name(row[f])])),
+    items: row.items.map((item) => ({ ...toItem(item), closedByName: name(item.closedByUserId) })),
+    dispenses: dispenses.filter((d) => d.prescriptionId === row.id)
+      .map((d) => ({ ...d, dispensedByName: name(d.dispensedByUserId), witnessName: name(d.witnessUserId) })),
+    allergies: allergies.filter((a) => a.patientId === row.patientId).map(({ substance, substanceCode, reaction, severity }) => ({ substance, substanceCode, reaction, severity })),
+    overriddenAlerts: row.items.flatMap((i) => i.safetyAlerts).filter((a) => a.overrideReason).length,
+    controlled: row.items.some((i) => i.controlled),
+  }));
+}
+
+/**
+ * Pharmacy queue — oldest first by default, or newest first for history. Flags lines with
+ * overridden safety alerts for extra attention.
+ */
+export async function queue(context, { status, patientId, limit, cursor, sort }) {
+  const direction = sort === 'newest' ? 'desc' : 'asc';
+  const after = afterCursor('createdAt', cursor, direction);
   return withTenant(context, async (tx) => {
     const rows = await tx.emrPrescription.findMany({
       where: {
@@ -129,19 +168,12 @@ export async function queue(context, { status, patientId, limit, cursor }) {
         ...after,
       },
       include: { patient: pharmacyPatient, items: ITEM_ORDER },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ createdAt: direction }, { id: direction }],
       take: limit + 1,
     });
     await recordAudit(tx, context, { action: 'pharmacy_queue.viewed', resourceType: 'prescription' });
     const result = page(rows, limit, 'createdAt');
-    return {
-      ...result,
-      items: result.items.map((row) => ({
-        ...toPrescription(row),
-        overriddenAlerts: row.items.flatMap((i) => i.safetyAlerts).filter((a) => a.overrideReason).length,
-        controlled: row.items.some((i) => i.controlled),
-      })),
-    };
+    return { ...result, items: await forPharmacy(tx, context, result.items) };
   });
 }
 

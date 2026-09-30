@@ -350,3 +350,69 @@ describe('medication list, database invariants and isolation', () => {
     expect((await balanced(bPharmacist)).batchesChecked).toBe(0);
   });
 });
+
+describe('pharmacy desk', () => {
+  const nameOf = async (who) => (await prisma.user.findUnique({ where: { id: who.userId }, select: { full_name: true } })).full_name;
+
+  it('closes a line it will not dispense (outsourced / not dispensed) with the reason; the prescription follows', async () => {
+    await receive('PARA500', 100);
+    const { visit } = await openVisit();
+    const rx = await approved(visit, [para(), { drugCode: 'METF500', dose: 500, doseUnit: 'mg', frequency: 'BD', durationDays: 30 }]);
+    const [paraItem, metformin] = rx.items;
+    const close = (itemId, body, version, who = pharmacist) => as(who).post(`/pharmacy/prescriptions/${rx.id}/items/${itemId}/close`, body, ifMatch(version));
+
+    expect((await close(metformin.id, { outcome: 'OUTSOURCED', reason: 'x' }, rx.version)).status).toBe(400);
+    expect((await close(metformin.id, { outcome: 'OUTSOURCED', reason: 'Out of stock — patient to buy outside' }, rx.version, doctor)).status).toBe(403);
+    const outsourced = await close(metformin.id, { outcome: 'OUTSOURCED', reason: 'Out of stock — patient to buy outside' }, rx.version);
+    expect(outsourced.status).toBe(200);
+    expect(outsourced.body.data.status).toBe('APPROVED'); // paracetamol is still to dispense
+    expect(outsourced.body.data.items.find((i) => i.id === metformin.id)).toMatchObject({ status: 'CANCELLED', closeOutcome: 'OUTSOURCED', closedByUserId: pharmacist.userId });
+    expect((await close(metformin.id, { outcome: 'NOT_DISPENSED', reason: 'Again please' }, outsourced.body.data.version)).status).toBe(409);
+
+    const dispensed = await as(pharmacist).post(`/pharmacy/prescriptions/${rx.id}/dispense`, { lines: [{ itemId: paraItem.id, quantity: paraItem.quantityPrescribed }] }, key());
+    expect(dispensed.body.data.prescriptionStatus).toBe('DISPENSED');
+  });
+
+  it('a prescription whose every line is closed without dispensing is cancelled at the pharmacy', async () => {
+    const { visit } = await openVisit();
+    const rx = await approved(visit, [para()]);
+    const closed = await as(pharmacist).post(`/pharmacy/prescriptions/${rx.id}/items/${rx.items[0].id}/close`, { outcome: 'NOT_DISPENSED', reason: 'Patient declined the medicine' }, ifMatch(rx.version));
+    expect(closed.body.data).toMatchObject({ status: 'CANCELLED', cancelledByUserId: pharmacist.userId, cancellationReason: 'Not dispensed at the pharmacy: Patient declined the medicine' });
+    await expect(withTenant({ organizationId: A.organizationId, userId: pharmacist.userId }, (tx) => tx.emrPrescriptionItem.updateMany({
+      where: { organizationId: A.organizationId, id: rx.items[0].id }, data: { closeReason: null },
+    }))).rejects.toThrow();
+  });
+
+  it('the queue carries staff names, dispensing records and the patient\'s allergies; history reads newest first', async () => {
+    await receive('PARA500', 50);
+    const { patient, visit } = await openVisit();
+    await as(doctor).post(`/patients/${patient.id}/allergies`, { substance: 'Sulfonamides', substanceCode: 'SULFONAMIDE', reaction: 'Rash' });
+    const rx = await approved(visit, [para()]);
+    await as(pharmacist).post(`/pharmacy/prescriptions/${rx.id}/dispense`, { lines: [{ itemId: rx.items[0].id, quantity: 5 }] }, key());
+    const open = (await as(pharmacist).get('/pharmacy/prescriptions?status=PARTIALLY_DISPENSED&sort=newest&limit=5')).body.data.items;
+    expect(open[0].id).toBe(rx.id);
+    expect(open[0]).toMatchObject({ prescriberName: await nameOf(doctor), reviewedByName: await nameOf(pharmacist), allergies: [expect.objectContaining({ substance: 'Sulfonamides' })] });
+    expect(open[0].dispenses).toEqual([expect.objectContaining({ dispensedByName: await nameOf(pharmacist), witnessName: null, lines: [expect.objectContaining({ quantity: 5 })] })]);
+  });
+
+  it('the ledger names who moved stock, and for controlled dispenses the patient and witness', async () => {
+    await receive('MORPH10_INJ', 20);
+    const { patient, visit } = await openVisit();
+    const rx = await approved(visit, [{ drugCode: 'MORPH10_INJ', dose: 10, doseUnit: 'mg', frequency: 'STAT', quantity: 1 }]);
+    await as(pharmacist).post(`/pharmacy/prescriptions/${rx.id}/dispense`, { lines: [{ itemId: rx.items[0].id, quantity: 1 }], witnessUserId: pharmacist2.userId }, key());
+    const ledger = (await as(pharmacist).get('/pharmacy/stock/movements?formularyCode=MORPH10_INJ&limit=10')).body.data.items;
+    expect(ledger[0]).toMatchObject({ kind: 'DISPENSE', quantity: -1, userName: await nameOf(pharmacist), witnessName: await nameOf(pharmacist2), patient: expect.objectContaining({ id: patient.id }) });
+    expect(ledger.at(-1)).toMatchObject({ kind: 'RECEIPT', patient: null, witnessName: null });
+  });
+
+  it('keeps catalogue details with each product, and lists pharmacy staff for witnessing', async () => {
+    const updated = await as(pharmacist).patch('/pharmacy/formulary/IBU400', {
+      category: 'Analgesic', manufacturer: 'Emzor', prescriptionRequired: false, minStock: 50, patientDescription: 'Take with food', pharmacistNotes: 'Check renal function',
+    }, ifMatch(1));
+    expect(updated.body.data).toMatchObject({ category: 'Analgesic', prescriptionRequired: false, minStock: 50 });
+    expect((await as(pharmacist).patch('/pharmacy/formulary/IBU400', { minStock: -1 }, ifMatch(2))).status).toBe(400);
+    const witnesses = (await as(pharmacist).get('/staff?permission=prescription.dispense')).body.data.items.map((s) => s.userId);
+    expect(witnesses).toEqual(expect.arrayContaining([pharmacist.userId, pharmacist2.userId]));
+    expect(witnesses).not.toContain(nurse.userId);
+  });
+});

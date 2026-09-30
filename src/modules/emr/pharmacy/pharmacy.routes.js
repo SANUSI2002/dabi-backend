@@ -50,6 +50,8 @@ pharmacyRoutes.post('/prescriptions/:prescriptionId/approve', check(v.approve), 
   handle(async (req, res) => send(res, await prescriptions.review(req.emr, req.params.prescriptionId, requireVersion(req), 'approve', req.body))));
 pharmacyRoutes.post('/prescriptions/:prescriptionId/reject', check(v.reject), allow('prescription.review'),
   handle(async (req, res) => send(res, await prescriptions.review(req.emr, req.params.prescriptionId, requireVersion(req), 'reject', req.body))));
+pharmacyRoutes.post('/prescriptions/:prescriptionId/items/:itemId/close', check(v.closeItem), allow('prescription.dispense'),
+  handle(async (req, res) => send(res, await dispensing.closeItem(req.emr, req.params.prescriptionId, req.params.itemId, requireVersion(req), req.body))));
 pharmacyRoutes.post('/prescriptions/:prescriptionId/dispense', check(v.dispense), allow('prescription.dispense'),
   handle(async (req, res) => sendResult(res, await dispensing.dispense(req.emr, req.params.prescriptionId, req.body, { idempotencyKey: readIdempotencyKey(req) }))));
 pharmacyRoutes.post('/dispenses/:dispenseId/returns', check(v.returnDispense), allow('prescription.dispense'),
