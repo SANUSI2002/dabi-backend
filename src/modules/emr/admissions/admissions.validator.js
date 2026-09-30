@@ -73,7 +73,7 @@ export const updateAdmission = z.object({
 export const transfer = z.object({ params: admissionParams, query: noQuery, body: z.object({ bedId: z.uuid(), note: text(300).optional() }).strict() });
 export const discharge = z.object({
   params: admissionParams, query: noQuery,
-  body: z.object({ disposition: z.enum(DISPOSITIONS), summary: z.string().trim().min(10).max(20_000), destination: optionalText(200) }).strict(),
+  body: z.object({ disposition: z.enum(DISPOSITIONS), outcome: optionalText(80), summary: z.string().trim().min(10).max(20_000), destination: optionalText(200) }).strict(),
 });
 export const cancelAdmission = z.object({ params: admissionParams, query: noQuery, body: z.object({ reason }).strict() });
 

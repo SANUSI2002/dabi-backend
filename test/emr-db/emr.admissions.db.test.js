@@ -357,8 +357,8 @@ describe('ward details and nursing flowsheet', () => {
 
     const moved = await as(nurse).post(`/admissions/${admission.id}/transfer`, { bedId: obsBeds.S2.id, note: 'Closer to the nursing station' }, ifMatch(ready.body.data.version));
     expect(moved.body.data.assignments.map((s) => [s.reason, s.bed.code])).toEqual([['ADMISSION', 'S1'], ['TRANSFER', 'S2']]);
-    const discharged = await as(doctor).post(`/admissions/${admission.id}/discharge`, { disposition: 'HOME', summary: 'Improved on antibiotics, home on oral course.', destination: 'Home with family' }, ifMatch(moved.body.data.version));
-    expect(discharged.body.data).toMatchObject({ status: 'DISCHARGED', dischargeDestination: 'Home with family', dischargeReady: false, dischargedByName: await nameOf(doctor) });
+    const discharged = await as(doctor).post(`/admissions/${admission.id}/discharge`, { disposition: 'HOME', outcome: 'Improved', summary: 'Improved on antibiotics, home on oral course.', destination: 'Home with family' }, ifMatch(moved.body.data.version));
+    expect(discharged.body.data).toMatchObject({ status: 'DISCHARGED', dischargeOutcome: 'Improved', dischargeDestination: 'Home with family', dischargeReady: false, dischargedByName: await nameOf(doctor) });
     expect((await as(nurse).patch(`/admissions/${admission.id}`, { dischargeReady: true }, ifMatch(discharged.body.data.version))).status).toBe(409);
   });
 
@@ -372,6 +372,8 @@ describe('ward details and nursing flowsheet', () => {
     expect(first.status).toBe(201);
     await as(nurse2).post(url, { note: 'Tolerating oral fluids' });
     const sheet = (await as(doctor).get(url)).body.data.items;
+    const onCensus = (await as(nurse).get('/admissions?limit=200')).body.data.items.find((a) => a.id === admission.id);
+    expect(onCensus.lastObservedAt).toBe(sheet[0].recordedAt); // the latest round, not the first
     expect(sheet.map((r) => r.note)).toEqual(['Tolerating oral fluids', 'Settled overnight']);
     expect(sheet[1]).toMatchObject({ fluidIntakeMl: 1200, fallsRisk: 'High', recordedByName: await nameOf(nurse) });
     expect((await as(nurse).post(url, { note: 'Before admission', recordedAt: ago(48) })).status).toBe(400);

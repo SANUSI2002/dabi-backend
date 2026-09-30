@@ -190,7 +190,10 @@ export async function admit(context, encounterId, input, { idempotencyKey } = {}
 
 const ADMISSION_PEOPLE = ['admittedByUserId', 'attendingUserId', 'dischargedByUserId'];
 
-/** Adds the ward/bed, the staff names behind the stay, and its bed history (oldest first). */
+/**
+ * Adds the ward/bed, the staff names behind the stay, its bed history (oldest first), and when the
+ * patient was last observed (vital signs on the visit or nursing findings on the stay).
+ */
 async function withPlaces(tx, context, admissions) {
   const assignments = await tx.emrBedAssignment.findMany({
     where: { organizationId: context.organizationId, admissionId: { in: admissions.map((a) => a.id) } },
@@ -200,11 +203,22 @@ async function withPlaces(tx, context, admissions) {
   const beds = await tx.emrBed.findMany({ where: { organizationId: context.organizationId, id: { in: bedIds } }, include: { ward: { select: { code: true, name: true } } } });
   const place = (bedId) => { const bed = beds.find((b) => b.id === bedId); return { ward: bed.ward, bed: { code: bed.code } }; };
   const names = await userNameMap(tx, admissions.flatMap((a) => ADMISSION_PEOPLE.map((f) => a[f])));
+  const vitals = await tx.emrObservation.groupBy({
+    by: ['encounterId'], where: { organizationId: context.organizationId, encounterId: { in: admissions.map((a) => a.encounterId) }, status: 'ACTIVE' }, _max: { recordedAt: true },
+  });
+  const nursing = await tx.emrNursingAssessment.groupBy({
+    by: ['admissionId'], where: { organizationId: context.organizationId, admissionId: { in: admissions.map((a) => a.id) } }, _max: { recordedAt: true },
+  });
+  const lastObserved = (a) => {
+    const times = [vitals.find((v) => v.encounterId === a.encounterId)?._max.recordedAt, nursing.find((n) => n.admissionId === a.id)?._max.recordedAt].filter(Boolean);
+    return times.length ? new Date(Math.max(...times.map((t) => t.getTime()))) : null;
+  };
   return admissions.map((a) => toAdmission({
     ...a,
     ...place(a.bedId),
     ...Object.fromEntries(ADMISSION_PEOPLE.map((f) => [f.replace(/UserId$/, 'Name'), a[f] ? names.get(a[f]) ?? null : null])),
     assignments: assignments.filter((s) => s.admissionId === a.id).map((s) => ({ ...s, ...place(s.bedId) })),
+    lastObservedAt: lastObserved(a),
   }));
 }
 
@@ -285,7 +299,7 @@ export async function transfer(context, admissionId, expectedVersion, { bedId, n
 }
 
 /** Ends the stay: bed to cleaning, visit finished; a death also closes the patient record. */
-export async function discharge(context, admissionId, expectedVersion, { disposition, summary, destination }) {
+export async function discharge(context, admissionId, expectedVersion, { disposition, outcome, summary, destination }) {
   return withTenant(context, async (tx) => {
     const admission = await lockAdmission(tx, context, admissionId, expectedVersion);
     policy.requireAdmitted(admission, 'discharged');
@@ -297,7 +311,7 @@ export async function discharge(context, admissionId, expectedVersion, { disposi
     await setBed(tx, context, bed, { status: 'CLEANING' });
     await updateAdmission(tx, context, admission, {
       status: 'DISCHARGED', dischargedAt: now, dischargedByUserId: context.userId, dischargeDisposition: disposition, dischargeSummary: summary,
-      dischargeDestination: destination ?? null, dischargeReady: false,
+      dischargeDestination: destination ?? null, dischargeOutcome: outcome ?? null, dischargeReady: false,
     });
     await setEncounterFromOpen(tx, context, admission.encounterId, { status: 'FINISHED', endedAt: now, ...(encounter.startedAt ? {} : { startedAt: admission.admittedAt }) });
     await closeForEncounter(tx, context, admission.encounterId);
