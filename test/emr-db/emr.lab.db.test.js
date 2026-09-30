@@ -225,3 +225,79 @@ describe('tenant isolation for the lab', () => {
     expect(seq[2] - seq[0]).toBe(2);
   });
 });
+
+describe('result follow-up', () => {
+  const hbLow = [{ analyteCode: 'HB', value: 6.5 }, { analyteCode: 'PCV', value: 30 }, { analyteCode: 'WBC', value: 7.2 }, { analyteCode: 'PLT', value: 250 }];
+  async function resultedFbc() {
+    const labOrder = await order(['FBC']);
+    await as(nurse).post(`/lab/orders/${labOrder.id}/collect`, {}, ifMatch(1));
+    const fbc = item(labOrder, 'FBC');
+    const url = `/lab/orders/${labOrder.id}/items/${fbc.id}`;
+    expect((await as(scientist).put(`${url}/results`, { results: hbLow }, ifMatch(1))).status).toBe(200);
+    return { labOrder, url };
+  }
+
+  it('a verifier sends a result back with a reason; it is re-entered and then released', async () => {
+    const { url } = await resultedFbc();
+    expect((await as(scientist2).post(`${url}/return`, { reason: 'x' }, ifMatch(2))).status).toBe(400);
+    const returned = await as(scientist2).post(`${url}/return`, { reason: 'PCV inconsistent with Hb — recheck' }, ifMatch(2));
+    expect(returned.body.data).toMatchObject({ status: 'PENDING', returnReason: 'PCV inconsistent with Hb — recheck', returnedByUserId: scientist2.userId });
+    expect((await as(scientist2).post(`${url}/verify`, {}, ifMatch(3))).status).toBe(409); // nothing to verify until re-entered
+    expect((await as(scientist2).post(`${url}/return`, { reason: 'Again please' }, ifMatch(3))).status).toBe(409);
+    expect((await as(scientist).put(`${url}/results`, { results: hbLow }, ifMatch(3))).body.data.status).toBe('RESULTED');
+    expect((await as(scientist2).post(`${url}/verify`, {}, ifMatch(4))).body.data.status).toBe('VERIFIED');
+    expect((await as(doctor).post(`${url}/return`, { reason: 'Doctors cannot do this' }, ifMatch(5))).status).toBe(403);
+  });
+
+  it('records who was told about an abnormal result and who acknowledged it; an amendment asks again', async () => {
+    const { url } = await resultedFbc();
+    expect((await as(doctor).post(`${url}/acknowledge`, {}, ifMatch(2))).status).toBe(409); // not released yet
+    await as(scientist2).post(`${url}/verify`, {}, ifMatch(2));
+
+    expect((await as(scientist).post(`${url}/communicate`, { toUserId: nurse.userId }, ifMatch(3))).status).toBe(400); // nurses do not order tests
+    const told = await as(scientist).post(`${url}/communicate`, { toUserId: doctor.userId }, ifMatch(3));
+    expect(told.body.data).toMatchObject({ criticalCommunicatedByUserId: scientist.userId, criticalCommunicatedToUserId: doctor.userId });
+    expect((await as(scientist).post(`${url}/communicate`, { toUserId: doctor.userId }, ifMatch(4))).status).toBe(409);
+
+    expect((await as(scientist).post(`${url}/acknowledge`, {}, ifMatch(4))).status).toBe(403);
+    const seen = await as(doctor).post(`${url}/acknowledge`, {}, ifMatch(4));
+    expect(seen.body.data).toMatchObject({ acknowledgedByUserId: doctor.userId });
+    expect((await as(doctor).post(`${url}/acknowledge`, {}, ifMatch(5))).status).toBe(409);
+
+    const amended = await as(scientist2).post(`${url}/amend`, { reason: 'Transcription error', results: hbLow.map((r) => (r.analyteCode === 'HB' ? { ...r, value: 7.1 } : r)) }, ifMatch(5));
+    expect(amended.body.data).toMatchObject({ acknowledgedAt: null, criticalCommunicatedAt: null });
+  });
+
+  it('only abnormal released results are communicated, and the database keeps who/when together', async () => {
+    const labOrder = await order(['MP_RDT']);
+    await as(nurse).post(`/lab/orders/${labOrder.id}/collect`, {}, ifMatch(1));
+    const url = `/lab/orders/${labOrder.id}/items/${item(labOrder, 'MP_RDT').id}`;
+    await as(scientist).put(`${url}/results`, { results: [{ analyteCode: 'MP', value: 'NEGATIVE' }] }, ifMatch(1));
+    await as(scientist2).post(`${url}/verify`, {}, ifMatch(2));
+    expect((await as(scientist).post(`${url}/communicate`, { toUserId: doctor.userId }, ifMatch(3))).status).toBe(409);
+    await expect(withTenant({ organizationId: A.organizationId, userId: doctor.userId }, (tx) => tx.emrLabOrderItem.updateMany({
+      where: { organizationId: A.organizationId, id: item(labOrder, 'MP_RDT').id }, data: { acknowledgedAt: new Date() },
+    }))).rejects.toThrow();
+  });
+
+  it('the worklist carries current results and staff names, newest first when asked', async () => {
+    const { labOrder } = await resultedFbc();
+    const newest = (await as(scientist).get('/lab/orders?status=ORDERED,COLLECTED,IN_PROGRESS&sort=newest&limit=5')).body.data.items;
+    expect(newest[0].id).toBe(labOrder.id);
+    const names = async (who) => (await prisma.user.findUnique({ where: { id: who.userId }, select: { full_name: true } })).full_name;
+    expect(newest[0]).toMatchObject({ orderedByName: await names(doctor), collectedByName: await names(nurse) });
+    expect(newest[0].items[0]).toMatchObject({ status: 'RESULTED', resultedByName: await names(scientist) });
+    expect(newest[0].items[0].results.map((r) => r.analyteCode).sort()).toEqual(['HB', 'PCV', 'PLT', 'WBC']);
+    const oldest = (await as(scientist).get('/lab/orders?status=ORDERED,COLLECTED,IN_PROGRESS&limit=100')).body.data.items;
+    expect(oldest.at(-1).id).toBe(labOrder.id);
+  });
+
+  it('lists colleagues by capability (names only) for pickers', async () => {
+    const clinicians = (await as(scientist).get('/staff?permission=lab.order.create')).body.data.items;
+    expect(clinicians.map((c) => c.userId)).toContain(doctor.userId);
+    expect(clinicians.map((c) => c.userId)).not.toContain(nurse.userId);
+    expect(Object.keys(clinicians[0]).sort()).toEqual(['name', 'userId']);
+    expect((await as(scientist).get('/staff?permission=membership.manage')).status).toBe(400);
+    expect((await as(bScientist).get('/staff?permission=lab.order.create')).body.data.items.map((c) => c.userId)).not.toContain(doctor.userId);
+  });
+});

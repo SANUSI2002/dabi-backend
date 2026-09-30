@@ -47,6 +47,8 @@ export const worklist = z.object({
     patientId: z.uuid().optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
     cursor: z.string().max(200).optional(),
+    // oldest first (default) is the bench's first-in-first-out order; newest first suits recent results
+    sort: z.enum(['oldest', 'newest']).default('oldest'),
   }).strict(),
 });
 export const oneOrder = z.object({ params: orderParams, query: noQuery });
@@ -56,4 +58,7 @@ export const cancel = z.object({ params: orderParams, query: noQuery, body: z.ob
 // ---- results ----
 export const enterResults = z.object({ params: itemParams, query: noQuery, body: z.object({ results: resultEntries }).strict() });
 export const verify = z.object({ params: itemParams, query: noQuery, body: noBody });
+export const returnResults = z.object({ params: itemParams, query: noQuery, body: z.object({ reason }).strict() });
+export const acknowledge = z.object({ params: itemParams, query: noQuery, body: noBody });
+export const communicate = z.object({ params: itemParams, query: noQuery, body: z.object({ toUserId: z.uuid() }).strict() });
 export const amend = z.object({ params: itemParams, query: noQuery, body: z.object({ reason, results: resultEntries }).strict() });

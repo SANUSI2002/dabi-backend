@@ -3,9 +3,9 @@
 //   /api/v1/emr/organizations/:organizationId/encounters/:encounterId/lab-orders  (order + view in a visit)
 //
 // Who can do what (migration 20260930090000_emr_lab):
-//   doctor:        order tests, read results
+//   doctor:        order tests, read results, acknowledge released results
 //   nurse:         read, collect specimens
-//   lab scientist: worklist, collect, enter, verify, amend, manage the catalog
+//   lab scientist: worklist, collect, enter, return, verify, amend, record critical calls, manage the catalog
 //   hospital admin: manage the catalog
 import express from 'express';
 import { requireEmrPermission as allow } from '../core/context.js';
@@ -41,10 +41,16 @@ labRoutes.post('/orders/:orderId/items/:itemId/verify', check(v.verify), allow('
   handle(async (req, res) => send(res, await service.verifyResults(req.emr, req.params.orderId, req.params.itemId, requireVersion(req)))));
 labRoutes.post('/orders/:orderId/items/:itemId/amend', check(v.amend), allow('lab.result.verify'),
   handle(async (req, res) => send(res, await service.amendResults(req.emr, req.params.orderId, req.params.itemId, requireVersion(req), req.body))));
+labRoutes.post('/orders/:orderId/items/:itemId/return', check(v.returnResults), allow('lab.result.verify'),
+  handle(async (req, res) => send(res, await service.returnForCorrection(req.emr, req.params.orderId, req.params.itemId, requireVersion(req), req.body))));
+labRoutes.post('/orders/:orderId/items/:itemId/acknowledge', check(v.acknowledge), allow('lab.order.create'),
+  handle(async (req, res) => send(res, await service.acknowledgeResults(req.emr, req.params.orderId, req.params.itemId, requireVersion(req)))));
+labRoutes.post('/orders/:orderId/items/:itemId/communicate', check(v.communicate), allow('lab.result.verify'),
+  handle(async (req, res) => send(res, await service.communicateCritical(req.emr, req.params.orderId, req.params.itemId, requireVersion(req), req.body))));
 
 export const encounterLabRoutes = express.Router({ mergeParams: true });
 
 encounterLabRoutes.get('/', check(v.encounterOrders), allow('clinical.read', 'lab.order.read'),
   handle(async (req, res) => sendItems(res, await service.listEncounterOrders(req.emr, req.params.encounterId))));
-encounterLabRoutes.post('/', check(v.orderTests), allow('lab.order.create'), 
+encounterLabRoutes.post('/', check(v.orderTests), allow('lab.order.create'),
   handle(async (req, res) => sendResult(res, await service.orderTests(req.emr, req.params.encounterId, req.body, { idempotencyKey: readIdempotencyKey(req) }))));

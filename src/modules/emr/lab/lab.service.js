@@ -13,6 +13,8 @@ import { enqueueEvent } from '../core/outbox.js';
 import { updateVersioned } from '../core/concurrency.js';
 import { nextSequence } from '../core/sequence.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
+import { activeMemberWithPermission } from '../core/membership.js';
+import { userNameMap } from '../core/people.js';
 import { requireOpen } from '../encounters/encounters.policy.js';
 import { DEFAULT_TESTS } from './lab.catalog.js';
 import * as policy from './lab.policy.js';
@@ -120,9 +122,26 @@ export async function listEncounterOrders(context, encounterId) {
   });
 }
 
-/** Lab worklist, oldest first (first in, first out); STAT/URGENT can be filtered for. */
-export async function worklist(context, { status, priority, patientId, limit, cursor }) {
-  const after = afterCursor('createdAt', cursor, 'asc');
+const ORDER_PEOPLE = ['orderedByUserId', 'collectedByUserId', 'cancelledByUserId'];
+const ITEM_PEOPLE = ['resultedByUserId', 'verifiedByUserId', 'returnedByUserId', 'acknowledgedByUserId', 'criticalCommunicatedByUserId', 'criticalCommunicatedToUserId'];
+const nameField = (field) => field.replace(/UserId$/, 'Name');
+
+/** Adds the display name beside every staff id on the orders and their tests (e.g. verifiedByName). */
+async function withStaffNames(tx, orders) {
+  const ids = orders.flatMap((order) => [...ORDER_PEOPLE.map((f) => order[f]), ...order.items.flatMap((item) => ITEM_PEOPLE.map((f) => item[f]))]);
+  const names = await userNameMap(tx, ids);
+  const named = (row, fields) => ({ ...row, ...Object.fromEntries(fields.map((f) => [nameField(f), names.get(row[f]) ?? null])) });
+  return orders.map((order) => ({ ...named(order, ORDER_PEOPLE), items: order.items.map((item) => named(item, ITEM_PEOPLE)) }));
+}
+
+/**
+ * Lab worklist with each test's current results and the staff names behind every step. Oldest
+ * first by default (first in, first out); newest first for recent results. STAT/URGENT can be
+ * filtered for.
+ */
+export async function worklist(context, { status, priority, patientId, limit, cursor, sort }) {
+  const direction = sort === 'newest' ? 'desc' : 'asc';
+  const after = afterCursor('createdAt', cursor, direction);
   return withTenant(context, async (tx) => {
     const rows = await tx.emrLabOrder.findMany({
       where: {
@@ -132,13 +151,13 @@ export async function worklist(context, { status, priority, patientId, limit, cu
         ...(patientId ? { patientId } : {}),
         ...after,
       },
-      include: { patient: labPatient, items: { select: { id: true, testCode: true, testName: true, specimenType: true, status: true }, orderBy: { testCode: 'asc' } } },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      include: { patient: labPatient, items: { include: { results: currentResults }, orderBy: { testCode: 'asc' } } },
+      orderBy: [{ createdAt: direction }, { id: direction }],
       take: limit + 1,
     });
     await recordAudit(tx, context, { action: 'lab_worklist.viewed', resourceType: 'lab_order' });
     const result = page(rows, limit, 'createdAt');
-    return { ...result, items: result.items.map(toOrder) };
+    return { ...result, items: (await withStaffNames(tx, result.items)).map(toOrder) };
   });
 }
 
@@ -263,6 +282,51 @@ export async function verifyResults(context, orderId, itemId, expectedVersion) {
   });
 }
 
+/** Send an unverified result back to the bench for correction; it is re-entered, then verified. */
+export async function returnForCorrection(context, orderId, itemId, expectedVersion, { reason }) {
+  return withTenant(context, async (tx) => {
+    const order = await lockOrder(tx, context, orderId);
+    const item = await loadItem(tx, context, order, itemId);
+    if (item.status !== 'RESULTED') throw new EmrError('INVALID_STATE', { message: 'Only a result awaiting verification can be sent back.' });
+    await updateItem(tx, context, itemId, expectedVersion, { status: 'PENDING', returnReason: reason, returnedAt: new Date(), returnedByUserId: context.userId });
+    await recordAudit(tx, context, { action: 'lab_result.returned', resourceType: 'lab_order_item', resourceId: itemId });
+    return itemWithResults(tx, context, itemId);
+  });
+}
+
+/** The clinician confirms they have seen a released result (once). */
+export async function acknowledgeResults(context, orderId, itemId, expectedVersion) {
+  return withTenant(context, async (tx) => {
+    const order = await lockOrder(tx, context, orderId);
+    const item = await loadItem(tx, context, order, itemId);
+    if (item.status !== 'VERIFIED') throw new EmrError('INVALID_STATE', { message: 'Only released results can be acknowledged.' });
+    if (item.acknowledgedAt) throw new EmrError('INVALID_STATE', { message: 'This result has already been acknowledged.' });
+    await updateItem(tx, context, itemId, expectedVersion, { acknowledgedAt: new Date(), acknowledgedByUserId: context.userId });
+    await recordAudit(tx, context, { action: 'lab_result.acknowledged', resourceType: 'lab_order_item', resourceId: itemId });
+    await enqueueEvent(tx, context, { type: 'lab.result.acknowledged', aggregateType: 'lab_order', aggregateId: orderId, data: { orderId, itemId, patientId: order.patientId } });
+    return itemWithResults(tx, context, itemId);
+  });
+}
+
+/** Records that the lab told a clinician about an abnormal or critical released result. */
+export async function communicateCritical(context, orderId, itemId, expectedVersion, { toUserId }) {
+  // The recipient must be a clinician of this hospital who can act on results (identity tables).
+  if (!await activeMemberWithPermission(context.organizationId, toUserId, 'lab.order.create')) {
+    throw new EmrError('VALIDATION_FAILED', { details: [{ field: 'toUserId', message: 'must be an active clinician of this organization' }] });
+  }
+  return withTenant(context, async (tx) => {
+    const order = await lockOrder(tx, context, orderId);
+    const item = await loadItem(tx, context, order, itemId);
+    if (item.status !== 'VERIFIED') throw new EmrError('INVALID_STATE', { message: 'Only released results can be communicated.' });
+    if (item.criticalCommunicatedAt) throw new EmrError('INVALID_STATE', { message: 'This result has already been communicated.' });
+    const released = await itemWithResults(tx, context, itemId);
+    if (!released.results.some((r) => r.flag && r.flag !== 'NORMAL')) throw new EmrError('INVALID_STATE', { message: 'Only abnormal results are communicated this way.' });
+    await updateItem(tx, context, itemId, expectedVersion, { criticalCommunicatedAt: new Date(), criticalCommunicatedByUserId: context.userId, criticalCommunicatedToUserId: toUserId });
+    await recordAudit(tx, context, { action: 'lab_result.communicated', resourceType: 'lab_order_item', resourceId: itemId });
+    return itemWithResults(tx, context, itemId);
+  });
+}
+
 /** Correct a released test. The old values stay, marked SUPERSEDED, with who/when/why. */
 export async function amendResults(context, orderId, itemId, expectedVersion, { reason, results }) {
   return withTenant(context, async (tx) => {
@@ -278,7 +342,11 @@ export async function amendResults(context, orderId, itemId, expectedVersion, { 
     await tx.emrLabResult.createMany({
       data: rows.map((row) => ({ ...row, organizationId: context.organizationId, itemId, status: 'FINAL', enteredByUserId: context.userId, amendmentReason: reason })),
     });
-    await updateItem(tx, context, itemId, expectedVersion, { amendedAt: now });
+    // Corrected values are new information: the clinician must see (and acknowledge) them again.
+    await updateItem(tx, context, itemId, expectedVersion, {
+      amendedAt: now, acknowledgedAt: null, acknowledgedByUserId: null,
+      criticalCommunicatedAt: null, criticalCommunicatedByUserId: null, criticalCommunicatedToUserId: null,
+    });
     await recordAudit(tx, context, { action: 'lab_result.amended', resourceType: 'lab_order_item', resourceId: itemId, changedFields: rows.map((r) => r.analyteCode) });
     await announce(tx, context, { type: 'lab.result.amended', order, itemId, rows });
     return itemWithResults(tx, context, itemId);

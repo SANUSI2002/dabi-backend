@@ -15,6 +15,21 @@ export async function activeMemberWithPermission(organizationId, userId, permiss
   return !!membership;
 }
 
+/** Active colleagues whose role grants `permission`, as { userId, name }, by name. Names only. */
+export async function activeMembersWithPermission(organizationId, permission) {
+  const memberships = await prisma.organizationMembership.findMany({
+    where: {
+      organizationId, status: 'ACTIVE',
+      user: { accountStatus: 'ACTIVE' },
+      roles: { some: { role: { permissions: { some: { permissionCode: permission } } } } },
+    },
+    select: { user: { select: { id: true, full_name: true } } },
+  });
+  return memberships
+    .map(({ user }) => ({ userId: user.id, name: user.full_name }))
+    .sort((left, right) => (left.name ?? '').localeCompare(right.name ?? ''));
+}
+
 /** True when the user has an ACTIVE membership in the organization holding `roleCode`. */
 export async function activeMemberWithRole(organizationId, userId, roleCode) {
   const membership = await prisma.organizationMembership.findFirst({
