@@ -124,6 +124,9 @@ describe('UC-8: role permissions', () => {
     expect((await as(nurse).post(`/encounters/${visit.id}/vitals`, { readings: [{ code: 'TEMPERATURE', value: 37.2 }] })).status).toBe(201);
     const muac = await as(nurse).post(`/encounters/${visit.id}/vitals`, { readings: [{ code: 'MUAC', value: 11.2 }] });
     expect(muac.body.data.items).toEqual([expect.objectContaining({ code: 'MUAC', unit: 'cm' })]);
+    const recorded = (await as(doctor).get(`/encounters/${visit.id}/vitals`)).body.data.items;
+    const nurseName = (await prisma.user.findUnique({ where: { id: nurse.userId }, select: { full_name: true } })).full_name;
+    expect(recorded.every((reading) => reading.recordedByName === nurseName)).toBe(true);
     expect((await as(nurse).post(`/encounters/${visit.id}/vitals`, { readings: [{ code: 'MUAC', value: 90 }] })).status).toBe(400);
     const nursing = await as(nurse).post(`/encounters/${visit.id}/notes`, { kind: 'NURSING', body: 'Patient settled, obs stable.' });
     expect(nursing.status).toBe(201);

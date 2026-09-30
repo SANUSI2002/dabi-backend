@@ -7,6 +7,7 @@ import { recordAudit, changedFieldNames } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
 import { afterCursor } from '../core/cursor.js';
 import { markEnteredInError } from '../core/entries.js';
+import { withUserNames } from '../core/people.js';
 import { enqueueEvent } from '../core/outbox.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
 import { findPatient } from '../patients/patients.repository.js';
@@ -188,7 +189,7 @@ export async function listVitals(context, encounterId) {
     await loadEncounter(tx, context, encounterId);
     const rows = await tx.emrObservation.findMany({ where: { organizationId: context.organizationId, encounterId }, orderBy: [{ recordedAt: 'asc' }, { code: 'asc' }] });
     await recordAudit(tx, context, { action: 'vitals.viewed', resourceType: 'encounter', resourceId: encounterId });
-    return rows.map(toObservation);
+    return (await withUserNames(tx, rows, 'recordedByUserId', 'recordedByName')).map(toObservation);
   });
 }
 

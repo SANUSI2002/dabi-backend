@@ -8,6 +8,7 @@ import { withTenant } from '../core/db.js';
 import { recordAudit } from '../core/audit.js';
 import { updateVersioned } from '../core/concurrency.js';
 import { EmrError } from '../core/errors.js';
+import { withUserNames } from '../core/people.js';
 import { OPEN_STATUSES } from '../encounters/encounters.policy.js';
 
 const ACTIVE_STATUSES = ['WAITING', 'IN_PROGRESS'];
@@ -50,14 +51,6 @@ export async function closeForEncounter(tx, context, encounterId) {
   await event(tx, context, { ...entry, status: 'COMPLETED' }, 'CLOSED');
 }
 
-/** Adds each assignee's display name (the request role may read users' id and full_name only). */
-async function withAssignees(tx, rows) {
-  const ids = [...new Set(rows.map((row) => row.assignedToUserId).filter(Boolean))];
-  const users = ids.length ? await tx.$queryRaw`SELECT "id", "full_name" AS "name" FROM "users" WHERE "id" = ANY(${ids}::text[])` : [];
-  const names = new Map(users.map((user) => [user.id, user.name]));
-  return rows.map((row) => ({ ...row, assignedToName: names.get(row.assignedToUserId) ?? null }));
-}
-
 export async function listQueue(context, { station, status, limit }) {
   return withTenant(context, async (tx) => {
     const rows = await tx.emrQueueEntry.findMany({
@@ -73,7 +66,7 @@ export async function listQueue(context, { station, status, limit }) {
     });
     await recordAudit(tx, context, { action: 'queue.viewed', resourceType: 'queue' });
     const now = Date.now();
-    return (await withAssignees(tx, rows)).map((row) => toEntry(row, now));
+    return (await withUserNames(tx, rows, 'assignedToUserId', 'assignedToName')).map((row) => toEntry(row, now));
   });
 }
 
@@ -96,7 +89,7 @@ export async function callNext(context, { station = null }) {
     const entry = await tx.emrQueueEntry.findFirst({ where: { organizationId: context.organizationId, id: next.id }, select: entrySelect });
     await event(tx, context, entry, 'CALLED');
     await recordAudit(tx, context, { action: 'queue.called', resourceType: 'queue_entry', resourceId: entry.id });
-    return toEntry((await withAssignees(tx, [entry]))[0]);
+    return toEntry((await withUserNames(tx, [entry], 'assignedToUserId', 'assignedToName'))[0]);
   });
 }
 
