@@ -44,6 +44,7 @@ router.get('/practice/slots', validate(v.practiceSlots), handle((q) => s.practic
 router.post('/practice/slots', validate(v.createSlots), handle((q) => s.createSlots(q.user.id, q.body), true));
 router.delete('/practice/slots/:id', validate(v.slotId), handle((q) => s.cancelSlot(q.user.id, q.params.id)));
 router.get('/practice/appointments', validate(v.practiceQueue), handle((q) => s.practiceQueue(q.user.id, q.query)));
+router.get('/practice/appointments/:id', validate(v.appointmentId), handle((q) => s.practiceAppointmentDetail(q.user.id, q.params.id)));
 router.post('/practice/appointments/:id/confirm', validate(v.confirm), handle((q) => s.confirm(q.user.id, q.params.id, q.body)));
 router.patch('/practice/appointments/:id/meeting-link', validate(v.meetingLink), handle((q) => s.setMeetingLink(q.user.id, q.params.id, q.body)));
 router.post('/practice/appointments/:id/decline', validate(v.decline), handle((q) => s.decline(q.user.id, q.params.id, q.body)));

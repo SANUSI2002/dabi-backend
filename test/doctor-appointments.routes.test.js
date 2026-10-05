@@ -89,6 +89,15 @@ describe('patient booking', () => {
 });
 
 describe('doctor workspace', () => {
+  it('reads a single appointment only for the verified doctor who owns it', async () => {
+    const result = await request(app).get(`/doctor-appointments/practice/appointments/${appt}`).set(auth(doctorUser));
+    expect(result.status).toBe(200);
+    expect(db.doctorAppointment.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: appt, doctorProfileId: doctorProfile } }));
+    db.doctorAppointment.findFirst.mockResolvedValueOnce(null);
+    expect((await request(app).get(`/doctor-appointments/practice/appointments/${uid(99)}`).set(auth(doctorUser))).status).toBe(404);
+    expect((await request(app).get(`/doctor-appointments/practice/appointments/${appt}`).set(auth(patient))).status).toBe(403);
+    expect((await request(app).get(`/doctor-appointments/practice/appointments/${appt}`)).status).toBe(401);
+  });
   it('refuses anyone who is not a verified doctor', async () => {
     expect((await request(app).get('/doctor-appointments/practice/appointments').set(auth(patient))).status).toBe(403);
     expect((await request(app).post('/doctor-appointments/practice/slots').set(auth(patient)).send({ slots: [{ startsAt: inHours(30), endsAt: inHours(30.5), consultationTypes: ['VIRTUAL'] }] })).status).toBe(403);
@@ -144,7 +153,7 @@ describe('doctor workspace', () => {
     const res = await request(app).get('/doctor-appointments/practice/appointments').set(auth(doctorUser));
     expect(res.body.data.items[0]).toMatchObject({ patient: { name: 'Pat Ient', patientId: '#SHM1' }, dependent: { name: 'Kid' } });
     const select = db.doctorAppointment.findMany.mock.calls[0][0].select;
-    expect(select.patient).toEqual({ select: { full_name: true, patientId: true } });
+    expect(select.patient).toEqual({ select: { id: true, full_name: true, patientId: true } });
     expect(db.doctorAppointment.findMany.mock.calls[0][0].where).toMatchObject({ doctorProfileId: doctorProfile });
   });
 });
