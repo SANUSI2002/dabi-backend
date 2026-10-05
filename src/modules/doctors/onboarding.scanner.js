@@ -8,7 +8,7 @@ import { enabled } from './onboarding.service.js';
 export async function processDoctorCredentialJob({ db = prisma, client = privateStorageClient(), scan = scanEvidence } = {}) {
   if (!enabled()) return false;
   const now = new Date();
-  const candidates = await db.doctorCredential.findMany({ where: { scanStatus: 'PENDING', OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }], application: { professional: { verificationStatus: { in: ['PENDING', 'REJECTED'] } } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 10 });
+  const candidates = await db.doctorCredential.findMany({ where: { scanStatus: 'PENDING', OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }], application: { professional: { verificationStatus: { in: ['PENDING', 'REJECTED'] } } } }, include: { application: { select: { professional: { select: { userId: true } } } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 10 });
   for (const doc of candidates) {
     const lease = crypto.randomUUID();
     const claim = await db.doctorCredential.updateMany({ where: { id: doc.id, scanStatus: 'PENDING', OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }] }, data: { scanLeaseToken: lease, scanLeaseExpiresAt: new Date(Date.now() + 300000), scanAttempts: { increment: 1 } } });
@@ -45,7 +45,9 @@ export async function processDoctorCredentialJob({ db = prisma, client = private
     }
     await db.$transaction(async (tx) => {
       const changed = await tx.doctorCredential.updateMany({ where: { id: doc.id, scanStatus: 'PENDING', scanLeaseToken: lease }, data: { scanLeaseToken: null, scanLeaseExpiresAt: null, ...data } });
-      if (changed.count) await tx.activityLog.create({ data: { userId: null, type: `DOCTOR_SCAN_${data.scanStatus}`, description: 'Doctor credential malware screening', meta: { credentialId: doc.id, scanStatus: data.scanStatus, code: data.scanErrorCode, provider: process.env.EVIDENCE_SCANNER_PROVIDER || 'clamav' } } });
+      // ActivityLog is account-scoped and requires a real user FK. The actor
+      // remains explicitly the system scanner, not the doctor or reviewer.
+      if (changed.count) await tx.activityLog.create({ data: { userId: doc.application.professional.userId, type: `DOCTOR_SCAN_${data.scanStatus}`, description: 'Background doctor credential malware screening', meta: { actorKind: 'SYSTEM_SCANNER', credentialId: doc.id, scanStatus: data.scanStatus, code: data.scanErrorCode, provider: process.env.EVIDENCE_SCANNER_PROVIDER || 'clamav' } } });
     });
     return true;
   }
