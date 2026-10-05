@@ -168,23 +168,28 @@ export async function processEvidenceJob({ db = prisma, client = privateStorageC
   }
 }
 
+export function createEvidencePoller({ hospital = processEvidenceJob, doctor = async () => (await import('../doctors/onboarding.scanner.js')).processDoctorCredentialJob(), report = (queue, code) => console.error(`[evidence-scanner] ${queue} poll failed (${code}); the job remains queued.`) } = {}) {
+  let running = false;
+  let doctorTurn = false;
+  return async () => {
+    if (running) return;
+    running = true;
+    const queue = process.env.DOCTOR_REGISTRATION_ENABLED === 'true' && doctorTurn ? 'doctor' : 'hospital';
+    // Advance before awaiting: a failed hospital query must not starve all
+    // doctor credentials (or vice versa) on every subsequent interval.
+    doctorTurn = !doctorTurn;
+    try {
+      await (queue === 'doctor' ? doctor() : hospital());
+    }
+    catch (error) { report(queue, /^[A-Z][A-Z0-9_]{2,64}$/.test(error?.code || '') ? error.code : 'QUEUE_UNAVAILABLE'); }
+    finally { running = false; }
+  };
+}
+
 export function startEvidenceScanner() {
   if (!evidenceScannerConfigured()) return () => {};
   if (evidenceScannerProvider() === 'clamav') clamdAddress();
-  let running = false;
-  let doctorTurn = false;
-  const poll = async () => {
-    if (running) return;
-    running = true;
-    try {
-      if (process.env.DOCTOR_REGISTRATION_ENABLED === 'true' && doctorTurn) {
-        await (await import('../doctors/onboarding.scanner.js')).processDoctorCredentialJob();
-      } else await processEvidenceJob();
-      doctorTurn = !doctorTurn;
-    }
-    catch { console.error('[evidence-scanner] Poll failed; the job remains queued.'); }
-    finally { running = false; }
-  };
+  const poll = createEvidencePoller();
   const timer = setInterval(poll, 15_000);
   timer.unref();
   void poll();
