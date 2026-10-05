@@ -4,6 +4,8 @@ import { Buffer } from 'node:buffer';
 import { setInterval, clearInterval } from 'node:timers';
 import prisma from '../../config/db.js';
 import { assertPrivateBucket, PRIVATE_BUCKETS, privateStorageClient } from '../../config/privateStorage.js';
+import { evidenceScannerConfigured, evidenceScannerProvider } from '../../config/evidenceScanner.js';
+import { scanWithCloudmersive } from './platform.cloudmersive.js';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_ATTEMPTS = 5;
@@ -71,16 +73,20 @@ export async function scanWithClamd(bytes) {
   throw new Error('CLAMD_SCAN_UNCERTAIN');
 }
 
+export const scanEvidence = (bytes, job) => evidenceScannerProvider() === 'cloudmersive'
+  ? scanWithCloudmersive(bytes, job) : scanWithClamd(bytes);
+const queuedStatuses = () => evidenceScannerProvider() === 'cloudmersive' ? ['PENDING', 'UNSCANNED_EXCEPTION'] : ['PENDING'];
+
 export async function claimEvidenceJob(db = prisma, now = new Date()) {
   const candidates = await db.platformApplicationEvidence.findMany({
-    where: { scanStatus: 'PENDING', OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }],
+    where: { scanStatus: { in: queuedStatuses() }, OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }],
       application: { status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'NEEDS_INFORMATION'] } } },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 10,
   });
   for (const candidate of candidates) {
     const lease = crypto.randomUUID();
     const result = await db.platformApplicationEvidence.updateMany({
-      where: { id: candidate.id, scanStatus: 'PENDING', OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }] },
+      where: { id: candidate.id, scanStatus: candidate.scanStatus, OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }] },
       data: { scanLeaseToken: lease, scanLeaseExpiresAt: new Date(now.getTime() + LEASE_MS), scanAttempts: { increment: 1 }, scanErrorCode: null },
     });
     if (result.count === 1) return { ...candidate, scanLeaseToken: lease, scanAttempts: candidate.scanAttempts + 1 };
@@ -114,14 +120,14 @@ async function releaseCleanObject(client, job, bytes) {
 
 async function markScan(db, job, data, eventType, details) {
   return db.$transaction(async (tx) => {
-    const changed = await tx.platformApplicationEvidence.updateMany({ where: { id: job.id, scanStatus: 'PENDING', scanLeaseToken: job.scanLeaseToken }, data });
+    const changed = await tx.platformApplicationEvidence.updateMany({ where: { id: job.id, scanStatus: job.scanStatus, scanLeaseToken: job.scanLeaseToken }, data });
     if (changed.count !== 1) return false;
-    await tx.platformApplicationEvidenceEvent.create({ data: { evidenceId: job.id, eventType, actorKind: 'CLAMD_SCANNER', details } });
+    await tx.platformApplicationEvidenceEvent.create({ data: { evidenceId: job.id, eventType, actorKind: evidenceScannerProvider() === 'cloudmersive' ? 'CLOUDMERSIVE_SCANNER' : 'CLAMD_SCANNER', details } });
     return true;
   });
 }
 
-export async function processEvidenceJob({ db = prisma, client = privateStorageClient(), scan = scanWithClamd } = {}) {
+export async function processEvidenceJob({ db = prisma, client = privateStorageClient(), scan = scanEvidence } = {}) {
   const job = await claimEvidenceJob(db);
   if (!job) return false;
   if (job.scanAttempts > MAX_ATTEMPTS) {
@@ -131,12 +137,16 @@ export async function processEvidenceJob({ db = prisma, client = privateStorageC
   try {
     if (job.storageBucket !== PRIVATE_BUCKETS.hospitalEvidenceQuarantine) throw new Error('EVIDENCE_QUARANTINE_MISMATCH');
     const bytes = await downloadVerified(client, job.storageBucket, job.storageKey, job);
-    const result = await scan(bytes);
+    const result = scan === scanEvidence ? await scan(bytes, job) : await scan(bytes);
     if (result.verdict === 'INFECTED') {
       await markScan(db, job, { scanStatus: 'INFECTED', scannedAt: new Date(), scannerVersion: result.scannerVersion, scanLeaseToken: null, scanLeaseExpiresAt: null }, 'SCAN_INFECTED', { signature: result.signature, sha256: job.sha256 });
       return true;
     }
-    if (result.verdict !== 'CLEAN' || !result.scannerVersion) throw new Error('CLAMD_SCAN_UNCERTAIN');
+    if (result.verdict === 'REJECTED') {
+      await markScan(db, job, { scanStatus: 'REJECTED', scannedAt: new Date(), scannerVersion: result.scannerVersion, scanErrorCode: 'UNSAFE_DOCUMENT_CONTENT', scanLeaseToken: null, scanLeaseExpiresAt: null }, 'SCAN_REJECTED', { sha256: job.sha256 });
+      return true;
+    }
+    if (result.verdict !== 'CLEAN' || !result.scannerVersion) throw new Error('EVIDENCE_SCAN_UNCERTAIN');
     const released = await releaseCleanObject(client, job, bytes);
     const committed = await markScan(db, job, { scanStatus: 'CLEAN', storageBucket: released.bucket, storageKey: released.path, scannedAt: new Date(), scannerVersion: result.scannerVersion, scanLeaseToken: null, scanLeaseExpiresAt: null }, 'SCAN_CLEAN', { sha256: job.sha256, scannerVersion: result.scannerVersion });
     if (committed) {
@@ -148,7 +158,7 @@ export async function processEvidenceJob({ db = prisma, client = privateStorageC
     return true;
   } catch (error) {
     const code = /^[A-Z_]{4,64}$/.test(error?.message || '') ? error.message : 'EVIDENCE_SCAN_FAILED';
-    const terminal = job.scanAttempts >= MAX_ATTEMPTS || ['EVIDENCE_INTEGRITY_MISMATCH', 'EVIDENCE_QUARANTINE_MISMATCH', 'EVIDENCE_CONTENT_TYPE_INVALID'].includes(code);
+    const terminal = job.scanAttempts >= MAX_ATTEMPTS || ['EVIDENCE_INTEGRITY_MISMATCH', 'EVIDENCE_QUARANTINE_MISMATCH', 'EVIDENCE_CONTENT_TYPE_INVALID', 'CLOUDMERSIVE_FILE_TOO_LARGE', 'CLOUDMERSIVE_FORMAT_MISMATCH'].includes(code);
     await markScan(db, job, {
       scanStatus: terminal ? 'FAILED' : 'PENDING', scanErrorCode: code, scanLeaseToken: null,
       scanLeaseExpiresAt: terminal ? null : new Date(Date.now() + Math.min(30, 2 ** job.scanAttempts) * 60_000),
@@ -159,8 +169,8 @@ export async function processEvidenceJob({ db = prisma, client = privateStorageC
 }
 
 export function startEvidenceScanner() {
-  if (process.env.EVIDENCE_SCANNER_ENABLED !== 'true') return () => {};
-  clamdAddress();
+  if (!evidenceScannerConfigured()) return () => {};
+  if (evidenceScannerProvider() === 'clamav') clamdAddress();
   let running = false;
   const poll = async () => {
     if (running) return;

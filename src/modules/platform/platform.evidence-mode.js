@@ -1,6 +1,9 @@
+import { evidenceScannerConfigured, evidenceScannerProvider } from '../../config/evidenceScanner.js';
 // Deliberately separate from scanner CLEAN. This short-lived exception is only
 // for the disposable test service while no always-on scanner host exists.
 export function unscannedExceptionEnabled(now = new Date()) {
+  // Selecting a hosted scanner must never silently fall back to unscanned access.
+  if (evidenceScannerProvider() === 'cloudmersive') return false;
   if (process.env.HOSPITAL_UNSCANNED_EXCEPTION_ENABLED !== 'true') return false;
   const raw = process.env.HOSPITAL_UNSCANNED_EXCEPTION_UNTIL;
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(raw ?? '')) return false;
@@ -9,4 +12,4 @@ export function unscannedExceptionEnabled(now = new Date()) {
 }
 
 export const evidenceWorkflowAvailable = () =>
-  process.env.EVIDENCE_SCANNER_ENABLED === 'true' || unscannedExceptionEnabled();
+  evidenceScannerConfigured() || unscannedExceptionEnabled();

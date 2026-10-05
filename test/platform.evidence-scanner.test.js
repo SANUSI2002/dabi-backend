@@ -24,6 +24,7 @@ const { processEvidenceJob, scanWithClamd } = await import('../src/modules/platf
 const originalClamdHost = process.env.CLAMD_HOST;
 const originalClamdPort = process.env.CLAMD_PORT;
 afterEach(() => {
+  vi.unstubAllEnvs();
   if (originalClamdHost === undefined) delete process.env.CLAMD_HOST; else process.env.CLAMD_HOST = originalClamdHost;
   if (originalClamdPort === undefined) delete process.env.CLAMD_PORT; else process.env.CLAMD_PORT = originalClamdPort;
 });
@@ -41,6 +42,29 @@ beforeEach(() => {
 });
 
 describe('asynchronous evidence scanner', () => {
+  it('quarantines content-policy rejections without publishing a clean object', async () => {
+    vi.stubEnv('EVIDENCE_SCANNER_PROVIDER', 'cloudmersive');
+    const scan = vi.fn(async () => ({ verdict: 'REJECTED', scannerVersion: 'Cloudmersive advanced API v1' }));
+    expect(await processEvidenceJob({ db, client, scan })).toBe(true);
+    expect(clean.upload).not.toHaveBeenCalled();
+    expect(db.platformApplicationEvidence.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ scanStatus: 'REJECTED' }) }));
+    expect(db.platformApplicationEvidenceEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ eventType: 'SCAN_REJECTED', actorKind: 'CLOUDMERSIVE_SCANNER' }) });
+  });
+  it('scans previous pending exceptions without mislabeling them clean', async () => {
+    vi.stubEnv('EVIDENCE_SCANNER_PROVIDER', 'cloudmersive');
+    db.platformApplicationEvidence.findMany.mockResolvedValue([{ ...job, scanStatus: 'UNSCANNED_EXCEPTION' }]);
+    const scan = vi.fn(async () => ({ verdict: 'CLEAN', scannerVersion: 'Cloudmersive advanced API v1' }));
+    expect(await processEvidenceJob({ db, client, scan })).toBe(true);
+    expect(db.platformApplicationEvidence.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ scanStatus: { in: ['PENDING', 'UNSCANNED_EXCEPTION'] } }) }));
+    expect(db.platformApplicationEvidence.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ scanStatus: 'UNSCANNED_EXCEPTION' }), data: expect.objectContaining({ scanStatus: 'CLEAN' }) }));
+  });
+  it('does not publish a stale worker result when a lease changed', async () => {
+    db.platformApplicationEvidence.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    const scan = vi.fn(async () => ({ verdict: 'CLEAN', scannerVersion: 'Cloudmersive advanced API v1' }));
+    expect(await processEvidenceJob({ db, client, scan })).toBe(true);
+    expect(db.platformApplicationEvidenceEvent.create).not.toHaveBeenCalled();
+    expect(quarantine.remove).not.toHaveBeenCalled();
+  });
   it('uses the ClamAV INSTREAM protocol and accepts a fresh clean verdict', async () => {
     const received = [];
     const server = net.createServer((socket) => {
