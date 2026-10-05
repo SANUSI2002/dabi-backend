@@ -31,6 +31,8 @@ describe('Cloudmersive credential scanner', () => {
     expect(Buffer.from(await file.arrayBuffer())).toEqual(bytes);
     expect(JSON.stringify(options.headers)).not.toContain(job.fileName);
     expect(options.headers.restrictFileTypes).toBe('.pdf,.jpg,.jpeg,.png');
+    expect(options.headers.allowOleEmbeddedObject).toBe('false');
+    expect(options.headers.allowUnwantedAction).toBe('false');
   });
   it('requires the explicit credential-processing gate and configured key', async () => {
     vi.stubEnv('CLOUDMERSIVE_CREDENTIAL_PROCESSING_APPROVED', 'false');
@@ -51,7 +53,13 @@ describe('Cloudmersive credential scanner', () => {
   it.each(['ContainsScript', 'ContainsMacros', 'ContainsPasswordProtectedFile', 'ContainsInvalidFile', 'ContainsExecutable', 'ContainsRestrictedFileFormat', 'ContainsUnsafeArchive'])('rejects unsafe %s content even with CleanResult=true', async (key) => {
     await expect(scanWithCloudmersive(bytes, job, async () => response({ ...clean, [key]: true }))).resolves.toMatchObject({ verdict: 'REJECTED' });
   });
-  it.each([{}, { CleanResult: 'true', FoundViruses: [] }, { ...clean, FoundViruses: null }, { ...clean, ContainsScript: 'false' }])('fails closed on malformed response %j', async (data) => {
+  it('accepts the observed null-virus PNG response only when all safety checks pass', async () => {
+    const observed = { ...clean, FoundViruses: null, VerifiedFileFormat: '.png' };
+    await expect(scanWithCloudmersive(bytes, { contentType: 'image/png' }, async () => response(observed))).resolves.toMatchObject({ verdict: 'CLEAN' });
+    await expect(scanWithCloudmersive(bytes, { contentType: 'image/png' }, async () => response({ ...observed, ContainsScript: true }))).resolves.toMatchObject({ verdict: 'REJECTED' });
+    await expect(scanWithCloudmersive(bytes, { contentType: 'image/png' }, async () => response({ ...observed, CleanResult: false }))).resolves.toMatchObject({ verdict: 'REJECTED' });
+  });
+  it.each([{}, { CleanResult: 'true', FoundViruses: [] }, { ...clean, FoundViruses: undefined }, { ...clean, FoundViruses: {} }, { ...clean, ContainsScript: 'false' }])('fails closed on malformed response %j', async (data) => {
     await expect(scanWithCloudmersive(bytes, job, async () => response(data))).rejects.toThrow('CLOUDMERSIVE_REPLY_INVALID');
   });
   it('rejects file type mismatch', async () => {

@@ -21,7 +21,7 @@ Official references: [API](https://api.cloudmersive.com/docs/virus.asp), [plan l
 
 ## Limits and failure handling
 
-Conservative default: 3,500,000 bytes per file (free plan currently 3.5 MB, 600 calls/month, 1 call/sec). Our single worker polls every 15 seconds. A paid plan may support a larger size; setting a larger server limit does **not** purchase that plan. The application's absolute cap stays 10 MiB.
+Conservative default: 3,500,000 bytes per file. The Sabi free test key dashboard showed 800 calls/month and 1 call/sec on 5 October 2026; check the account dashboard for current limits. Our single worker polls every 15 seconds. A paid plan may support a larger size; setting a larger server limit does **not** purchase that plan. The application's absolute cap stays 10 MiB.
 
 - CLEAN requires a boolean clean result, no identified viruses, no affirmative unsafe-content flags, and a verified MIME-compatible file format.
 - Malware yields INFECTED; unsafe scripts/macros/password protection/invalid content yield REJECTED. Neither permits preview or approval.
