@@ -169,6 +169,7 @@ model ProfessionalProfile {
   doctorCareRelationships DoctorCareRelationship[]
   prescriptionsIssued Prescription[]
   wellnessProvider WellnessProvider?
+  doctorApplication DoctorApplication?
   // Public practice details the doctor edits in their workspace.
   bio                  String?                  @map("bio")
   yearsOfExperience    Int?                     @map("years_of_experience")
@@ -189,6 +190,46 @@ enum DoctorCareStatus {
   DECLINED
   REVOKED
   EXPIRED
+}
+
+model DoctorApplication {
+  id String @id @default(uuid())
+  professionalId String @unique
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  details Json
+  consentVersion String
+  consentAcceptedAt DateTime @default(now())
+  submittedAt DateTime?
+  createdAt DateTime @default(now())
+  credentials DoctorCredential[]
+}
+
+model DoctorCredential {
+  id String @id @default(uuid())
+  applicationId String
+  application DoctorApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  kind String
+  storageKey String @unique
+  storageBucket String @default("sabi-hospital-evidence-quarantine")
+  contentType String
+  byteSize Int
+  sha256 String
+  scanStatus String @default("PENDING")
+  scanAttempts Int @default(0)
+  scanLeaseToken String?
+  scanLeaseExpiresAt DateTime?
+  scanErrorCode String?
+  scannerVersion String?
+  scannedAt DateTime?
+  reviewStatus String @default("PENDING")
+  sourceName String?
+  reference String?
+  note String?
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([applicationId, kind, createdAt])
+  @@index([scanStatus, scanLeaseExpiresAt])
 }
 
 model DoctorCareRelationship {

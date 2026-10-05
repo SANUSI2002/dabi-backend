@@ -53,7 +53,7 @@ export const login = async (req, res, next) => {
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
     }
-    if (user.accountStatus === 'PENDING' && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT')) {
+    if (user.accountStatus === 'PENDING' && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT' || role === 'PROFESSIONAL')) {
       return res.status(403).json({ status: 'error', error: { code: 'EMAIL_VERIFICATION_REQUIRED', message: 'Verify your email before signing in.' } });
     }
     if (user.accountStatus && user.accountStatus !== 'ACTIVE') return res.status(401).json({ status: 'error', message: 'Invalid email or password' });

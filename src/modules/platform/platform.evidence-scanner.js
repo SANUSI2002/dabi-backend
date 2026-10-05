@@ -172,10 +172,16 @@ export function startEvidenceScanner() {
   if (!evidenceScannerConfigured()) return () => {};
   if (evidenceScannerProvider() === 'clamav') clamdAddress();
   let running = false;
+  let doctorTurn = false;
   const poll = async () => {
     if (running) return;
     running = true;
-    try { await processEvidenceJob(); }
+    try {
+      if (process.env.DOCTOR_REGISTRATION_ENABLED === 'true' && doctorTurn) {
+        await (await import('../doctors/onboarding.scanner.js')).processDoctorCredentialJob();
+      } else await processEvidenceJob();
+      doctorTurn = !doctorTurn;
+    }
     catch { console.error('[evidence-scanner] Poll failed; the job remains queued.'); }
     finally { running = false; }
   };

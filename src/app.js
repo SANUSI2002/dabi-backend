@@ -17,6 +17,7 @@ import healthMetricsRoutes from './modules/health-metrics/health-metrics.routes.
 import medicalRecordsRoutes from './modules/medical-records/medical-records.routes.js';
 import familyCareRoutes from './modules/family-care/family-care.routes.js';
 import professionalRoutes from './modules/professionals/professionals.routes.js';
+import { doctorOnboardingRoutes, platformDoctorRoutes } from './modules/doctors/onboarding.routes.js';
 import doctorCareRoutes from './modules/doctor-care/doctor-care.routes.js';
 import doctorAppointmentRoutes from './modules/doctor-appointments/doctor-appointments.routes.js';
 import prescriptionRoutes from './modules/prescriptions/prescriptions.routes.js';
@@ -95,6 +96,8 @@ app.use('/api/v1/health-metrics', healthMetricsRoutes);
 app.use('/api/v1/medical-records', medicalRecordsRoutes);
 app.use('/api/v1/family-care', familyCareRoutes);
 app.use('/api/v1/professionals', professionalRoutes);
+app.use('/api/v1/doctors', doctorOnboardingRoutes);
+app.use('/api/v1/platform/doctors', platformDoctorRoutes);
 app.use('/api/v1/doctor-care', doctorCareRoutes);
 // Before the /api/v1 payment router, which requires auth for every path it sees.
 app.use('/api/v1/doctor-appointments', doctorAppointmentRoutes);
