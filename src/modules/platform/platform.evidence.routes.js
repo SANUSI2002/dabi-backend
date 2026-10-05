@@ -10,6 +10,7 @@ import { validate } from '../../middleware/validateMiddleware.js';
 import { verificationEmailAllowedFor, verificationEmailConfigured } from '../auth/auth.email.js';
 import { requiredEvidence } from './platform.approval-readiness.js';
 import { evidenceWorkflowAvailable, unscannedExceptionEnabled } from './platform.evidence-mode.js';
+import { evidenceScannerConfigured, evidenceScannerProvider, evidenceUploadMaxBytes } from '../../config/evidenceScanner.js';
 
 export const evidenceRoutes = express.Router();
 export const platformEvidenceRoutes = express.Router();
@@ -36,7 +37,7 @@ const decisionRequest = z.object({
   ]), query: z.object({}).strict(), params: evidenceParams,
 });
 const errorResponse = (res, code, status) => res.status(status).set('Cache-Control', 'no-store').json({ status: 'error', error: { code, message: code.replaceAll('_', ' ').toLowerCase() } });
-const evidenceSelect = { id: true, requirementKey: true, fileName: true, contentType: true, sizeBytes: true, sha256: true, scanStatus: true, scannedAt: true, unscannedDownloadedAt: true, unscannedExceptionAt: true, reviewStatus: true, reviewedAt: true, createdAt: true };
+const evidenceSelect = { id: true, requirementKey: true, fileName: true, contentType: true, sizeBytes: true, sha256: true, scanStatus: true, scanErrorCode: true, scannedAt: true, unscannedDownloadedAt: true, unscannedExceptionAt: true, reviewStatus: true, reviewedAt: true, createdAt: true };
 const withErrors = (handler) => async (req, res, next) => { try { await handler(req, res); } catch (error) {
   if (error instanceof PrivateStorageError) return errorResponse(res, error.code, error.code === 'EVIDENCE_ACCESS_DENIED' ? 403 : error.code === 'PRIVATE_STORAGE_UPLOAD_INVALID' ? 400 : 503);
   return next(error);
@@ -93,7 +94,7 @@ evidenceRoutes.get('/:id/evidence', validate(listRequest), withErrors(async (req
   const application = await applicationForToken(req.params.id, req.get('X-Sabi-Evidence-Token'));
   if (!application) return errorResponse(res, 'EVIDENCE_ACCESS_DENIED', 403);
   const items = await prisma.platformApplicationEvidence.findMany({ where: { applicationId: application.id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100, select: evidenceSelect });
-  res.set('Cache-Control', 'no-store').json({ status: 'success', data: { requiredEvidence: requiredEvidence(application.details), items } });
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data: { requiredEvidence: requiredEvidence(application.details), items, maxUploadBytes: evidenceUploadMaxBytes(), scannerProvider: evidenceScannerConfigured() ? evidenceScannerProvider() : null } });
 }));
 
 const rawEvidence = express.raw({ type: ['application/pdf', 'image/jpeg', 'image/png'], limit: '10mb', inflate: false });
@@ -107,6 +108,7 @@ evidenceRoutes.put('/:id/evidence/:requirementKey', createLimiter({ kind: 'hospi
   if (!uuid.test(req.params.id) || !/^[A-Z_]{4,64}$/.test(req.params.requirementKey) || Object.keys(req.query).length) return errorResponse(res, 'EVIDENCE_UPLOAD_INVALID', 400);
   const contentType = req.get('Content-Type')?.toLowerCase();
   if (!['application/pdf', 'image/jpeg', 'image/png'].includes(contentType) || !Buffer.isBuffer(req.body)) return errorResponse(res, 'EVIDENCE_UPLOAD_INVALID', 415);
+  if (req.body.length > evidenceUploadMaxBytes()) return res.status(413).set('Cache-Control', 'no-store').json({ status: 'error', error: { code: 'EVIDENCE_TOO_LARGE', message: `File exceeds the scanner limit of ${evidenceUploadMaxBytes() / 1000000} MB. Compress or split the document, then upload again.` } });
   const application = await applicationForToken(req.params.id, req.get('X-Sabi-Evidence-Token'));
   if (!application) return errorResponse(res, 'EVIDENCE_ACCESS_DENIED', 403);
   const requirements = requiredEvidence(application.details);
@@ -150,7 +152,25 @@ platformEvidenceRoutes.get('/:id/evidence', validate(listRequest), withErrors(as
     return items;
   });
   if (!result) return errorResponse(res, 'APPLICATION_NOT_FOUND', 404);
-  res.set('Cache-Control', 'no-store').json({ status: 'success', data: { items: result, previewAvailable: evidenceReviewEnabled(), unscannedExceptionAvailable: unscannedExceptionEnabled() } });
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data: { items: result, previewAvailable: evidenceReviewEnabled(), unscannedExceptionAvailable: unscannedExceptionEnabled(), scannerProvider: evidenceScannerConfigured() ? evidenceScannerProvider() : null } });
+}));
+
+// Retry an operational failure, not a malicious/invalid-content verdict. The
+// next worker verifies the stored checksum again. No files are marked clean here.
+platformEvidenceRoutes.post('/:id/evidence/:evidenceId/retry-scan', requirePermission('platform.onboarding.approve'), createLimiter({ kind: 'evidence-rescan', max: 5 }), validate(previewRequest), withErrors(async (req, res) => {
+  if (!evidenceScannerConfigured() || !evidenceReviewEnabled()) return errorResponse(res, 'EVIDENCE_SCANNER_DISABLED', 503);
+  const result = await prisma.$transaction(async (tx) => {
+    const doc = await tx.platformApplicationEvidence.findFirst({ where: { id: req.params.evidenceId, applicationId: req.params.id, scanStatus: 'FAILED', storageBucket: PRIVATE_BUCKETS.hospitalEvidenceQuarantine,
+      scanErrorCode: { in: ['CLOUDMERSIVE_AUTH_FAILED', 'CLOUDMERSIVE_RATE_LIMITED', 'CLOUDMERSIVE_UNAVAILABLE', 'CLOUDMERSIVE_NOT_CONFIGURED', 'CLOUDMERSIVE_REPLY_INVALID', 'EVIDENCE_SCAN_FAILED', 'SCAN_LEASE_EXHAUSTED', 'CLAMD_CONNECTION_FAILED', 'CLAMD_TIMEOUT'] },
+      application: { status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'NEEDS_INFORMATION'] } } }, select: { id: true, sizeBytes: true } });
+    if (!doc || doc.sizeBytes > evidenceUploadMaxBytes()) return false;
+    const changed = await tx.platformApplicationEvidence.updateMany({ where: { id: doc.id, scanStatus: 'FAILED' }, data: { scanStatus: 'PENDING', scanAttempts: 0, scanErrorCode: null, scanLeaseToken: null, scanLeaseExpiresAt: null, scannedAt: null } });
+    if (changed.count !== 1) return false;
+    await tx.platformApplicationEvidenceEvent.create({ data: { evidenceId: doc.id, eventType: 'SCAN_REQUEUED', actorKind: 'PLATFORM_REVIEWER', actorId: req.user.id } });
+    return true;
+  });
+  if (!result) return errorResponse(res, 'EVIDENCE_RESCAN_NOT_ELIGIBLE', 409);
+  res.status(202).set('Cache-Control', 'no-store').json({ status: 'success', data: { id: req.params.evidenceId, scanStatus: 'PENDING' } });
 }));
 
 // This is a download, never an inline preview. The file remains marked

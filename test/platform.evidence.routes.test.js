@@ -79,6 +79,10 @@ beforeEach(() => {
   identity.findPlatformRoles.mockResolvedValue([{ role: { code: 'SABI_PLATFORM_ADMIN', permissions: [{ permissionCode: 'platform.onboarding.review' }, { permissionCode: 'platform.onboarding.approve' }] } }]);
 });
 afterEach(() => {
+  delete process.env.EVIDENCE_SCANNER_PROVIDER;
+  delete process.env.CLOUDMERSIVE_API_KEY;
+  delete process.env.CLOUDMERSIVE_CREDENTIAL_PROCESSING_APPROVED;
+  delete process.env.CLOUDMERSIVE_MAX_FILE_BYTES;
   globalThis.fetch = originalFetch;
   delete process.env.HOSPITAL_EVIDENCE_INTAKE_ENABLED;
   delete process.env.HOSPITAL_EVIDENCE_REVIEW_ENABLED;
@@ -88,6 +92,45 @@ afterEach(() => {
 });
 
 describe('email-proven hospital evidence intake', () => {
+  it('publishes the scanner upload limit without exposing any provider credentials', async () => {
+    process.env.EVIDENCE_SCANNER_PROVIDER = 'cloudmersive';
+    process.env.CLOUDMERSIVE_API_KEY = 'synthetic-secret';
+    process.env.CLOUDMERSIVE_CREDENTIAL_PROCESSING_APPROVED = 'true';
+    const response = await request(app).get(`/api/v1/applications/${applicationId}/evidence`).set(evidenceAuth);
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({ maxUploadBytes: 3500000, scannerProvider: 'cloudmersive' });
+    expect(JSON.stringify(response.body)).not.toContain('synthetic-secret');
+  });
+  it('rejects files above the hosted scanner limit before storage writes', async () => {
+    process.env.EVIDENCE_SCANNER_PROVIDER = 'cloudmersive';
+    process.env.CLOUDMERSIVE_API_KEY = 'synthetic-secret';
+    process.env.CLOUDMERSIVE_CREDENTIAL_PROCESSING_APPROVED = 'true';
+    process.env.CLOUDMERSIVE_MAX_FILE_BYTES = '10';
+    const response = await request(app).put(uploadPath).set(evidenceAuth).set('Content-Type', 'application/pdf').send(Buffer.from('%PDF-1.7\nmore than ten bytes'));
+    expect(response.status).toBe(413);
+    expect(uploadPrivateObject).not.toHaveBeenCalled();
+  });
+  it('requires reviewer authentication to requeue a failed scan', async () => {
+    const response = await request(app).post(`/api/v1/platform/applications/${applicationId}/evidence/${evidenceId}/retry-scan`).send({});
+    expect(response.status).toBe(401);
+    expect(db.platformApplicationEvidence.updateMany).not.toHaveBeenCalled();
+  });
+  it('requeues only operational failures in private quarantine and audits the reviewer', async () => {
+    process.env.HOSPITAL_EVIDENCE_REVIEW_ENABLED = 'true';
+    db.platformApplicationEvidence.findFirst.mockResolvedValue({ id: evidenceId, sizeBytes: 40 });
+    const response = await request(app).post(`/api/v1/platform/applications/${applicationId}/evidence/${evidenceId}/retry-scan`).set(auth()).send({});
+    expect(response.status).toBe(202);
+    expect(db.platformApplicationEvidence.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ scanStatus: 'FAILED', scanErrorCode: { in: expect.arrayContaining(['CLOUDMERSIVE_RATE_LIMITED']) }, storageBucket: 'sabi-hospital-evidence-quarantine' }) }));
+    expect(db.platformApplicationEvidence.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ scanStatus: 'PENDING', scanAttempts: 0 }) }));
+    expect(db.platformApplicationEvidenceEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ actorId: userId, eventType: 'SCAN_REQUEUED' }) }));
+  });
+  it('does not requeue infected or content-rejected evidence', async () => {
+    process.env.HOSPITAL_EVIDENCE_REVIEW_ENABLED = 'true';
+    db.platformApplicationEvidence.findFirst.mockResolvedValue(null);
+    const response = await request(app).post(`/api/v1/platform/applications/${applicationId}/evidence/${evidenceId}/retry-scan`).set(auth()).send({});
+    expect(response.status).toBe(409);
+    expect(db.platformApplicationEvidence.updateMany).not.toHaveBeenCalled();
+  });
   it('stays disabled without an explicit test flag', async () => {
     process.env.HOSPITAL_EVIDENCE_INTAKE_ENABLED = 'false';
     const result = await request(app).put(uploadPath).set(evidenceAuth).set('Content-Type', 'application/pdf').send(Buffer.from('%PDF-1.7'));
