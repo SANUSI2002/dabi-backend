@@ -28,7 +28,7 @@ const patientView = {
 const doctorView = {
   id: true, dependentId: true, slotId: true, startsAt: true, endsAt: true, consultationType: true, reason: true, status: true,
   decisionReason: true, meetingUrl: true, cancelledBy: true, confirmedAt: true, cancelledAt: true, completedAt: true, createdAt: true,
-  patient: { select: { full_name: true, patientId: true } },
+  patient: { select: { id: true, full_name: true, patientId: true } },
   dependent: { select: { fullName: true, dateOfBirth: true } },
 };
 const slotView = { id: true, startsAt: true, endsAt: true, consultationTypes: true, cancelledAt: true };
@@ -37,7 +37,7 @@ const toDoctor = (p) => p && ({ id: p.id, name: p.user?.full_name ?? null, speci
 const toPatientAppointment = ({ doctorProfile, ...a }) => ({ ...a, doctor: toDoctor(doctorProfile) });
 const toDoctorAppointment = ({ patient, dependent, ...a }) => ({
   ...a,
-  patient: { name: patient?.full_name ?? null, patientId: patient?.patientId ?? null },
+  patient: { userId: patient?.id ?? null, name: patient?.full_name ?? null, patientId: patient?.patientId ?? null },
   dependent: dependent ? { name: dependent.fullName, dateOfBirth: dependent.dateOfBirth } : null,
 });
 
@@ -230,6 +230,13 @@ export const practiceQueue = async (userId, q) => {
     prisma.doctorAppointment.count({ where }),
   ]);
   return { items: items.map(toDoctorAppointment), total, limit: q.limit, offset: q.offset };
+};
+
+export const practiceAppointmentDetail = async (userId, id) => {
+  const doctorId = await requireDoctor(prisma, userId);
+  const item = await prisma.doctorAppointment.findFirst({ where: { id, doctorProfileId: doctorId }, select: doctorView });
+  if (!item) throw fail('NOT_FOUND');
+  return toDoctorAppointment(item);
 };
 
 const doctorTransition = (type, buildWhere, buildData, after) => (userId, id, body = {}) => transaction(async (tx) => {
