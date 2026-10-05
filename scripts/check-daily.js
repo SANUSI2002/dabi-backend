@@ -14,6 +14,6 @@ try {
   console.log('[video-preflight] private room and two restricted tokens verified; no participants joined');
   passed = true;
 } catch (error) { console.error(`[video-preflight] failed: ${error.code || 'UNKNOWN'}${Number.isInteger(error.providerStatus) ? ` (provider HTTP ${error.providerStatus})` : ''}`); }
-finally { try { await provider.revoke(row); console.log('[video-preflight] synthetic room cleanup verified'); } catch (error) { console.error(`[video-preflight] synthetic room cleanup failed (${error.code || 'UNKNOWN'}${Number.isInteger(error.providerStatus) ? ` HTTP ${error.providerStatus}` : ''}); room expires automatically`); passed = false; } }
+finally { try { await provider.revoke(row); console.log('[video-preflight] synthetic room cleanup verified'); } catch (error) { console.error(`[video-preflight] synthetic room cleanup failed (${error.code || 'UNKNOWN'} ${error.providerOperation || 'UNKNOWN'}${Number.isInteger(error.providerStatus) ? ` HTTP ${error.providerStatus}` : ''}); room expires automatically`); passed = false; } }
 // Optional startup diagnostic must never prevent the API starting after a failed probe.
 if (!passed && !process.argv.includes('--startup')) process.exitCode = 1;

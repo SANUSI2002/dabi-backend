@@ -14,7 +14,7 @@ export function createDailyProvider({ env = process.env, fetcher = globalThis.fe
         ...(body ? { body: JSON.stringify(body) } : {}), signal: globalThis.AbortSignal.timeout(10000) });
     } catch { throw videoError('VIDEO_PROVIDER_UNAVAILABLE'); }
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw Object.assign(videoError(response.status === 429 ? 'VIDEO_PROVIDER_LIMIT' : 'VIDEO_PROVIDER_UNAVAILABLE', response.status === 404 ? 404 : 503), { providerStatus: response.status });
+    if (!response.ok) throw Object.assign(videoError(response.status === 429 ? 'VIDEO_PROVIDER_LIMIT' : 'VIDEO_PROVIDER_UNAVAILABLE', response.status === 404 ? 404 : 503), { providerStatus: response.status, providerOperation: method === 'DELETE' ? 'DELETE_ROOM' : path.endsWith('/eject') ? 'EJECT' : path === '/rooms' ? 'CREATE_ROOM' : path === '/meeting-tokens' ? 'TOKEN' : method === 'POST' ? 'UPDATE_ROOM' : 'LOOKUP_ROOM' });
     return data;
   }
   const pathFor = (name) => {
@@ -70,7 +70,9 @@ export function createDailyProvider({ env = process.env, fetcher = globalThis.fe
     revoke: async (row) => {
       const path = pathFor(row.roomName);
       try {
-        await request(path, 'POST', { properties: { exp: Math.floor(Date.now() / 1000), eject_at_room_exp: true } });
+        // Daily rejects an expiry already in the past by the time it receives it.
+        // Use a short future fallback, then immediately ban/eject and delete.
+        await request(path, 'POST', { properties: { exp: Math.floor(Date.now() / 1000) + 15, eject_at_room_exp: true } });
         // Expiry with forced ejection is the primary stop. An empty session may
         // reject explicit ejection; deletion still invalidates further room access.
         try {
