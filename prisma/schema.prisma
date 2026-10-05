@@ -1757,11 +1757,25 @@ model DoctorAppointment {
   dependent        DependentProfile?       @relation(fields: [dependentId], references: [id], onDelete: Restrict)
   doctorProfile    ProfessionalProfile     @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
   slot             DoctorAvailabilitySlot  @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  videoRoom        DoctorVideoRoom?
 
   @@index([patientId, startsAt])
   @@index([doctorProfileId, status, startsAt])
   @@index([slotId])
   @@map("doctor_appointments")
+}
+
+model DoctorVideoRoom {
+  appointmentId String @id @map("appointment_id")
+  roomName String @unique @map("room_name") @db.VarChar(64)
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  cleanupAfter DateTime @default(now()) @map("cleanup_after")
+  createdAt DateTime @default(now()) @map("created_at")
+  appointment DoctorAppointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+
+  @@index([revokedAt, cleanupAfter])
+  @@map("doctor_video_rooms")
 }
 
 // ---------------- EMR foundation (tenant-scoped; RLS + composite FKs live in SQL) ----------------

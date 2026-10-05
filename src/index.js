@@ -4,6 +4,7 @@ import { startExpiryRunner, stopExpiryRunner } from './modules/reservations/rese
 import { privateStorageClient } from './config/privateStorage.js';
 import { checkOrProvisionBuckets } from './config/supabaseBuckets.js';
 import { startEvidenceScanner } from './modules/platform/platform.evidence-scanner.js';
+import { startVideoCleanup } from './modules/doctor-video/doctor-video.service.js';
 import { startEmrWorker, stopEmrWorker } from './modules/emr/core/worker.js';
 
 const PORT = process.env.PORT || 4000;
@@ -22,7 +23,8 @@ if (process.env.SUPABASE_URL || process.env.SUPABASE_SECRET_KEY) {
 }
 startExpiryRunner();
 const stopEvidenceScanner = startEvidenceScanner();
+const stopVideoCleanup = startVideoCleanup();
 // EMR worker (telehealth handoff, outbox → webhooks). Off by default; safe on several instances.
 if (process.env.EMR_OUTBOX_WORKER === 'true') startEmrWorker();
-const shutdown = () => { stopEmrWorker(); stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
+const shutdown = () => { stopVideoCleanup(); stopEmrWorker(); stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
 process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown);
