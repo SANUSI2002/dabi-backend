@@ -102,7 +102,7 @@ describe('Daily provider controls', () => {
   });
   it('still deletes an expired room when the inactive session rejects ejection', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(response({})).mockResolvedValueOnce(response({}, 400)).mockResolvedValueOnce(response({}));
-    await expect(createDailyProvider({ env, fetcher }).revoke(room)).rejects.toMatchObject({ providerStatus: 400 });
+    await expect(createDailyProvider({ env, fetcher }).revoke(room)).resolves.toBeUndefined();
     expect(fetcher.mock.calls.at(-1)[1].method).toBe('DELETE');
   });
 });

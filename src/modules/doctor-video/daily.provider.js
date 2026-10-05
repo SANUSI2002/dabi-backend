@@ -71,10 +71,12 @@ export function createDailyProvider({ env = process.env, fetcher = globalThis.fe
       const path = pathFor(row.roomName);
       try {
         await request(path, 'POST', { properties: { exp: Math.floor(Date.now() / 1000), eject_at_room_exp: true } });
-        // An inactive session may reject eject. Still remove the already-expired room.
+        // Expiry with forced ejection is the primary stop. An empty session may
+        // reject explicit ejection; deletion still invalidates further room access.
         try {
           await request(`${path}/eject`, 'POST', { user_ids: [`${row.roomName}-doctor`, `${row.roomName}-patient`], ban: true });
-        } finally { await request(path, 'DELETE'); }
+        } catch { /* The room is already expired; delete it even without a session. */ }
+        await request(path, 'DELETE');
       } catch (error) { if (error.status !== 404) throw error; }
     },
   };
