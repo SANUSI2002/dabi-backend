@@ -4,6 +4,7 @@ import { startExpiryRunner, stopExpiryRunner } from './modules/reservations/rese
 import { privateStorageClient } from './config/privateStorage.js';
 import { checkOrProvisionBuckets } from './config/supabaseBuckets.js';
 import { startEvidenceScanner } from './modules/platform/platform.evidence-scanner.js';
+import { startVideoCleanup } from './modules/doctor-video/doctor-video.service.js';
 
 const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, () => {
@@ -21,5 +22,6 @@ if (process.env.SUPABASE_URL || process.env.SUPABASE_SECRET_KEY) {
 }
 startExpiryRunner();
 const stopEvidenceScanner = startEvidenceScanner();
-const shutdown = () => { stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
+const stopVideoCleanup = startVideoCleanup();
+const shutdown = () => { stopVideoCleanup(); stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
 process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown);
