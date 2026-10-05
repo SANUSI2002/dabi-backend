@@ -27,7 +27,7 @@ export async function scanWithCloudmersive(bytes, { contentType } = {}, fetcher 
       headers: { Apikey: process.env.CLOUDMERSIVE_API_KEY.trim(), Accept: 'application/json',
         allowExecutables: 'false', allowInvalidFiles: 'false', allowScripts: 'false',
         allowPasswordProtectedFiles: 'false', allowMacros: 'false', allowUnsafeArchives: 'false',
-        allowOleEmbeddedObjects: 'false', allowUnwantedActions: 'false', restrictFileTypes: '.pdf,.jpg,.jpeg,.png' },
+        allowOleEmbeddedObject: 'false', allowUnwantedAction: 'false', restrictFileTypes: '.pdf,.jpg,.jpeg,.png' },
       body,
     });
   } catch { fail('CLOUDMERSIVE_UNAVAILABLE'); }
@@ -42,11 +42,13 @@ export async function scanWithCloudmersive(bytes, { contentType } = {}, fetcher 
     if (text.length > 100000) fail('CLOUDMERSIVE_REPLY_INVALID');
     result = JSON.parse(text);
   } catch { fail('CLOUDMERSIVE_REPLY_INVALID'); }
-  if (!result || typeof result.CleanResult !== 'boolean' || !Array.isArray(result.FoundViruses)
+  // The real provider uses null (not []) when no virus was found.
+  // Missing or other non-array values remain invalid and fail closed.
+  if (!result || typeof result.CleanResult !== 'boolean' || !(result.FoundViruses === null || Array.isArray(result.FoundViruses))
     || REQUIRED_FLAGS.some((key) => typeof result[key] !== 'boolean')
     || THREAT_FLAGS.some((key) => result[key] !== undefined && typeof result[key] !== 'boolean')) fail('CLOUDMERSIVE_REPLY_INVALID');
   const scannerVersion = 'Cloudmersive advanced API v1'; // Protocol label, NOT a claimed engine/signature version.
-  if (result.FoundViruses.length) return { verdict: 'INFECTED', scannerVersion, signature: 'CLOUDMERSIVE_MALWARE_DETECTED' };
+  if (result.FoundViruses?.length) return { verdict: 'INFECTED', scannerVersion, signature: 'CLOUDMERSIVE_MALWARE_DETECTED' };
   const unsafe = THREAT_FLAGS.some((key) => result[key] === true);
   if (!result.CleanResult || unsafe) return { verdict: 'REJECTED', scannerVersion };
   const format = typeof result.VerifiedFileFormat === 'string' ? result.VerifiedFileFormat.replace(/^\./, '').toUpperCase() : '';
