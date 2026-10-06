@@ -1,0 +1,14 @@
+import express from 'express';
+import { z } from 'zod';
+import { protect } from '../../middleware/authMiddleware.js';
+import { validate } from '../../middleware/validateMiddleware.js';
+import { scheduleSchema,publishScheduleSchema,timeBlockSchema } from './schedule.policy.js';
+import * as s from './schedule.service.js';
+const router = express.Router(); router.use(protect);
+const wrap = fn => async(req,res,next) => {res.set('Cache-Control','no-store');try {res.json({data:await fn(req)});}catch(e){if(e.status || e.code==='P2034') return res.status(e.status || 409).json({message:e.code==='P2034'?'Your schedule changed at the same time. Please retry.':e.message});next(e);}};
+router.get('/',wrap(req=>s.load(req.user.id)));
+router.put('/',validate(z.object({body:scheduleSchema})),wrap(req=>s.save(req.user.id,req.body)));
+router.post('/publish',validate(z.object({body:publishScheduleSchema})),wrap(req=>s.publish(req.user.id,req.body)));
+router.post('/blocks',validate(z.object({body:timeBlockSchema})),wrap(req=>s.addBlock(req.user.id,req.body)));
+router.delete('/blocks/:id',validate(z.object({params:z.object({id:z.string().uuid()})})),wrap(req=>s.removeBlock(req.user.id,req.params.id)));
+export default router;

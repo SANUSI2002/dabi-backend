@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const f = () => vi.fn();
 const db = {
+  professionalTimeBlock: { findFirst: f() },
   userRole: { findFirst: f() },
   professionalProfile: { findFirst: f(), update: f() },
   dependentProfile: { findFirst: f() },
@@ -26,6 +27,7 @@ const openSlot = { id: slot, doctorProfileId: doctorProfile, startsAt: new Date(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  db.professionalTimeBlock.findFirst.mockResolvedValue(null);
   db.$transaction.mockImplementation((work) => work(db));
   db.userRole.findFirst.mockImplementation(async ({ where }) => (where.userId === patient && where.role === 'PATIENT' ? { id: 'role' } : null));
   db.professionalProfile.findFirst.mockImplementation(async ({ where }) => (where.userId === doctorUser || where.id === doctorProfile ? { id: doctorProfile } : null));

@@ -6,6 +6,7 @@ import * as s from './doctor-appointments.service.js';
 
 // Error code -> [HTTP status, stable client code, message]
 const ERRORS = {
+  SLOT_BLOCKED: [409, 'SLOT_BLOCKED', 'That period is blocked. Remove the block before publishing availability.'],
   FORBIDDEN: [403, 'FORBIDDEN', 'This action needs a patient account or a verified doctor account'],
   NOT_FOUND: [404, 'NOT_FOUND', 'Not found'],
   SLOT_UNAVAILABLE: [409, 'SLOT_UNAVAILABLE', 'That time is no longer available. Please choose another slot.'],
