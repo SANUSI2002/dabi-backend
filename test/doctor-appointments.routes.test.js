@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const f = () => vi.fn();
 const db = {
+  $queryRaw: f(),
   professionalTimeBlock: { findFirst: f() },
   userRole: { findFirst: f() },
   professionalProfile: { findFirst: f(), update: f() },
@@ -50,7 +51,7 @@ describe('patient booking', () => {
     expect(res.body.data.doctor).toEqual({ id: doctorProfile, name: 'Dr Ada', specialty: 'Cardiology', practiceName: 'Heart Clinic', practiceAddress: null });
     // The slot lookup only matches open, future slots of verified doctors.
     const where = db.doctorAvailabilitySlot.findFirst.mock.calls[0][0].where;
-    expect(where).toMatchObject({ id: slot, cancelledAt: null, appointments: { none: { status: { in: ['REQUESTED', 'CONFIRMED'] } } }, doctorProfile: { professionType: 'DOCTOR', verificationStatus: 'VERIFIED' } });
+    expect(where).toMatchObject({ id: slot, cancelledAt: null, appointments: { none: { status: { in: ['REQUESTED', 'CONFIRMED'] } } }, doctorProfile: { professionType: {in:expect.arrayContaining(['DOCTOR','COUNSELLOR','PSYCHOLOGIST'])}, verificationStatus: 'VERIFIED' } });
   });
 
   it('rejects a type the slot does not offer, an unavailable slot, a lost race, and non-patients', async () => {

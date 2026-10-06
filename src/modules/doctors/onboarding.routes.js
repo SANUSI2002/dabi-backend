@@ -13,6 +13,7 @@ import * as V from './onboarding.validator.js';
 import * as S from './onboarding.service.js';
 import * as professionals from '../professionals/professionals.model.js';
 import { eligibleDocument, latestCredentials } from './onboarding.policy.js';
+import { PROFESSION_CATALOG, PORTAL_PROFESSIONS } from '../professionals/professionCatalog.js';
 
 export const doctorOnboardingRoutes = express.Router();
 export const platformDoctorRoutes = express.Router();
@@ -30,12 +31,13 @@ const wrap = (handler) => async (req, res, next) => {
 };
 const uuidParams = z.object({ params: z.object({ id: z.uuid(), credentialId: z.uuid().optional() }) });
 const principal = (req) => ({ userId: req.user?.id });
-doctorOnboardingRoutes.get('/registration-config', wrap(async (req, res) => res.json({ data: { enabled: S.enabled(), maxUploadBytes: Math.min(evidenceUploadMaxBytes(), 5 * 1024 * 1024) } })));
+doctorOnboardingRoutes.get('/registration-config', wrap(async (req, res) => res.json({ data: { enabled: S.enabled(), professions: PROFESSION_CATALOG, maxUploadBytes: Math.min(evidenceUploadMaxBytes(), 5 * 1024 * 1024) } })));
 doctorOnboardingRoutes.post('/register', registrationLimiter, validate(V.registrationSchema), wrap(async (req, res) => res.status(201).json({ data: await S.register(req.body) })));
+doctorOnboardingRoutes.post('/register-professional', registrationLimiter, validate(V.professionalRegistrationSchema), wrap(async (req, res) => res.status(201).json({ data: await S.register(req.body) })));
 doctorOnboardingRoutes.post('/resend-verification', verificationRequestLimiter, validate(V.resendSchema), wrap(async (req, res) => {
   const user = await auth.findUserByEmail(req.body.email);
   const profile = user && await prisma.professionalProfile.findUnique({ where: { userId: user.id }, select: { professionType: true } });
-  if (profile?.professionType === 'DOCTOR' && user.accountStatus === 'PENDING' && !user.emailVerifiedAt) {
+  if (PORTAL_PROFESSIONS.includes(profile?.professionType) && user.accountStatus === 'PENDING' && !user.emailVerifiedAt) {
     const latest = await auth.latestEmailVerificationToken(user.id);
     if (!latest || latest.createdAt < new Date(Date.now() - 60000)) await S.sendVerification(user).catch(() => false);
   }
@@ -43,7 +45,7 @@ doctorOnboardingRoutes.post('/resend-verification', verificationRequestLimiter, 
 }));
 doctorOnboardingRoutes.post('/verify-email', verificationConfirmLimiter, validate(V.verifySchema), wrap(async (req, res) => {
   const profile = await prisma.professionalProfile.findUnique({ where: { userId: req.body.uid }, select: { professionType: true } });
-  if (profile?.professionType !== 'DOCTOR' || !await auth.confirmEmailVerificationToken(req.body.uid, S.hash(req.body.token))) S.fail('This verification link is invalid, expired or already used. Request a fresh link.', 400);
+  if (!PORTAL_PROFESSIONS.includes(profile?.professionType) || !await auth.confirmEmailVerificationToken(req.body.uid, S.hash(req.body.token))) S.fail('This verification link is invalid, expired or already used. Request a fresh link.', 400);
   res.json({ data: { verified: true } });
 }));
 doctorOnboardingRoutes.put('/applications/:id/credentials/:kind', createLimiter({ kind: 'doctor-credential-upload', max: 12 }), protect,
@@ -52,6 +54,7 @@ doctorOnboardingRoutes.put('/applications/:id/credentials/:kind', createLimiter(
     res.status(201).json({ data: await S.upload(req.params.id, req.params.kind, req.body, req.get('Content-Type')?.toLowerCase(), principal(req)) });
   }));
 doctorOnboardingRoutes.post('/applications/:id/submit', createLimiter({ kind: 'doctor-submit', max: 10 }), validate(uuidParams), protect, wrap(async (req, res) => res.json({ data: await S.submit(req.params.id, principal(req)) })));
+doctorOnboardingRoutes.patch('/applications/:id/details',validate(uuidParams),validate(V.detailsPatchSchema),protect,wrap(async(req,res)=>res.json({data:await S.updateDetails(req.params.id,req.body,principal(req))})));
 doctorOnboardingRoutes.get('/me', protect, wrap(async (req, res) => res.json({ data: await S.detail(null, req.user.id) })));
 
 platformDoctorRoutes.use(protect, requirePlatform, requirePermission('platform.onboarding.review'), requireRecentMfa);
@@ -60,8 +63,8 @@ platformDoctorRoutes.get('/', wrap(async (req, res) => {
   if (!Number.isSafeInteger(page) || page < 1 || page > 200) S.fail('Invalid page.', 400);
   const status = req.query.status || 'PENDING';
   if (!['PENDING', 'VERIFIED', 'REJECTED', 'SUSPENDED'].includes(status)) S.fail('Invalid status.', 400);
-  const items = await prisma.professionalProfile.findMany({ where: { professionType: 'DOCTOR', verificationStatus: status }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: (page - 1) * 50, take: 51,
-    select: { id: true, specialty: true, verificationStatus: true, createdAt: true, user: { select: { email: true, full_name: true, emailVerifiedAt: true } }, doctorApplication: { select: { submittedAt: true } } } });
+  const items = await prisma.professionalProfile.findMany({ where: { professionType: { in: PORTAL_PROFESSIONS }, verificationStatus: status }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: (page - 1) * 50, take: 51,
+    select: { id: true, professionType: true, specialty: true, verificationStatus: true, createdAt: true, user: { select: { email: true, full_name: true, emailVerifiedAt: true } }, doctorApplication: { select: { submittedAt: true, stage: true } } } });
   await S.audit(prisma, req.user.id, 'DOCTOR_REVIEW_QUEUE_VIEWED', { page, status });
   res.json({ data: { items: items.slice(0, 50), nextPage: items.length > 50 ? page + 1 : null } });
 }));
@@ -98,7 +101,22 @@ platformDoctorRoutes.post('/:id/credentials/:credentialId/review', requirePermis
     if (!['PENDING', 'REJECTED'].includes(app.professional.verificationStatus) || !app.submittedAt) S.fail('This application is not awaiting review.');
     if (!eligibleDocument(doc)) S.fail('Malware screening must complete before authenticity review.');
     await tx.doctorCredential.update({ where: { id: doc.id }, data: { ...req.body, reviewedBy: req.user.id, reviewedAt: new Date() } });
+    await tx.doctorApplication.update({ where: { id: app.id }, data: { stage: 'PENDING_REVIEW' } });
     await S.audit(tx, req.user.id, 'DOCTOR_CREDENTIAL_REVIEWED', { professionalId: req.params.id, credentialId: doc.id, decision: req.body.reviewStatus });
+  });
+  res.json({ data: await S.detail(req.params.id) });
+}));
+platformDoctorRoutes.post('/:id/request-changes', requirePermission('platform.onboarding.approve'), validate(uuidParams), validate(V.decisionSchema), wrap(async (req, res) => {
+  await prisma.$transaction(async tx => {
+    const entry = await tx.doctorApplication.findUnique({ where: { professionalId: req.params.id }, select: { id: true } });
+    if (!entry) S.fail('Application not found.', 404);
+    const app = await S.lockedApplication(tx, entry.id);
+    if (app.professional.userId === req.user.id) S.fail('You cannot review your own application.', 403);
+    if (!app.submittedAt || app.professional.verificationStatus !== 'PENDING') S.fail('This application is not awaiting review.');
+    await tx.doctorApplication.update({ where: { id: app.id }, data: { stage: 'CHANGES_REQUESTED', submittedAt: null } });
+    await tx.professionalProfile.update({ where: { id: req.params.id }, data: { decisionReason: req.body.reason } });
+    await tx.notification.create({ data: { userId: app.professional.userId, title: 'Changes requested', message: req.body.reason } });
+    await S.audit(tx, req.user.id, 'PROFESSIONAL_CHANGES_REQUESTED', { professionalId: req.params.id });
   });
   res.json({ data: await S.detail(req.params.id) });
 }));

@@ -65,6 +65,8 @@ model User {
   wellnessBookings WellnessBooking[]
   medicalDocuments MedicalDocument[] @relation("MedicalDocumentOwner")
   medicalDocumentSharesReceived MedicalDocumentShare[] @relation("MedicalDocumentShareRecipient")
+  professionalCareConsents ProfessionalCareConsent[]
+  professionalCarePlans ProfessionalCarePlan[]
 
   @@map("users")
 }
@@ -180,6 +182,9 @@ model ProfessionalProfile {
   doctorAppointments   DoctorAppointment[]
   scheduleSettings ProfessionalSchedule?
   scheduleBlocks ProfessionalTimeBlock[]
+  careConsents ProfessionalCareConsent[]
+  carePlans ProfessionalCarePlan[]
+  careTemplates ProfessionalCareTemplate[]
 
   @@index([verificationStatus])
   @@index([professionType])
@@ -195,6 +200,7 @@ enum DoctorCareStatus {
 }
 
 model DoctorApplication {
+  stage             String @default("DRAFT")
   id String @id @default(uuid())
   professionalId String @unique
   professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
@@ -2789,6 +2795,76 @@ model EmrQueueEvent {
 
   @@index([organizationId, queueEntryId, createdAt])
   @@map("emr_queue_events")
+}
+
+model ProfessionalCareConsent {
+  id String @id @default(uuid())
+  professionalId String
+  patientId String
+  active Boolean @default(true)
+  grantedAt DateTime @default(now())
+  revokedAt DateTime?
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  patient User @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  @@unique([professionalId, patientId])
+}
+model ProfessionalCarePlan {
+  id String @id @default(uuid())
+  professionalId String
+  patientId String
+  kind String
+  title String
+  draft Json
+  revision Int @default(1)
+  publishedVersion Int?
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  patient User @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  versions ProfessionalCareVersion[]
+  feedback ProfessionalCareFeedback[]
+  notes ProfessionalCareNote[]
+  @@index([professionalId, patientId])
+  @@index([patientId, publishedVersion])
+}
+model ProfessionalCareVersion {
+  id String @id @default(uuid())
+  planId String
+  number Int
+  content Json
+  publishedAt DateTime @default(now())
+  plan ProfessionalCarePlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  @@unique([planId, number])
+}
+model ProfessionalCareFeedback {
+  id String @id @default(uuid())
+  planId String
+  version Int
+  message String
+  progress String
+  createdAt DateTime @default(now())
+  plan ProfessionalCarePlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  @@index([planId, createdAt])
+}
+model ProfessionalCareNote {
+  id String @id @default(uuid())
+  planId String
+  text String
+  followUpAt DateTime?
+  createdAt DateTime @default(now())
+  plan ProfessionalCarePlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  @@index([planId, createdAt])
+}
+model ProfessionalCareTemplate {
+  id String @id @default(uuid())
+  professionalId String
+  kind String
+  name String
+  content Json
+  createdAt DateTime @default(now())
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  @@index([professionalId])
 }
 
 model ProfessionalSchedule {

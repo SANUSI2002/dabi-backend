@@ -10,6 +10,7 @@ const h =
     try {
       res.status(c).json({ status: "success", data: await f(q) });
     } catch (e) {
+      if(e.code==='PROFESSIONAL_SLOT_REQUIRED') return res.status(409).json({status:'error',code:e.code,message:e.message});
       if (e.code === "NOT_FOUND")
         return res
           .status(404)

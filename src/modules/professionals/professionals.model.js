@@ -1,10 +1,11 @@
 import bcrypt from 'bcryptjs'; import prisma from '../../config/db.js';
 import { approve as verifyDoctorReadiness } from '../doctors/onboarding.service.js';
+import { PORTAL_PROFESSIONS, capabilities } from './professionCatalog.js';
 const select = { id: true, userId: true, professionType: true, registrationNumber: true, practiceName: true, specialty: true, onboardingProgress: true, verificationStatus: true, decisionReason: true, decidedAt: true, createdAt: true };
 const profileId = () => `#SHM${Math.floor(Math.random() * 100000).toString().padStart(5, '0')}`;
 const audit = (tx, userId, type, professionalId) => tx.activityLog.create({ data: { userId, type, description: 'Professional verification state changed', meta: { professionalId } } });
 export const register = async (data) => prisma.$transaction(async (tx) => { const user = await tx.user.create({ data: { patientId: profileId(), email: data.email, password: await bcrypt.hash(data.password, 12), full_name: data.fullName, phone_number: data.phoneNumber, roles: { create: { role: 'PROFESSIONAL' } } }, select: { id: true, email: true } }); const profile = await tx.professionalProfile.create({ data: { userId: user.id, professionType: data.professionType, registrationNumber: data.registrationNumber, practiceName: data.practiceName, specialty: data.specialty, onboardingProgress: 100 }, select }); await audit(tx, user.id, 'PROFESSIONAL_REGISTERED', profile.id); return profile; });
-export const mine = (userId) => prisma.professionalProfile.findUnique({ where: { userId }, select });
+export const mine = async (userId) => { const profile = await prisma.professionalProfile.findUnique({ where: { userId }, select: { ...select, doctorApplication: { select: { details: true, stage: true } } } }); if (!profile) return null; const { doctorApplication, ...publicProfile } = profile; return { ...publicProfile, discipline: doctorApplication?.details?.discipline || (profile.professionType === 'DOCTOR' ? 'MEDICAL_PRACTITIONER' : null), stage: doctorApplication?.stage, capabilities: capabilities(profile, doctorApplication?.details) }; };
 export const isSuperAdmin = (userId) => prisma.userRole.findFirst({ where: { userId, role: 'SUPER_ADMIN' }, select: { id: true } });
 export const list = async (q) => { const where = { ...(q.status ? { verificationStatus: q.status } : {}), ...(q.professionType ? { professionType: q.professionType } : {}) }; const [items, total] = await Promise.all([prisma.professionalProfile.findMany({ where, select, orderBy: { createdAt: 'asc' }, skip: (q.page - 1) * q.limit, take: q.limit }), prisma.professionalProfile.count({ where })]); return { items, page: q.page, limit: q.limit, total }; };
 export const decide = (adminId, id, status, reason) => prisma.$transaction(async (tx) => {
@@ -15,8 +16,9 @@ export const decide = (adminId, id, status, reason) => prisma.$transaction(async
   const allowed = { VERIFIED: ['PENDING', 'REJECTED', 'SUSPENDED'], REJECTED: ['PENDING'], SUSPENDED: ['VERIFIED'], PENDING: ['SUSPENDED'] };
   if (!allowed[status]?.includes(profile.verificationStatus)) throw Object.assign(new Error('Invalid transition'), { code: 'INVALID' });
   // Both legacy and Command Center approvals use the same evidence gates.
-  if (profile.professionType === 'DOCTOR' && status === 'VERIFIED') await verifyDoctorReadiness(tx, profile, adminId);
+  if (PORTAL_PROFESSIONS.includes(profile.professionType) && status === 'VERIFIED') await verifyDoctorReadiness(tx, profile, adminId);
   const updated = await tx.professionalProfile.update({ where: { id }, data: { verificationStatus: status, decisionReason: reason ?? null, decidedByUserId: adminId, decidedAt: new Date() }, select });
+  if (PORTAL_PROFESSIONS.includes(profile.professionType) && ['VERIFIED', 'REJECTED'].includes(status)) await tx.doctorApplication.updateMany({ where: { professionalId: id }, data: { stage: status === 'VERIFIED' ? 'APPROVED' : 'REJECTED' } });
   await audit(tx, adminId, `PROFESSIONAL_${status}`, id);
   return updated;
 });

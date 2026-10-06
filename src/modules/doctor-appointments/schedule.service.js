@@ -22,12 +22,12 @@ export const save = (userId,settings) => tx(async db => {
   await db.professionalSchedule.upsert({where:{professionalId:pro.id},create:{professionalId:pro.id,...data},update:data});
   await audit(db,userId,'PROFESSIONAL_SCHEDULE_SAVED',pro.id); return data;
 });
-export const publish = (userId,range) => tx(async db => {
+export const publish = (userId,range,overrideHours) => tx(async db => {
   const pro = await practitioner(db,userId); await db.$queryRaw`SELECT id FROM professional_profiles WHERE id = ${pro.id} FOR UPDATE`;
   const settings = await db.professionalSchedule.findUnique({where:{professionalId:pro.id}});
   if (!settings) throw error('Save your working hours first.');
   const blocks = await db.professionalTimeBlock.findMany({where:{professionalId:pro.id,endsAt:{gt:new Date()}}});
-  let generated; try { generated = generateSchedule(settingsToInput(settings),range,blocks); } catch(e) { throw error(e.message,400); }
+  let generated; try { generated = generateSchedule({...settingsToInput(settings),...(overrideHours?{weeklyHours:overrideHours}:{})},range,blocks); } catch(e) { throw error(e.message,400); }
   let created = 0, existing = 0;
   for (const slot of generated) {
     const overlap = await db.doctorAvailabilitySlot.findFirst({where:{doctorProfileId:pro.id,cancelledAt:null,startsAt:{lt:slot.endsAt},endsAt:{gt:slot.startsAt}},select:{startsAt:true,endsAt:true,consultationTypes:true}});

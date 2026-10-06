@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { setInterval, clearInterval } from 'node:timers';
 import prisma from '../../config/db.js';
+import { PORTAL_PROFESSIONS } from '../professionals/professionCatalog.js';
 import { createDailyProvider, dailyConfigured, videoError } from './daily.provider.js';
 const MINUTE = 60000;
 const select = { id: true, patientId: true, startsAt: true, endsAt: true, status: true, consultationType: true,
@@ -11,7 +12,7 @@ export function createVideoService({ db = prisma, provider = createDailyProvider
     const row = await db.doctorAppointment.findFirst({ where: { id, ...(role === 'doctor' ? { doctorProfile: { userId } } : { patientId: userId }) }, select });
     if (!row) throw videoError('VIDEO_NOT_FOUND', 404);
     const doctor = row.doctorProfile;
-    if (doctor.professionType !== 'DOCTOR' || doctor.verificationStatus !== 'VERIFIED'
+    if (!PORTAL_PROFESSIONS.includes(doctor.professionType) || doctor.verificationStatus !== 'VERIFIED'
       || doctor.user.accountStatus !== 'ACTIVE' || !doctor.user.emailVerifiedAt
       || row.patient.accountStatus !== 'ACTIVE' || !row.patient.emailVerifiedAt) throw videoError('VIDEO_ACCESS_DENIED', 403);
     if (role === 'patient' && !(await db.userRole.findFirst({ where: { userId, role: 'PATIENT' }, select: { id: true } }))) throw videoError('VIDEO_ACCESS_DENIED', 403);
@@ -53,7 +54,7 @@ export function createVideoService({ db = prisma, provider = createDailyProvider
       const rows = await db.doctorVideoRoom.findMany({ where: { revokedAt: null, cleanupAfter: { lte: time }, OR: [
         { expiresAt: { lte: time } }, { appointment: { status: { not: 'CONFIRMED' } } },
         { appointment: { doctorProfile: { verificationStatus: { not: 'VERIFIED' } } } },
-        { appointment: { doctorProfile: { professionType: { not: 'DOCTOR' } } } },
+        { appointment: { doctorProfile: { professionType: { notIn: PORTAL_PROFESSIONS } } } },
         { appointment: { doctorProfile: { user: { accountStatus: { not: 'ACTIVE' } } } } },
         { appointment: { doctorProfile: { user: { emailVerifiedAt: null } } } },
         { appointment: { patient: { accountStatus: { not: 'ACTIVE' } } } },
