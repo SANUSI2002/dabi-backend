@@ -178,6 +178,8 @@ model ProfessionalProfile {
   practiceAddress      String?                  @map("practice_address")
   availabilitySlots    DoctorAvailabilitySlot[]
   doctorAppointments   DoctorAppointment[]
+  scheduleSettings ProfessionalSchedule?
+  scheduleBlocks ProfessionalTimeBlock[]
 
   @@index([verificationStatus])
   @@index([professionType])
@@ -2787,4 +2789,25 @@ model EmrQueueEvent {
 
   @@index([organizationId, queueEntryId, createdAt])
   @@map("emr_queue_events")
+}
+
+model ProfessionalSchedule {
+  professionalId String @id
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  timezone String @default("Africa/Lagos")
+  durationMinutes Int @default(30)
+  bufferMinutes Int @default(5)
+  weeklyHours Json @default("[]")
+  updatedAt DateTime @updatedAt
+}
+
+model ProfessionalTimeBlock {
+  id String @id @default(uuid())
+  professionalId String
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  startsAt DateTime
+  endsAt DateTime
+  reason String
+  createdAt DateTime @default(now())
+  @@index([professionalId, startsAt, endsAt])
 }

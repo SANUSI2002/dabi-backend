@@ -195,6 +195,7 @@ export const practiceSlots = async (userId, query) => {
 export const createSlots = (userId, { slots }) => transaction(async (tx) => {
   const doctorId = await requireDoctor(tx, userId);
   for (const slot of slots) {
+    if (await tx.professionalTimeBlock.findFirst({ where: { professionalId: doctorId, startsAt: { lt: new Date(slot.endsAt) }, endsAt: { gt: new Date(slot.startsAt) } }, select: { id: true } })) throw fail('SLOT_BLOCKED');
     const overlap = await tx.doctorAvailabilitySlot.findFirst({
       where: { doctorProfileId: doctorId, cancelledAt: null, startsAt: { lt: new Date(slot.endsAt) }, endsAt: { gt: new Date(slot.startsAt) } },
       select: { id: true },

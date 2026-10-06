@@ -20,6 +20,7 @@ import professionalRoutes from './modules/professionals/professionals.routes.js'
 import { doctorOnboardingRoutes, platformDoctorRoutes } from './modules/doctors/onboarding.routes.js';
 import doctorCareRoutes from './modules/doctor-care/doctor-care.routes.js';
 import doctorAppointmentRoutes from './modules/doctor-appointments/doctor-appointments.routes.js';
+import scheduleRoutes from './modules/doctor-appointments/schedule.routes.js';
 import { videoConfigRoutes, videoPatientRoutes, videoDoctorRoutes } from './modules/doctor-video/doctor-video.routes.js';
 import prescriptionRoutes from './modules/prescriptions/prescriptions.routes.js';
 import pharmacyRoutes from './modules/pharmacies/pharmacies.routes.js';
@@ -105,6 +106,7 @@ app.use('/api/v1/doctor-appointments', videoConfigRoutes);
 app.use('/api/v1/doctor-appointments/practice/appointments', videoDoctorRoutes);
 app.use('/api/v1/doctor-appointments', videoPatientRoutes);
 app.use('/api/v1/doctor-appointments', doctorAppointmentRoutes);
+app.use('/api/v1/professional-schedule', scheduleRoutes);
 app.use('/api/v1/prescriptions', prescriptionRoutes);
 app.use('/api/v1/pharmacies', pharmacyRoutes);
 app.use('/api/v1/pharmacies', discoveryRoutes);
