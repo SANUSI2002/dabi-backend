@@ -54,4 +54,42 @@ describe('server-backed sessions', () => {
     await revokeSession(session.id);
     expect(await activeSession(session.id, 'user-1')).toBeNull();
   });
+
+  it('revokes a session left idle past the limit, together with its refresh credential', async () => {
+    const issued = await createSession({ id: 'user-1' });
+    state.session.lastUsedAt = new Date(Date.now() - 5 * 60_000 - 1000);
+    expect(await activeSession(issued.session.id, 'user-1')).toBeNull();
+    expect(state.session.revokedAt).toBeInstanceOf(Date);
+    expect(state.credentials[0].revokedAt).toBeInstanceOf(Date);
+  });
+
+  it('records activity at most every 30 seconds and never when only inspecting', async () => {
+    const issued = await createSession({ id: 'user-1' });
+    const recent = new Date(Date.now() - 10_000);
+    state.session.lastUsedAt = recent;
+    expect(await activeSession(issued.session.id, 'user-1')).toBeTruthy();
+    expect(state.session.lastUsedAt).toBe(recent);
+    state.session.lastUsedAt = new Date(Date.now() - 60_000);
+    expect(await activeSession(issued.session.id, 'user-1', { touch: false })).toBeTruthy();
+    expect(Date.now() - state.session.lastUsedAt.getTime()).toBeGreaterThanOrEqual(60_000);
+    expect(await activeSession(issued.session.id, 'user-1')).toBeTruthy();
+    expect(Date.now() - state.session.lastUsedAt.getTime()).toBeLessThan(1000);
+  });
+
+  it('refuses to refresh an idle session and revokes it', async () => {
+    const issued = await createSession({ id: 'user-1' });
+    state.session.lastUsedAt = new Date(Date.now() - 6 * 60_000);
+    await expect(rotateRefreshToken(issued.refreshToken)).rejects.toMatchObject({ code: 'SESSION_IDLE' });
+    expect(state.session.revokedAt).toBeInstanceOf(Date);
+    expect(state.credentials).toHaveLength(1);
+  });
+
+  it('honours a configured idle limit', async () => {
+    vi.stubEnv('SESSION_IDLE_MINUTES', '15');
+    try {
+      const issued = await createSession({ id: 'user-1' });
+      state.session.lastUsedAt = new Date(Date.now() - 10 * 60_000);
+      expect(await activeSession(issued.session.id, 'user-1')).toBeTruthy();
+    } finally { vi.unstubAllEnvs(); }
+  });
 });

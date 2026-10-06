@@ -8,6 +8,15 @@ const maxSessionDays = Math.min(365, Math.max(sessionDays, Number(process.env.SE
 const sessionExpiry = () => new Date(Date.now() + sessionDays * 86_400_000);
 const invalid = () => Object.assign(new Error('Invalid or revoked refresh token'), { code: 'SESSION_INVALID' });
 
+// Inactivity limit. A session with no authenticated request (or refresh) for this long is revoked,
+// so a closed laptop or forgotten browser cannot be resumed. Clients also sign out locally after the
+// same period without user input, and their background polling stops once they do.
+const idleMinutes = () => Math.min(120, Math.max(1, Number(process.env.SESSION_IDLE_MINUTES) || 5));
+export const sessionIdleMs = () => idleMinutes() * 60_000;
+const isIdle = (session, now) => now.getTime() - new Date(session.lastUsedAt).getTime() >= sessionIdleMs();
+// Recording use on every request would write once per API call; once per 30 seconds is precise enough.
+const TOUCH_INTERVAL_MS = 30_000;
+
 export const createSession = async (user, userAgent = '', { mfaVerified = false } = {}) => {
   const refreshToken = randomToken();
   const expiresAt = sessionExpiry();
@@ -24,9 +33,25 @@ export const createSession = async (user, userAgent = '', { mfaVerified = false 
   });
 };
 
-export const activeSession = async (sessionId, userId) => {
+/**
+ * The live session behind an access token, or null when it is revoked, expired, suspended or idle.
+ * An idle session is revoked on the spot so its refresh credential dies with it. `touch` records this
+ * request as activity; pass false when merely inspecting a session (e.g. one the user is revoking).
+ */
+export const activeSession = async (sessionId, userId, { touch = true } = {}) => {
   if (!sessionId) return null;
-  return prisma.authSession.findFirst({ where: { id: sessionId, userId, revokedAt: null, expiresAt: { gt: new Date() }, user: { accountStatus: 'ACTIVE' } } });
+  const now = new Date();
+  const session = await prisma.authSession.findFirst({ where: { id: sessionId, userId, revokedAt: null, expiresAt: { gt: now }, user: { accountStatus: 'ACTIVE' } } });
+  if (!session) return null;
+  if (isIdle(session, now)) {
+    await revokeSession(session.id);
+    return null;
+  }
+  if (touch && now.getTime() - new Date(session.lastUsedAt).getTime() >= TOUCH_INTERVAL_MS) {
+    // Conditional on the value read, so concurrent requests write at most once.
+    await prisma.authSession.updateMany({ where: { id: session.id, revokedAt: null, lastUsedAt: session.lastUsedAt }, data: { lastUsedAt: now } });
+  }
+  return session;
 };
 
 export const rotateRefreshToken = async (rawToken) => {
@@ -42,6 +67,10 @@ export const rotateRefreshToken = async (rawToken) => {
   }
   const now = new Date();
   if (credential.revokedAt || credential.expiresAt <= now || credential.session.revokedAt || credential.session.expiresAt <= now) throw invalid();
+  if (isIdle(credential.session, now)) {
+    await revokeSession(credential.sessionId);
+    throw Object.assign(invalid(), { code: 'SESSION_IDLE' });
+  }
   const nextToken = randomToken();
   const absoluteExpiry = new Date(credential.session.createdAt.getTime() + maxSessionDays * 86_400_000);
   if (absoluteExpiry <= now) throw invalid();
@@ -104,12 +133,14 @@ export const userIdForRefresh = async (rawToken) => {
   if (!rawToken) return null;
   const credential = await prisma.authRefreshCredential.findUnique({
     where: { tokenHash: hash(rawToken) },
-    include: { session: { select: { userId: true, revokedAt: true, expiresAt: true } } },
+    include: { session: { select: { userId: true, revokedAt: true, expiresAt: true, lastUsedAt: true } } },
   });
   if (credential?.consumedAt) {
     await revokeSession(credential.sessionId);
     throw Object.assign(invalid(), { code: 'SESSION_REPLAY' });
   }
-  if (!credential || credential.revokedAt || credential.expiresAt <= new Date() || credential.session.revokedAt || credential.session.expiresAt <= new Date()) return null;
+  const now = new Date();
+  if (!credential || credential.revokedAt || credential.expiresAt <= now || credential.session.revokedAt || credential.session.expiresAt <= now) return null;
+  if (isIdle(credential.session, now)) { await revokeSession(credential.sessionId); return null; }
   return credential?.session?.userId ?? null;
 };

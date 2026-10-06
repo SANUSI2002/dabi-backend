@@ -11,7 +11,8 @@ export const requireRecentMfa = async (req, res, next) => {
     if (process.env.NODE_ENV === 'test' && !req.user.sessionId) return next();
     if (!req.user.sessionId) return error(res, 'MFA_REQUIRED');
     if (!(await hasActiveMfa(req.user.id))) return error(res, 'MFA_ENROLLMENT_REQUIRED');
-    const session = await activeSession(req.user.sessionId, req.user.id);
+    // protect() has already recorded this request as activity.
+    const session = await activeSession(req.user.sessionId, req.user.id, { touch: false });
     if (!recent(session)) return error(res, 'MFA_REQUIRED');
     return next();
   } catch (cause) { return next(cause); }

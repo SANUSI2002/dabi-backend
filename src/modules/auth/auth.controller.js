@@ -90,7 +90,7 @@ export const refreshAccessToken = async (req, res, next) => {
     if (browserRequest(req) || readRefreshCookie(req)) setRefreshCookie(res, rotated.refreshToken);
     return res.status(200).json({ status: 'success', message: 'Access token refreshed successfully', accessToken: generateAccessToken(user, { sessionId: rotated.sessionId, organizationId }), ...(!browserRequest(req) && !readRefreshCookie(req) ? { refreshToken: rotated.refreshToken } : {}) });
   } catch (error) {
-    if (error?.code === 'SESSION_INVALID' || error?.code === 'SESSION_REPLAY') return res.status(401).json({ status: 'error', message: 'Invalid or revoked refresh token' });
+    if (['SESSION_INVALID', 'SESSION_REPLAY', 'SESSION_IDLE'].includes(error?.code)) return res.status(401).json({ status: 'error', message: 'Invalid or revoked refresh token' });
     return next(error);
   }
 };
@@ -116,7 +116,7 @@ export const getSessions = async (req, res, next) => {
 
 export const revokeDeviceSession = async (req, res, next) => {
   try {
-    const session = await activeSession(req.params.id, req.user.id);
+    const session = await activeSession(req.params.id, req.user.id, { touch: false });
     if (!session) return res.status(404).json({ status: 'error', message: 'Session not found' });
     await revokeSession(session.id);
     if (session.id === req.user.sessionId) clearRefreshCookie(res);
