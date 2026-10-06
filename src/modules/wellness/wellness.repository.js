@@ -23,7 +23,7 @@ const pub = {
         select: { id: true, name: true, address: true, city: true },
       },
       professional: {
-        select: { id: true, practiceName: true, specialty: true },
+        select: { id: true, professionType: true, practiceName: true, specialty: true },
       },
     },
   },

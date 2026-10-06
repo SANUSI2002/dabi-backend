@@ -10,6 +10,7 @@ export const scheduleSchema = z.object({
     .refine(r => r.breaks.every(b => minutes(b.start) >= minutes(r.start) && minutes(b.end) <= minutes(r.end)), 'Breaks must fall inside working hours')).max(14),
 }).strict();
 export const publishScheduleSchema = z.object({ from: day, to: day }).strict().refine(v => v.to >= v.from && Date.parse(v.to) - Date.parse(v.from) <= 30 * 86400000, 'Choose a range of at most 31 days');
+export const exceptionSchema = z.object({ date: day, hours: scheduleSchema.shape.weeklyHours }).strict().refine(v=>v.hours.length>0 && v.hours.every(h=>h.day===new Date(`${v.date}T00:00:00Z`).getUTCDay()), 'Working hours must match the selected date');
 export const timeBlockSchema = z.object({ startsAt: z.string().datetime({ offset: true }), endsAt: z.string().datetime({ offset: true }), reason: z.string().trim().min(2).max(200) }).strict()
   .refine(v => new Date(v.endsAt) > new Date(v.startsAt) && new Date(v.endsAt) > new Date(), 'Choose a valid future block');
 export function scheduleInstant(day, hhmm, timezone) {

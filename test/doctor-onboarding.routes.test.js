@@ -5,7 +5,7 @@ import request from 'supertest';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 const owner = '11111111-1111-4111-8111-111111111111', reviewer = '22222222-2222-4222-8222-222222222222';
 const id = '33333333-3333-4333-8333-333333333333', professionalId = '44444444-4444-4444-8444-444444444444', credentialId = '55555555-5555-4555-8555-555555555555';
-const db = { user: { create: vi.fn() }, professionalProfile: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() }, doctorApplication: { findUnique: vi.fn(), update: vi.fn() }, doctorCredential: { create: vi.fn(), update: vi.fn() }, activityLog: { create: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() };
+const db = { user: { create: vi.fn() }, professionalProfile: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() }, doctorApplication: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() }, doctorCredential: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn() }, activityLog: { create: vi.fn() }, notification: {create: vi.fn()}, $queryRaw: vi.fn(), $transaction: vi.fn() };
 const authModel = { createEmailVerificationToken: vi.fn(), revokeOtherEmailVerificationTokens: vi.fn(), revokeEmailVerificationToken: vi.fn(), findUserByEmail: vi.fn(), latestEmailVerificationToken: vi.fn(), confirmEmailVerificationToken: vi.fn() };
 const getBucket = vi.fn(), storageUpload = vi.fn(), signed = vi.fn(), remove = vi.fn();
 const client = { storage: { getBucket, from: () => ({ upload: storageUpload, remove, createSignedUrl: signed }) } };
@@ -82,7 +82,7 @@ describe('doctor credential lifecycle', () => {
   it('uploads an immutable quarantined object and invalidates prior submission', async () => {
     const response = await request(app).put(`/doctors/applications/${id}/credentials/licence`).set(headers()).type('application/pdf').send(bytes);
     expect(response.status).toBe(201); expect(response.body.data.scanStatus).toBe('PENDING'); expect(response.body.data.storageKey).toBeUndefined();
-    expect(storageUpload.mock.calls[0][2].upsert).toBe(false); expect(db.doctorApplication.update).toHaveBeenCalledWith({ where: { id }, data: { submittedAt: null } });
+    expect(storageUpload.mock.calls[0][2].upsert).toBe(false); expect(db.doctorApplication.update).toHaveBeenCalledWith({ where: { id }, data: { submittedAt: null, stage: 'DRAFT' } });
   });
   it('rejects malformed, oversized and unsupported documents without storing content', async () => {
     const path = `/doctors/applications/${id}/credentials/licence`;
@@ -127,5 +127,23 @@ describe('doctor credential lifecycle', () => {
   it('never exposes private keys or raw DB errors', async () => {
     db.professionalProfile.findFirst.mockRejectedValue(new Error('database-password-secret'));
     const response = await request(app).get('/doctors/me').set(headers()); expect(response.status).toBe(503); expect(JSON.stringify(response.body)).not.toContain('database-password-secret');
+  });
+  it('accepts a profession-specific qualification upload, not doctor licence substitution', async()=>{
+    profile.professionType='COUNSELLOR';application.details={professionType:'COUNSELLOR',discipline:'COUNSELLOR'};
+    const ok=await request(app).put(`/doctors/applications/${id}/credentials/qualification`).set(headers()).type('application/pdf').send(bytes);
+    expect(ok.status).toBe(201);
+    expect((await request(app).put(`/doctors/applications/${id}/credentials/licence`).set(headers()).type('application/pdf').send(bytes)).status).toBe(400);
+  });
+  it('requests changes without granting access, then invalidates reviews on applicant corrections', async()=>{
+    expect((await request(app).post(`/platform/doctors/${professionalId}/request-changes`).set(staff()).send({reason:'Please correct the qualification and institution details.'})).status).toBe(200);
+    expect(db.doctorApplication.update).toHaveBeenCalledWith({where:{id},data:{stage:'CHANGES_REQUESTED',submittedAt:null}});
+    const changed=await request(app).patch(`/doctors/applications/${id}/details`).set(headers()).send({qualification:'Corrected qualification'});
+    expect(changed.status).toBe(200);expect(db.doctorCredential.updateMany).toHaveBeenCalledWith(expect.objectContaining({where:{applicationId:id},data:expect.objectContaining({reviewStatus:'PENDING'})}));
+    expect((await request(app).patch(`/doctors/applications/${id}/details`).set(headers()).send({professionType:'DOCTOR'})).status).toBe(400);
+  });
+  it('denies another account correction and prevents approved application edits', async()=>{
+    expect((await request(app).patch(`/doctors/applications/${id}/details`).set(headers(reviewer)).send({qualification:'Changed qualification'})).status).toBe(403);
+    profile.verificationStatus='VERIFIED';expect((await request(app).patch(`/doctors/applications/${id}/details`).set(headers()).send({qualification:'Changed qualification'})).status).toBe(409);
+    expect(db.doctorCredential.updateMany).not.toHaveBeenCalled();
   });
 });

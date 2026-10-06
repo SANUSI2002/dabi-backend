@@ -7,7 +7,8 @@ import { privateStorageClient, assertPrivateBucket, PRIVATE_BUCKETS, uploadPriva
 import { evidenceScannerConfigured, evidenceUploadMaxBytes } from '../../config/evidenceScanner.js';
 import * as auth from '../auth/auth.model.js';
 import { sendEmailVerificationEmail, verificationEmailConfigured, verificationEmailAllowedFor } from '../auth/auth.email.js';
-import { approvalBlockers, latestCredentials, REQUIRED_CREDENTIALS } from './onboarding.policy.js';
+import { approvalBlockers, latestCredentials } from './onboarding.policy.js';
+import { PORTAL_PROFESSIONS, credentialRequirements, needsCurrentLicence } from '../professionals/professionCatalog.js';
 
 export const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 export const fail = (message, status = 409) => { throw Object.assign(new Error(message), { status }); };
@@ -40,7 +41,7 @@ export async function register(data) {
       created = await prisma.$transaction(async (tx) => {
         const user = await tx.user.create({ data: { email: data.email, full_name: `${data.firstName} ${data.lastName}`, phone_number: data.phone,
           password: encoded, accountStatus: 'PENDING', patientId: `#SHM${crypto.randomInt(100000).toString().padStart(5, '0')}`, roles: { create: { role: 'PROFESSIONAL' } } } });
-        const profile = await tx.professionalProfile.create({ data: { userId: user.id, professionType: 'DOCTOR', registrationNumber: data.registrationNumber, specialty: data.specialty, practiceName: data.hospital || null,
+        const profile = await tx.professionalProfile.create({ data: { userId: user.id, professionType: data.professionType || 'DOCTOR', registrationNumber: data.registrationNumber, specialty: data.specialty, practiceName: data.hospital || null, yearsOfExperience: data.yearsOfExperience,
           doctorApplication: { create: { details, consentVersion: data.consentVersion } } }, include: { doctorApplication: true } });
         await audit(tx, user.id, 'DOCTOR_APPLICATION_CREATED', { professionalId: profile.id, applicationId: profile.doctorApplication.id });
         return { user, application: profile.doctorApplication };
@@ -70,9 +71,22 @@ export function uploadAllowed(application, { userId }) {
   fail('Sign in after verifying your email to complete the application.', 403);
 }
 export const publicCredential = (doc) => ({ id: doc.id, kind: doc.kind, contentType: doc.contentType, byteSize: doc.byteSize, sha256: doc.sha256, scanStatus: doc.scanStatus, scanErrorCode: doc.scanErrorCode, reviewStatus: doc.reviewStatus, sourceName: doc.sourceName, reference: doc.reference, note: doc.note, reviewedAt: doc.reviewedAt, createdAt: doc.createdAt });
+export async function updateDetails(id,patch,principal) {
+  return prisma.$transaction(async tx => {
+    const app=await lockedApplication(tx,id);uploadAllowed(app,principal);
+    const details={...app.details,...patch};
+    if(app.professional.professionType!=='DOCTOR' && needsCurrentLicence(details) && details.licenceType!=='annual') fail('A dated current licence is required for this discipline.',400);
+    await tx.doctorApplication.update({where:{id},data:{details,submittedAt:null,stage:'DRAFT'}});
+    // Changed qualification/licensing facts require an independent fresh review.
+    await tx.doctorCredential.updateMany({where:{applicationId:id},data:{reviewStatus:'PENDING',sourceName:null,reference:null,note:null,reviewedBy:null,reviewedAt:null}});
+    await tx.professionalProfile.update({where:{id:app.professionalId},data:{verificationStatus:'PENDING',decisionReason:null,...(patch.specialty?{specialty:patch.specialty}:{}),...(patch.registrationNumber?{registrationNumber:patch.registrationNumber}:{})}});
+    await audit(tx,principal.userId,'PROFESSIONAL_DETAILS_UPDATED',{applicationId:id,fields:Object.keys(patch)});
+    return {updated:true};
+  });
+}
 export async function upload(id, kind, bytes, contentType, principal) {
   if (!enabled()) fail('Doctor credential uploads are temporarily unavailable.', 503);
-  if (!REQUIRED_CREDENTIALS.includes(kind) || !Buffer.isBuffer(bytes) || !bytes.length) fail('A valid document is required.', 400);
+  if (!Buffer.isBuffer(bytes) || !bytes.length) fail('A valid document is required.', 400);
   if (bytes.length > Math.min(evidenceUploadMaxBytes(), 5 * 1024 * 1024)) fail('File exceeds the scanner size limit.', 413);
   const extension = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg' }[contentType];
   if (!extension) fail('Only PDF, PNG and JPEG files are accepted.', 415);
@@ -82,10 +96,11 @@ export async function upload(id, kind, bytes, contentType, principal) {
     return await prisma.$transaction(async (tx) => {
       const application = await lockedApplication(tx, id);
       uploadAllowed(application, principal);
+      if (!credentialRequirements(application.details).some((r) => r.kind === kind)) fail('This document kind is not required for your profession.', 400);
       if (application.credentials.length >= 20) fail('Maximum document revisions reached. Contact Sabi support.', 409);
       stored = await uploadPrivateObject(client, { bucket: PRIVATE_BUCKETS.hospitalEvidenceQuarantine, path: `doctor-applications/${id}/${crypto.randomUUID()}.${extension}`, bytes, contentType });
       const doc = await tx.doctorCredential.create({ data: { applicationId: id, kind, storageKey: stored.path, storageBucket: stored.bucket, contentType, byteSize: bytes.length, sha256: hash(bytes) } });
-      await tx.doctorApplication.update({ where: { id }, data: { submittedAt: null } });
+      await tx.doctorApplication.update({ where: { id }, data: { submittedAt: null, stage: 'DRAFT' } });
       await audit(tx, application.professional.userId, 'DOCTOR_CREDENTIAL_UPLOADED', { applicationId: id, credentialId: doc.id, kind });
       return publicCredential(doc);
     }, { timeout: 30000 });
@@ -98,19 +113,19 @@ export async function submit(id, principal) {
   if (!enabled()) fail('Doctor submissions are temporarily unavailable.', 503);
   return prisma.$transaction(async (tx) => {
     const app = await lockedApplication(tx, id); uploadAllowed(app, principal);
-    if (latestCredentials(app).length !== REQUIRED_CREDENTIALS.length) fail('Upload both required credentials before submitting.');
-    await tx.doctorApplication.update({ where: { id }, data: { submittedAt: new Date() } });
+    if (latestCredentials(app).length !== credentialRequirements(app.details).length) fail('Upload all required credentials before submitting.');
+    await tx.doctorApplication.update({ where: { id }, data: { submittedAt: new Date(), stage: 'SUBMITTED' } });
     await tx.professionalProfile.update({ where: { id: app.professionalId }, data: { verificationStatus: 'PENDING', onboardingProgress: 100, decisionReason: null } });
     await audit(tx, app.professional.userId, 'DOCTOR_APPLICATION_SUBMITTED', { applicationId: id });
     return { id, submitted: true };
   });
 }
 export async function detail(id, userId) {
-  const profile = await prisma.professionalProfile.findFirst({ where: { professionType: 'DOCTOR', ...(id ? { id } : { userId }) }, include: profileInclude });
+  const profile = await prisma.professionalProfile.findFirst({ where: { professionType: { in: PORTAL_PROFESSIONS }, ...(id ? { id } : { userId }) }, include: profileInclude });
   if (!profile) fail('Doctor application not found.', 404);
   const app = profile.doctorApplication;
   return { id: profile.id, userId: profile.userId, email: profile.user.email, name: profile.user.full_name, emailVerified: Boolean(profile.user.emailVerifiedAt), status: profile.verificationStatus, decisionReason: profile.decisionReason,
-    specialty: profile.specialty, registrationNumber: profile.registrationNumber, applicationId: app?.id, details: app?.details, submittedAt: app?.submittedAt,
+    professionType: profile.professionType, stage: app?.stage, requiredCredentials: credentialRequirements(app?.details), specialty: profile.specialty, registrationNumber: profile.registrationNumber, applicationId: app?.id, details: app?.details, submittedAt: app?.submittedAt,
     credentials: latestCredentials(app).map(publicCredential), blockers: approvalBlockers(profile, app), maxUploadBytes: Math.min(evidenceUploadMaxBytes(), 5 * 1024 * 1024) };
 }
 export async function approve(tx, profile, adminId) {
@@ -126,7 +141,7 @@ export async function sendApproved(email) {
   try {
     if (!verificationEmailConfigured() || !verificationEmailAllowedFor(email)) return false;
     const response = await globalThis.fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: process.env.PASSWORD_RESET_EMAIL_FROM, to: [email], subject: 'Your Sabi doctor credentials have been approved', text: `Sabi operations has reviewed your submitted credentials and approved your doctor workspace. Sign in using the email and password you chose at registration. No password is sent by email.\n\n${doctorPortal()}/login\n\nIf you have forgotten your password, use the password-reset link on the sign-in page.` }), signal: globalThis.AbortSignal.timeout(10000) });
+      body: JSON.stringify({ from: process.env.PASSWORD_RESET_EMAIL_FROM, to: [email], subject: 'Your Sabi professional credentials have been approved', text: `Sabi operations has reviewed your submitted credentials and approved your professional workspace within your verified scope. Sign in using the email and password you chose at registration. No password is sent by email.\n\n${doctorPortal()}/login\n\nIf you have forgotten your password, use the password-reset link on the sign-in page.` }), signal: globalThis.AbortSignal.timeout(10000) });
     return response.ok;
   } catch { return false; }
 }

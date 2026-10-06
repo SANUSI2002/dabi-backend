@@ -1,4 +1,5 @@
 import * as r from "./wellness.repository.js";
+import {PORTAL_PROFESSIONS} from '../professionals/professionCatalog.js';
 const fail = () => Object.assign(new Error("NOT_FOUND"), { code: "NOT_FOUND" });
 export const list = r.offerings;
 export const detail = async (id) => {
@@ -11,6 +12,7 @@ export const book = (u, d) =>
     if (!(await r.patient(t, u))) throw fail();
     const o = await r.offering(d.offeringId, t);
     if (!o) throw fail();
+    if (PORTAL_PROFESSIONS.includes(o.provider?.professional?.professionType)) throw Object.assign(new Error('Choose a published appointment slot for this professional.'),{code:'PROFESSIONAL_SLOT_REQUIRED'});
     const b = await r.create(t, {
       patientId: u,
       offeringId: d.offeringId,

@@ -9,6 +9,7 @@
 //   actions cannot move an appointment through an invalid transition.
 // - Doctors see only the minimum identity of their own patients (name + Sabi patient ID).
 import prisma from '../../config/db.js';
+import { PORTAL_PROFESSIONS } from '../professionals/professionCatalog.js';
 
 const DAY = 86400000;
 const ACTIVE = ['REQUESTED', 'CONFIRMED'];
@@ -42,7 +43,7 @@ const toDoctorAppointment = ({ patient, dependent, ...a }) => ({
 });
 
 const isPatient = (tx, userId) => tx.userRole.findFirst({ where: { userId, role: 'PATIENT' }, select: { id: true } });
-const verifiedDoctor = (tx, where) => tx.professionalProfile.findFirst({ where: { ...where, professionType: 'DOCTOR', verificationStatus: 'VERIFIED' }, select: { id: true } });
+const verifiedDoctor = (tx, where) => tx.professionalProfile.findFirst({ where: { ...where, professionType: { in: PORTAL_PROFESSIONS }, verificationStatus: 'VERIFIED' }, select: { id: true } });
 const requireDoctor = async (tx, userId) => {
   const doctor = await verifiedDoctor(tx, { userId });
   if (!doctor) throw fail('FORBIDDEN');
@@ -81,10 +82,12 @@ export const nextAvailable = async (doctorIds) => {
 
 const createBooking = async (tx, patientId, { slotId, consultationType, reason, dependentId }, sameDoctorAs) => {
   const slot = await tx.doctorAvailabilitySlot.findFirst({
-    where: { id: slotId, ...openSlotWhere(), doctorProfile: { professionType: 'DOCTOR', verificationStatus: 'VERIFIED' } },
+    where: { id: slotId, ...openSlotWhere(), doctorProfile: { professionType: { in: PORTAL_PROFESSIONS }, verificationStatus: 'VERIFIED' } },
     select: { id: true, doctorProfileId: true, startsAt: true, endsAt: true, consultationTypes: true },
   });
   if (!slot) throw fail('SLOT_UNAVAILABLE');
+  await tx.$queryRaw`SELECT id FROM professional_profiles WHERE id = ${slot.doctorProfileId} FOR UPDATE`;
+  if (await tx.professionalTimeBlock.findFirst({ where: { professionalId: slot.doctorProfileId, startsAt: { lt: slot.endsAt }, endsAt: { gt: slot.startsAt } }, select: { id: true } })) throw fail('SLOT_UNAVAILABLE');
   if (sameDoctorAs && slot.doctorProfileId !== sameDoctorAs) throw fail('SLOT_UNAVAILABLE');
   if (!slot.consultationTypes.includes(consultationType)) throw fail('TYPE_NOT_OFFERED');
   if (dependentId && !(await tx.dependentProfile.findFirst({ where: { id: dependentId, patientId }, select: { id: true } }))) throw fail('NOT_FOUND');
@@ -161,7 +164,7 @@ const publicProfileSelect = {
 };
 
 export const practiceProfile = async (userId) => {
-  const profile = await prisma.professionalProfile.findFirst({ where: { userId, professionType: 'DOCTOR' }, select: publicProfileSelect });
+  const profile = await prisma.professionalProfile.findFirst({ where: { userId, professionType: { in: PORTAL_PROFESSIONS }, verificationStatus: 'VERIFIED' }, select: publicProfileSelect });
   if (!profile) throw fail('FORBIDDEN');
   return profile;
 };
@@ -194,6 +197,7 @@ export const practiceSlots = async (userId, query) => {
 
 export const createSlots = (userId, { slots }) => transaction(async (tx) => {
   const doctorId = await requireDoctor(tx, userId);
+  await tx.$queryRaw`SELECT id FROM professional_profiles WHERE id = ${doctorId} FOR UPDATE`;
   for (const slot of slots) {
     if (await tx.professionalTimeBlock.findFirst({ where: { professionalId: doctorId, startsAt: { lt: new Date(slot.endsAt) }, endsAt: { gt: new Date(slot.startsAt) } }, select: { id: true } })) throw fail('SLOT_BLOCKED');
     const overlap = await tx.doctorAvailabilitySlot.findFirst({
