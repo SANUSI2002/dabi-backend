@@ -14,6 +14,7 @@ import * as S from './onboarding.service.js';
 import * as professionals from '../professionals/professionals.model.js';
 import { eligibleDocument, latestCredentials } from './onboarding.policy.js';
 import { PROFESSION_CATALOG, PORTAL_PROFESSIONS } from '../professionals/professionCatalog.js';
+import { RETRYABLE_SCAN_FAILURES } from '../platform/platform.evidence-scanner.js';
 
 export const doctorOnboardingRoutes = express.Router();
 export const platformDoctorRoutes = express.Router();
@@ -101,7 +102,9 @@ platformDoctorRoutes.post('/:id/credentials/:credentialId/review', requirePermis
     if (!['PENDING', 'REJECTED'].includes(app.professional.verificationStatus) || !app.submittedAt) S.fail('This application is not awaiting review.');
     if (!eligibleDocument(doc)) S.fail('Malware screening must complete before authenticity review.');
     await tx.doctorCredential.update({ where: { id: doc.id }, data: { ...req.body, reviewedBy: req.user.id, reviewedAt: new Date() } });
-    await tx.doctorApplication.update({ where: { id: app.id }, data: { stage: 'PENDING_REVIEW' } });
+    // Reviewing a credential opens review on a submitted application; it never rewinds one that
+    // has already been decided (REJECTED/APPROVED) or sent back for changes.
+    await tx.doctorApplication.updateMany({ where: { id: app.id, stage: 'SUBMITTED' }, data: { stage: 'PENDING_REVIEW' } });
     await S.audit(tx, req.user.id, 'DOCTOR_CREDENTIAL_REVIEWED', { professionalId: req.params.id, credentialId: doc.id, decision: req.body.reviewStatus });
   });
   res.json({ data: await S.detail(req.params.id) });
@@ -120,12 +123,11 @@ platformDoctorRoutes.post('/:id/request-changes', requirePermission('platform.on
   });
   res.json({ data: await S.detail(req.params.id) });
 }));
-platformDoctorRoutes.post('/:id/credentials/:credentialId/retry-scan', validate(uuidParams), wrap(async (req, res) => {
+platformDoctorRoutes.post('/:id/credentials/:credentialId/retry-scan', requirePermission('platform.onboarding.approve'), createLimiter({ kind: 'doctor-credential-rescan', max: 5 }), validate(uuidParams), wrap(async (req, res) => {
   if (!S.enabled()) S.fail('Scanning is temporarily unavailable.', 503);
   await prisma.$transaction(async (tx) => {
     const { app, doc } = await credential(tx, req.params.id, req.params.credentialId);
-    const codes = ['CLOUDMERSIVE_UNAVAILABLE', 'CLOUDMERSIVE_AUTH_FAILED', 'CLOUDMERSIVE_RATE_LIMITED', 'CLOUDMERSIVE_REPLY_INVALID', 'EVIDENCE_DOWNLOAD_FAILED', 'EVIDENCE_CLEAN_UPLOAD_FAILED', 'SCAN_LEASE_EXHAUSTED'];
-    if (!['PENDING', 'REJECTED'].includes(app.professional.verificationStatus) || doc.scanStatus !== 'FAILED' || !codes.includes(doc.scanErrorCode) || doc.storageBucket !== 'sabi-hospital-evidence-quarantine' || doc.byteSize > evidenceUploadMaxBytes()) S.fail('Only operational scan failures may be retried. Replace unsafe or oversized documents.');
+    if (!['PENDING', 'REJECTED'].includes(app.professional.verificationStatus) || doc.scanStatus !== 'FAILED' || !RETRYABLE_SCAN_FAILURES.includes(doc.scanErrorCode) || doc.storageBucket !== 'sabi-hospital-evidence-quarantine' || doc.byteSize > evidenceUploadMaxBytes()) S.fail('Only operational scan failures may be retried. Replace unsafe or oversized documents.');
     await tx.doctorCredential.update({ where: { id: doc.id }, data: { scanStatus: 'PENDING', scanAttempts: 0, scanLeaseToken: null, scanLeaseExpiresAt: null, scanErrorCode: null } });
     await S.audit(tx, req.user.id, 'DOCTOR_SCAN_REQUEUED', { credentialId: doc.id });
   });

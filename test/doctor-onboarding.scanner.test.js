@@ -6,13 +6,13 @@ vi.mock('../src/config/db.js', () => ({ default: db }));
 const { processDoctorCredentialJob } = await import('../src/modules/doctors/onboarding.scanner.js');
 const bytes = Buffer.from('%PDF-1.7\nsynthetic');
 const job = { id: 'test-document', applicationId: 'test-app', application: { professional: { userId: 'doctor-owner' } }, storageBucket: 'sabi-hospital-evidence-quarantine', storageKey: 'synthetic.pdf', byteSize: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex'), contentType: 'application/pdf', scanAttempts: 0, scanStatus: 'PENDING' };
-const quarantine = { download: vi.fn() }, clean = { upload: vi.fn(), download: vi.fn() };
+const quarantine = { download: vi.fn(), remove: vi.fn() }, clean = { upload: vi.fn(), download: vi.fn() };
 const client = { storage: { getBucket: vi.fn(), from: (bucket) => bucket === 'sabi-hospital-evidence-clean' ? clean : quarantine } };
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv('DOCTOR_REGISTRATION_ENABLED', 'true'); vi.stubEnv('EVIDENCE_SCANNER_ENABLED', 'true'); vi.stubEnv('EVIDENCE_SCANNER_PROVIDER', 'cloudmersive'); vi.stubEnv('CLOUDMERSIVE_API_KEY', 'synthetic'); vi.stubEnv('CLOUDMERSIVE_CREDENTIAL_PROCESSING_APPROVED', 'true');
   db.$transaction.mockImplementation(async (work) => work(db)); db.doctorCredential.findMany.mockResolvedValue([job]); db.doctorCredential.updateMany.mockResolvedValue({ count: 1 });
   db.activityLog.create.mockImplementation(async ({ data }) => { if (!data.userId) throw new Error('ActivityLog.userId is required'); return {}; });
-  client.storage.getBucket.mockResolvedValue({ data: { public: false } }); quarantine.download.mockResolvedValue({ data: new Blob([bytes]) }); clean.upload.mockResolvedValue({ data: { path: 'clean.pdf' } });
+  client.storage.getBucket.mockResolvedValue({ data: { public: false } }); quarantine.download.mockResolvedValue({ data: new Blob([bytes]) }); clean.upload.mockResolvedValue({ data: { path: 'clean.pdf' } }); quarantine.remove.mockResolvedValue({});
 });
 afterEach(() => vi.unstubAllEnvs());
 describe('doctor asynchronous malware screening', () => {
@@ -45,6 +45,25 @@ describe('doctor asynchronous malware screening', () => {
   it('cannot publish audit state for a stale lease', async () => {
     db.doctorCredential.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
     await processDoctorCredentialJob({ db, client, scan: async () => ({ verdict: 'CLEAN', scannerVersion: 'Synthetic' }) }); expect(db.activityLog.create).not.toHaveBeenCalled();
+  });
+  it('passes the credential to the scanner and deletes the quarantine copy only after the clean copy is committed', async () => {
+    const scan = vi.fn(async () => ({ verdict: 'CLEAN', scannerVersion: 'Synthetic' }));
+    await processDoctorCredentialJob({ db, client, scan });
+    expect(scan).toHaveBeenCalledWith(bytes, expect.objectContaining({ id: job.id, contentType: 'application/pdf' }));
+    expect(quarantine.remove).toHaveBeenCalledWith([job.storageKey]);
+    expect(db.doctorCredential.updateMany.mock.invocationCallOrder.at(-1)).toBeLessThan(quarantine.remove.mock.invocationCallOrder[0]);
+  });
+  it('keeps the quarantine copy when the lease was lost or the verdict is not clean', async () => {
+    db.doctorCredential.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    await processDoctorCredentialJob({ db, client, scan: async () => ({ verdict: 'CLEAN', scannerVersion: 'Synthetic' }) });
+    await processDoctorCredentialJob({ db, client, scan: async () => ({ verdict: 'INFECTED', scannerVersion: 'Synthetic' }) });
+    expect(quarantine.remove).not.toHaveBeenCalled();
+  });
+  it('fails an unsupported content type at once instead of retrying it', async () => {
+    db.doctorCredential.findMany.mockResolvedValue([{ ...job, contentType: 'image/gif' }]);
+    await processDoctorCredentialJob({ db, client, scan: async () => ({ verdict: 'CLEAN', scannerVersion: 'Synthetic' }) });
+    expect(clean.upload).not.toHaveBeenCalled();
+    expect(db.doctorCredential.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ scanStatus: 'FAILED', scanErrorCode: 'EVIDENCE_CONTENT_TYPE_INVALID' }) }));
   });
   it('does no work while doctor intake is gated off', async () => {
     vi.stubEnv('DOCTOR_REGISTRATION_ENABLED', 'false'); expect(await processDoctorCredentialJob({ db, client })).toBe(false); expect(db.doctorCredential.findMany).not.toHaveBeenCalled();

@@ -22,6 +22,17 @@ export function createVideoService({ db = prisma, provider = createDailyProvider
     if (time >= new Date(row.endsAt).getTime() + 15 * MINUTE) throw videoError('VIDEO_WINDOW_ENDED', 409);
     return row;
   }
+  // The doctor and the patient often press "Join" together. An upsert is a read then an insert, so
+  // both can take the insert branch and one fails on the unique appointmentId. Insert with
+  // ON CONFLICT DO NOTHING instead, then read back whichever row won: both joiners share one room.
+  async function roomFor(appointment) {
+    const existing = await db.doctorVideoRoom.findUnique({ where: { appointmentId: appointment.id } });
+    if (existing) return existing;
+    await db.doctorVideoRoom.createMany({ data: [{ appointmentId: appointment.id, roomName: `sabi-v-${crypto.randomBytes(16).toString('hex')}`, expiresAt: new Date(new Date(appointment.endsAt).getTime() + 15 * MINUTE) }], skipDuplicates: true });
+    const room = await db.doctorVideoRoom.findUnique({ where: { appointmentId: appointment.id } });
+    if (!room) throw videoError('VIDEO_UNAVAILABLE');
+    return room;
+  }
   return {
     config: () => ({ enabled: dailyConfigured(env), joinMinutesBefore: 10, graceMinutesAfter: 15 }),
     check: async (userId, id, role) => {
@@ -35,9 +46,7 @@ export function createVideoService({ db = prisma, provider = createDailyProvider
       const appointment = await authorize(userId, id, role);
       if (!dailyConfigured(env)) throw videoError('VIDEO_UNAVAILABLE');
       if (!consent.providerConsent) throw videoError('VIDEO_CONSENT_REQUIRED', 400);
-      const room = await db.doctorVideoRoom.upsert({ where: { appointmentId: id }, update: {}, create: {
-        appointmentId: id, roomName: `sabi-v-${crypto.randomBytes(16).toString('hex')}`, expiresAt: new Date(new Date(appointment.endsAt).getTime() + 15 * MINUTE),
-      } });
+      const room = await roomFor(appointment);
       if (room.revokedAt || new Date(room.expiresAt) <= now()) throw videoError('VIDEO_WINDOW_ENDED', 409);
       const remote = await provider.ensureRoom(room, appointment.startsAt);
       await authorize(userId, id, role);

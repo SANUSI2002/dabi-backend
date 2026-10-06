@@ -101,7 +101,7 @@ describe('asynchronous evidence scanner', () => {
   it('claims once, verifies bytes, releases clean object, and audits the result', async () => {
     const scan = vi.fn(async () => ({ verdict: 'CLEAN', scannerVersion: 'ClamAV test-version' }));
     expect(await processEvidenceJob({ db, client, scan })).toBe(true);
-    expect(scan).toHaveBeenCalledWith(bytes);
+    expect(scan).toHaveBeenCalledWith(bytes, expect.objectContaining({ id: job.id }));
     expect(clean.upload).toHaveBeenCalledWith(expect.stringContaining(job.id), bytes, expect.objectContaining({ upsert: false }));
     expect(db.platformApplicationEvidence.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ scanStatus: 'CLEAN', storageBucket: 'sabi-hospital-evidence-clean' }) }));
     expect(db.platformApplicationEvidenceEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ eventType: 'SCAN_CLEAN', actorKind: 'CLAMD_SCANNER' }) });

@@ -73,6 +73,7 @@ export async function scanWithClamd(bytes) {
   throw new Error('CLAMD_SCAN_UNCERTAIN');
 }
 
+/** Every scanner takes (bytes, job); ClamAV ignores the job, Cloudmersive checks its declared format. */
 export const scanEvidence = (bytes, job) => evidenceScannerProvider() === 'cloudmersive'
   ? scanWithCloudmersive(bytes, job) : scanWithClamd(bytes);
 const queuedStatuses = () => evidenceScannerProvider() === 'cloudmersive' ? ['PENDING', 'UNSCANNED_EXCEPTION'] : ['PENDING'];
@@ -94,28 +95,61 @@ export async function claimEvidenceJob(db = prisma, now = new Date()) {
   return null;
 }
 
-async function downloadVerified(client, bucket, path, evidence) {
+/**
+ * Failures a retry can never fix: the stored bytes or their declared type are wrong, so the
+ * document itself has to be replaced. Both scan pipelines stop at once on these.
+ */
+export const CONTENT_SCAN_FAILURES = Object.freeze(['EVIDENCE_INTEGRITY_MISMATCH', 'EVIDENCE_QUARANTINE_MISMATCH', 'EVIDENCE_CONTENT_TYPE_INVALID', 'CLOUDMERSIVE_FILE_TOO_LARGE', 'CLOUDMERSIVE_FORMAT_MISMATCH']);
+
+/** Operational failures (scanner, storage or lease) an operator may re-queue once the cause is fixed. */
+export const RETRYABLE_SCAN_FAILURES = Object.freeze([
+  'CLOUDMERSIVE_AUTH_FAILED', 'CLOUDMERSIVE_RATE_LIMITED', 'CLOUDMERSIVE_UNAVAILABLE', 'CLOUDMERSIVE_NOT_CONFIGURED', 'CLOUDMERSIVE_REPLY_INVALID',
+  'CLAMD_CONNECTION_FAILED', 'CLAMD_TIMEOUT', 'CLAMD_REPLY_INVALID', 'CLAMD_REPLY_INCOMPLETE', 'CLAMD_VERSION_INVALID', 'CLAMD_SIGNATURES_STALE', 'CLAMD_SCAN_UNCERTAIN', 'CLAMD_PRIVATE_ADDRESS_INVALID',
+  'EVIDENCE_SCAN_UNCERTAIN', 'EVIDENCE_SCAN_FAILED', 'EVIDENCE_DOWNLOAD_FAILED', 'EVIDENCE_CLEAN_UPLOAD_FAILED', 'SCAN_LEASE_EXHAUSTED',
+]);
+
+/** The machine-readable code for a scan failure; anything unexpected becomes EVIDENCE_SCAN_FAILED. */
+export const scanFailureCode = (error) => /^[A-Z_]{4,64}$/.test(error?.message || '') ? error.message : 'EVIDENCE_SCAN_FAILED';
+export const isTerminalScanFailure = (code, attempts) => attempts >= MAX_ATTEMPTS || CONTENT_SCAN_FAILURES.includes(code);
+/** Exponential backoff for the next attempt, capped at 30 minutes. */
+export const scanRetryAt = (attempts, now = Date.now()) => new Date(now + Math.min(30, 2 ** attempts) * 60_000);
+
+/** Downloads a private object and proves it is byte-for-byte the document that was uploaded. */
+export async function downloadVerified(client, bucket, path, { size, sha256: digest, maxBytes = MAX_BYTES }) {
   await assertPrivateBucket(client, bucket);
   const { data, error } = await client.storage.from(bucket).download(path);
   if (error || !data) throw new Error('EVIDENCE_DOWNLOAD_FAILED');
   const bytes = Buffer.from(await data.arrayBuffer());
-  if (bytes.length !== evidence.sizeBytes || bytes.length === 0 || bytes.length > MAX_BYTES || sha256(bytes) !== evidence.sha256) throw new Error('EVIDENCE_INTEGRITY_MISMATCH');
+  if (bytes.length !== size || bytes.length === 0 || bytes.length > maxBytes || sha256(bytes) !== digest) throw new Error('EVIDENCE_INTEGRITY_MISMATCH');
   return bytes;
 }
 
-async function releaseCleanObject(client, job, bytes) {
+/** Copies scanned-clean bytes into the clean bucket at `${keyPrefix}.<ext>`. Idempotent across crashed workers. */
+export async function releaseCleanObject(client, { keyPrefix, contentType, size, sha256: digest, maxBytes = MAX_BYTES }, bytes) {
   await assertPrivateBucket(client, PRIVATE_BUCKETS.hospitalEvidenceClean);
-  const extension = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' }[job.contentType];
+  const extension = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' }[contentType];
   if (!extension) throw new Error('EVIDENCE_CONTENT_TYPE_INVALID');
-  const path = `applications/${job.applicationId}/${job.id}.${extension}`;
+  const path = `${keyPrefix}.${extension}`;
   const bucket = PRIVATE_BUCKETS.hospitalEvidenceClean;
-  const { error } = await client.storage.from(bucket).upload(path, bytes, { contentType: job.contentType, upsert: false, cacheControl: '0' });
+  const { error } = await client.storage.from(bucket).upload(path, bytes, { contentType, upsert: false, cacheControl: '0' });
   if (error) {
     // A previous worker may have crashed after writing the clean object but
     // before committing metadata. Reuse it only if its bytes match exactly.
-    await downloadVerified(client, bucket, path, job);
+    try { await downloadVerified(client, bucket, path, { size, sha256: digest, maxBytes }); }
+    catch { throw new Error('EVIDENCE_CLEAN_UPLOAD_FAILED'); }
   }
   return { bucket, path };
+}
+
+/**
+ * Deletes the quarantine copy once the clean copy is committed. Best effort: a failure leaves an
+ * unreferenced private object for operators, never a reachable document.
+ */
+export async function removeQuarantineObject(client, bucket, key) {
+  try {
+    const { error } = await client.storage.from(bucket).remove([key]);
+    if (error) console.error('[evidence-scanner] Quarantine cleanup requires operator follow-up.');
+  } catch { console.error('[evidence-scanner] Quarantine cleanup requires operator follow-up.'); }
 }
 
 async function markScan(db, job, data, eventType, details) {
@@ -136,8 +170,8 @@ export async function processEvidenceJob({ db = prisma, client = privateStorageC
   }
   try {
     if (job.storageBucket !== PRIVATE_BUCKETS.hospitalEvidenceQuarantine) throw new Error('EVIDENCE_QUARANTINE_MISMATCH');
-    const bytes = await downloadVerified(client, job.storageBucket, job.storageKey, job);
-    const result = scan === scanEvidence ? await scan(bytes, job) : await scan(bytes);
+    const bytes = await downloadVerified(client, job.storageBucket, job.storageKey, { size: job.sizeBytes, sha256: job.sha256 });
+    const result = await scan(bytes, job);
     if (result.verdict === 'INFECTED') {
       await markScan(db, job, { scanStatus: 'INFECTED', scannedAt: new Date(), scannerVersion: result.scannerVersion, scanLeaseToken: null, scanLeaseExpiresAt: null }, 'SCAN_INFECTED', { signature: result.signature, sha256: job.sha256 });
       return true;
@@ -147,21 +181,16 @@ export async function processEvidenceJob({ db = prisma, client = privateStorageC
       return true;
     }
     if (result.verdict !== 'CLEAN' || !result.scannerVersion) throw new Error('EVIDENCE_SCAN_UNCERTAIN');
-    const released = await releaseCleanObject(client, job, bytes);
+    const released = await releaseCleanObject(client, { keyPrefix: `applications/${job.applicationId}/${job.id}`, contentType: job.contentType, size: job.sizeBytes, sha256: job.sha256 }, bytes);
     const committed = await markScan(db, job, { scanStatus: 'CLEAN', storageBucket: released.bucket, storageKey: released.path, scannedAt: new Date(), scannerVersion: result.scannerVersion, scanLeaseToken: null, scanLeaseExpiresAt: null }, 'SCAN_CLEAN', { sha256: job.sha256, scannerVersion: result.scannerVersion });
-    if (committed) {
-      try {
-        const { error } = await client.storage.from(job.storageBucket).remove([job.storageKey]);
-        if (error) console.error('[evidence-scanner] Quarantine cleanup requires operator follow-up.');
-      } catch { console.error('[evidence-scanner] Quarantine cleanup requires operator follow-up.'); }
-    }
+    if (committed) await removeQuarantineObject(client, job.storageBucket, job.storageKey);
     return true;
   } catch (error) {
-    const code = /^[A-Z_]{4,64}$/.test(error?.message || '') ? error.message : 'EVIDENCE_SCAN_FAILED';
-    const terminal = job.scanAttempts >= MAX_ATTEMPTS || ['EVIDENCE_INTEGRITY_MISMATCH', 'EVIDENCE_QUARANTINE_MISMATCH', 'EVIDENCE_CONTENT_TYPE_INVALID', 'CLOUDMERSIVE_FILE_TOO_LARGE', 'CLOUDMERSIVE_FORMAT_MISMATCH'].includes(code);
+    const code = scanFailureCode(error);
+    const terminal = isTerminalScanFailure(code, job.scanAttempts);
     await markScan(db, job, {
       scanStatus: terminal ? 'FAILED' : 'PENDING', scanErrorCode: code, scanLeaseToken: null,
-      scanLeaseExpiresAt: terminal ? null : new Date(Date.now() + Math.min(30, 2 ** job.scanAttempts) * 60_000),
+      scanLeaseExpiresAt: terminal ? null : scanRetryAt(job.scanAttempts),
       ...(terminal ? { scannedAt: new Date() } : {}),
     }, terminal ? 'SCAN_FAILED' : 'SCAN_RETRY_SCHEDULED', { code, attempt: job.scanAttempts });
     return true;

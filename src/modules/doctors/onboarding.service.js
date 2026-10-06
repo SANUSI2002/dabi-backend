@@ -36,22 +36,20 @@ export async function register(data) {
   const { password, ...details } = data;
   const encoded = await bcrypt.hash(password, 12);
   let created;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      created = await prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({ data: { email: data.email, full_name: `${data.firstName} ${data.lastName}`, phone_number: data.phone,
-          password: encoded, accountStatus: 'PENDING', patientId: `#SHM${crypto.randomInt(100000).toString().padStart(5, '0')}`, roles: { create: { role: 'PROFESSIONAL' } } } });
-        const profile = await tx.professionalProfile.create({ data: { userId: user.id, professionType: data.professionType || 'DOCTOR', registrationNumber: data.registrationNumber, specialty: data.specialty, practiceName: data.hospital || null, yearsOfExperience: data.yearsOfExperience,
-          doctorApplication: { create: { details, consentVersion: data.consentVersion } } }, include: { doctorApplication: true } });
-        await audit(tx, user.id, 'DOCTOR_APPLICATION_CREATED', { professionalId: profile.id, applicationId: profile.doctorApplication.id });
-        return { user, application: profile.doctorApplication };
-      });
-      break;
-    } catch (error) {
-      if (error.code === 'P2002' && String(error.meta?.target).includes('patient_id') && attempt < 4) continue;
-      if (error.code === 'P2002') fail('An account with these details already exists. Sign in or reset your password.', 409);
-      throw error;
-    }
+  try {
+    created = await prisma.$transaction(async (tx) => {
+      // Professionals are not patients: give them a collision-free internal identifier (as caregiver and
+      // organization accounts do) instead of drawing from the 100,000-value patient number space.
+      const user = await tx.user.create({ data: { email: data.email, full_name: `${data.firstName} ${data.lastName}`, phone_number: data.phone,
+        password: encoded, accountStatus: 'PENDING', patientId: `PRO-${crypto.randomUUID()}`, roles: { create: { role: 'PROFESSIONAL' } } } });
+      const profile = await tx.professionalProfile.create({ data: { userId: user.id, professionType: data.professionType || 'DOCTOR', registrationNumber: data.registrationNumber, specialty: data.specialty, practiceName: data.hospital || null, yearsOfExperience: data.yearsOfExperience,
+        doctorApplication: { create: { details, consentVersion: data.consentVersion } } }, include: { doctorApplication: true } });
+      await audit(tx, user.id, 'DOCTOR_APPLICATION_CREATED', { professionalId: profile.id, applicationId: profile.doctorApplication.id });
+      return { user, application: profile.doctorApplication };
+    });
+  } catch (error) {
+    if (error.code === 'P2002') fail('An account with these details already exists. Sign in or reset your password.', 409);
+    throw error;
   }
   const emailSent = await sendVerification(created.user).catch(() => false);
   return { applicationId: created.application.id, userId: created.user.id, email: created.user.email, emailSent, status: 'email_pending', maxUploadBytes: Math.min(evidenceUploadMaxBytes(), 5 * 1024 * 1024) };
@@ -63,8 +61,9 @@ export async function lockedApplication(tx, id) {
   if (!entry) fail('Application not found.', 404);
   await tx.$queryRaw`SELECT id FROM professional_profiles WHERE id = ${entry.professionalId} FOR UPDATE`;
   await tx.$queryRaw`SELECT id FROM "DoctorApplication" WHERE id = ${id} FOR UPDATE`;
-  return tx.doctorApplication.findUnique({ where: { id }, include: { credentials: true, professional: { include: { user: profileInclude.user } } } });
+  return readApplication(tx, id);
 }
+const readApplication = (db, id) => db.doctorApplication.findUnique({ where: { id }, include: { credentials: true, professional: { include: { user: profileInclude.user } } } });
 export function uploadAllowed(application, { userId }) {
   if (!['PENDING', 'REJECTED'].includes(application.professional.verificationStatus)) fail('This application cannot accept changes.', 409);
   if (userId === application.professional.userId && application.professional.user.accountStatus === 'ACTIVE' && application.professional.user.emailVerifiedAt) return;
@@ -91,21 +90,29 @@ export async function upload(id, kind, bytes, contentType, principal) {
   const extension = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg' }[contentType];
   if (!extension) fail('Only PDF, PNG and JPEG files are accepted.', 415);
   const client = privateStorageClient();
-  let stored;
+  const acceptUpload = (application) => {
+    if (!application) fail('Application not found.', 404);
+    uploadAllowed(application, principal);
+    if (!credentialRequirements(application.details).some((r) => r.kind === kind)) fail('This document kind is not required for your profession.', 400);
+    if (application.credentials.length >= 20) fail('Maximum document revisions reached. Contact Sabi support.', 409);
+  };
+  // Refuse early without locks so a request that will fail never touches storage.
+  acceptUpload(await readApplication(prisma, id));
+  // Storage I/O runs outside any transaction: no row lock or pooled connection is held while the
+  // bytes travel. The application is then locked and every rule re-checked before the row is written;
+  // if anything changed in between, the stored object is removed.
+  const stored = await uploadPrivateObject(client, { bucket: PRIVATE_BUCKETS.hospitalEvidenceQuarantine, path: `doctor-applications/${id}/${crypto.randomUUID()}.${extension}`, bytes, contentType });
   try {
     return await prisma.$transaction(async (tx) => {
       const application = await lockedApplication(tx, id);
-      uploadAllowed(application, principal);
-      if (!credentialRequirements(application.details).some((r) => r.kind === kind)) fail('This document kind is not required for your profession.', 400);
-      if (application.credentials.length >= 20) fail('Maximum document revisions reached. Contact Sabi support.', 409);
-      stored = await uploadPrivateObject(client, { bucket: PRIVATE_BUCKETS.hospitalEvidenceQuarantine, path: `doctor-applications/${id}/${crypto.randomUUID()}.${extension}`, bytes, contentType });
+      acceptUpload(application);
       const doc = await tx.doctorCredential.create({ data: { applicationId: id, kind, storageKey: stored.path, storageBucket: stored.bucket, contentType, byteSize: bytes.length, sha256: hash(bytes) } });
       await tx.doctorApplication.update({ where: { id }, data: { submittedAt: null, stage: 'DRAFT' } });
       await audit(tx, application.professional.userId, 'DOCTOR_CREDENTIAL_UPLOADED', { applicationId: id, credentialId: doc.id, kind });
       return publicCredential(doc);
-    }, { timeout: 30000 });
+    });
   } catch (error) {
-    if (stored) await client.storage.from(stored.bucket).remove([stored.path]).catch(() => {});
+    await client.storage.from(stored.bucket).remove([stored.path]).catch(() => {});
     throw error;
   }
 }

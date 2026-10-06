@@ -1,10 +1,17 @@
 import crypto from 'node:crypto';
-import { Buffer } from 'node:buffer';
 import prisma from '../../config/db.js';
-import { assertPrivateBucket, PRIVATE_BUCKETS, privateStorageClient } from '../../config/privateStorage.js';
-import { scanEvidence } from '../platform/platform.evidence-scanner.js';
+import { PRIVATE_BUCKETS, privateStorageClient } from '../../config/privateStorage.js';
+import { downloadVerified, isTerminalScanFailure, releaseCleanObject, removeQuarantineObject, scanEvidence, scanFailureCode, scanRetryAt } from '../platform/platform.evidence-scanner.js';
 import { enabled } from './onboarding.service.js';
 
+// Professional credentials are capped lower than hospital evidence at upload time.
+const MAX_CREDENTIAL_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Screens one queued professional credential. It shares the download, verification, release,
+ * failure-classification and quarantine-cleanup rules with the hospital evidence pipeline
+ * (platform.evidence-scanner.js); only the table, lease query and audit trail differ.
+ */
 export async function processDoctorCredentialJob({ db = prisma, client = privateStorageClient(), scan = scanEvidence } = {}) {
   if (!enabled()) return false;
   const now = new Date();
@@ -18,37 +25,30 @@ export async function processDoctorCredentialJob({ db = prisma, client = private
     try {
       if (attempts > 5) throw new Error('SCAN_LEASE_EXHAUSTED');
       if (doc.storageBucket !== PRIVATE_BUCKETS.hospitalEvidenceQuarantine) throw new Error('EVIDENCE_QUARANTINE_MISMATCH');
-      await assertPrivateBucket(client, doc.storageBucket);
-      const download = await client.storage.from(doc.storageBucket).download(doc.storageKey);
-      if (download.error || !download.data) throw new Error('EVIDENCE_DOWNLOAD_FAILED');
-      const bytes = Buffer.from(await download.data.arrayBuffer());
-      if (!bytes.length || bytes.length > 5 * 1024 * 1024 || bytes.length !== doc.byteSize || crypto.createHash('sha256').update(bytes).digest('hex') !== doc.sha256) throw new Error('EVIDENCE_INTEGRITY_MISMATCH');
+      const evidence = { size: doc.byteSize, sha256: doc.sha256, maxBytes: MAX_CREDENTIAL_BYTES };
+      const bytes = await downloadVerified(client, doc.storageBucket, doc.storageKey, evidence);
       const result = await scan(bytes, doc);
       if (!['CLEAN', 'INFECTED', 'REJECTED'].includes(result.verdict) || typeof result.scannerVersion !== 'string' || !result.scannerVersion.trim()) throw new Error('EVIDENCE_SCAN_UNCERTAIN');
       data = { scanStatus: result.verdict, scannerVersion: result.scannerVersion.slice(0, 250), scannedAt: new Date(), scanErrorCode: result.verdict === 'REJECTED' ? 'UNSAFE_DOCUMENT_CONTENT' : null };
       if (result.verdict === 'CLEAN') {
-        await assertPrivateBucket(client, PRIVATE_BUCKETS.hospitalEvidenceClean);
-        const extension = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg' }[doc.contentType];
-        if (!extension) throw new Error('EVIDENCE_CONTENT_TYPE_INVALID');
-        const path = `doctor-applications/${doc.applicationId}/${doc.id}.${extension}`;
-        const upload = await client.storage.from(PRIVATE_BUCKETS.hospitalEvidenceClean).upload(path, bytes, { contentType: doc.contentType, upsert: false, cacheControl: '0' });
-        if (upload.error) {
-          const existing = await client.storage.from(PRIVATE_BUCKETS.hospitalEvidenceClean).download(path);
-          if (existing.error || !existing.data || crypto.createHash('sha256').update(Buffer.from(await existing.data.arrayBuffer())).digest('hex') !== doc.sha256) throw new Error('EVIDENCE_CLEAN_UPLOAD_FAILED');
-        }
-        data.storageBucket = PRIVATE_BUCKETS.hospitalEvidenceClean; data.storageKey = path;
+        const released = await releaseCleanObject(client, { keyPrefix: `doctor-applications/${doc.applicationId}/${doc.id}`, contentType: doc.contentType, ...evidence }, bytes);
+        data.storageBucket = released.bucket; data.storageKey = released.path;
       }
     } catch (error) {
-      const code = /^[A-Z_]{4,64}$/.test(error.message || '') ? error.message : 'EVIDENCE_SCAN_FAILED';
-      const terminal = attempts >= 5 || ['EVIDENCE_INTEGRITY_MISMATCH', 'EVIDENCE_QUARANTINE_MISMATCH', 'CLOUDMERSIVE_FILE_TOO_LARGE', 'CLOUDMERSIVE_FORMAT_MISMATCH'].includes(code);
-      data = { scanStatus: terminal ? 'FAILED' : 'PENDING', scanErrorCode: code, scanLeaseExpiresAt: terminal ? null : new Date(Date.now() + Math.min(30, 2 ** attempts) * 60000) };
+      const code = scanFailureCode(error);
+      const terminal = isTerminalScanFailure(code, attempts);
+      data = { scanStatus: terminal ? 'FAILED' : 'PENDING', scanErrorCode: code, scanLeaseExpiresAt: terminal ? null : scanRetryAt(attempts) };
     }
-    await db.$transaction(async (tx) => {
+    const committed = await db.$transaction(async (tx) => {
       const changed = await tx.doctorCredential.updateMany({ where: { id: doc.id, scanStatus: 'PENDING', scanLeaseToken: lease }, data: { scanLeaseToken: null, scanLeaseExpiresAt: null, ...data } });
       // ActivityLog is account-scoped and requires a real user FK. The actor
       // remains explicitly the system scanner, not the doctor or reviewer.
       if (changed.count) await tx.activityLog.create({ data: { userId: doc.application.professional.userId, type: `DOCTOR_SCAN_${data.scanStatus}`, description: 'Background doctor credential malware screening', meta: { actorKind: 'SYSTEM_SCANNER', credentialId: doc.id, scanStatus: data.scanStatus, code: data.scanErrorCode, provider: process.env.EVIDENCE_SCANNER_PROVIDER || 'clamav' } } });
+      return changed.count === 1;
     });
+    // Only after the clean location is committed is the quarantine copy redundant. If the lease was
+    // lost, the worker that holds it releases to the same deterministic clean path and cleans up.
+    if (committed && data.scanStatus === 'CLEAN') await removeQuarantineObject(client, doc.storageBucket, doc.storageKey);
     return true;
   }
   return false;

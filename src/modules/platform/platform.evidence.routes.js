@@ -11,6 +11,7 @@ import { verificationEmailAllowedFor, verificationEmailConfigured } from '../aut
 import { requiredEvidence } from './platform.approval-readiness.js';
 import { evidenceWorkflowAvailable, unscannedExceptionEnabled } from './platform.evidence-mode.js';
 import { evidenceScannerConfigured, evidenceScannerProvider, evidenceUploadMaxBytes } from '../../config/evidenceScanner.js';
+import { RETRYABLE_SCAN_FAILURES } from './platform.evidence-scanner.js';
 
 export const evidenceRoutes = express.Router();
 export const platformEvidenceRoutes = express.Router();
@@ -161,7 +162,7 @@ platformEvidenceRoutes.post('/:id/evidence/:evidenceId/retry-scan', requirePermi
   if (!evidenceScannerConfigured() || !evidenceReviewEnabled()) return errorResponse(res, 'EVIDENCE_SCANNER_DISABLED', 503);
   const result = await prisma.$transaction(async (tx) => {
     const doc = await tx.platformApplicationEvidence.findFirst({ where: { id: req.params.evidenceId, applicationId: req.params.id, scanStatus: 'FAILED', storageBucket: PRIVATE_BUCKETS.hospitalEvidenceQuarantine,
-      scanErrorCode: { in: ['CLOUDMERSIVE_AUTH_FAILED', 'CLOUDMERSIVE_RATE_LIMITED', 'CLOUDMERSIVE_UNAVAILABLE', 'CLOUDMERSIVE_NOT_CONFIGURED', 'CLOUDMERSIVE_REPLY_INVALID', 'EVIDENCE_SCAN_FAILED', 'SCAN_LEASE_EXHAUSTED', 'CLAMD_CONNECTION_FAILED', 'CLAMD_TIMEOUT'] },
+      scanErrorCode: { in: [...RETRYABLE_SCAN_FAILURES] },
       application: { status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'NEEDS_INFORMATION'] } } }, select: { id: true, sizeBytes: true } });
     if (!doc || doc.sizeBytes > evidenceUploadMaxBytes()) return false;
     const changed = await tx.platformApplicationEvidence.updateMany({ where: { id: doc.id, scanStatus: 'FAILED' }, data: { scanStatus: 'PENDING', scanAttempts: 0, scanErrorCode: null, scanLeaseToken: null, scanLeaseExpiresAt: null, scannedAt: null } });

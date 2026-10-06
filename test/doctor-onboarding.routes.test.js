@@ -187,3 +187,50 @@ describe('doctor credential lifecycle', () => {
     expect(db.doctorCredential.updateMany).not.toHaveBeenCalled();
   });
 });
+describe('review findings: identifiers, upload scope, rescans and review stage', () => {
+  it('gives professionals a collision-free internal id and reports only a real duplicate as one', async () => {
+    expect((await request(app).post('/doctors/register').send(body)).status).toBe(201);
+    expect(db.user.create.mock.calls[0][0].data.patientId).toMatch(/^PRO-[0-9a-f-]{36}$/);
+    db.user.create.mockRejectedValueOnce(Object.assign(new Error('unique'), { code: 'P2002', meta: { target: ['email'] } }));
+    expect((await request(app).post('/doctors/register').send(body)).status).toBe(409);
+    expect(db.user.create).toHaveBeenCalledTimes(2);
+  });
+  it('uploads to storage outside the locked transaction', async () => {
+    let inTransaction = false; const uploadedInTransaction = [];
+    db.$transaction.mockImplementation(async (work) => { inTransaction = true; try { return await work(db); } finally { inTransaction = false; } });
+    storageUpload.mockImplementation(async (path) => { uploadedInTransaction.push(inTransaction); return { data: { path } }; });
+    expect((await request(app).put(`/doctors/applications/${id}/credentials/licence`).set(headers()).type('application/pdf').send(bytes)).status).toBe(201);
+    expect(uploadedInTransaction).toEqual([false]);
+    expect(db.doctorCredential.create).toHaveBeenCalledOnce();
+  });
+  it('re-checks the application under lock and removes the object if it changed during upload', async () => {
+    storageUpload.mockImplementation(async (path) => { profile.verificationStatus = 'VERIFIED'; return { data: { path } }; });
+    expect((await request(app).put(`/doctors/applications/${id}/credentials/licence`).set(headers()).type('application/pdf').send(bytes)).status).toBe(409);
+    expect(db.doctorCredential.create).not.toHaveBeenCalled();
+    expect(remove).toHaveBeenCalledWith([storageUpload.mock.calls[0][0]]);
+  });
+  const failed = (scanErrorCode) => credential('licence', { scanStatus: 'FAILED', scanErrorCode, storageBucket: 'sabi-hospital-evidence-quarantine' });
+  const retry = () => request(app).post(`/platform/doctors/${professionalId}/credentials/${credentialId}/retry-scan`);
+  it('requires approval permission to re-queue a scan', async () => {
+    application.credentials = [failed('CLOUDMERSIVE_UNAVAILABLE')];
+    expect((await retry().set({ ...staff(), 'X-Test-Approve': 'false' }).send({})).status).toBe(403);
+    expect(db.doctorCredential.update).not.toHaveBeenCalled();
+  });
+  it.each(['CLAMD_CONNECTION_FAILED', 'CLAMD_TIMEOUT', 'EVIDENCE_SCAN_FAILED', 'CLOUDMERSIVE_UNAVAILABLE'])('re-queues the operational failure %s', async (code) => {
+    application.credentials = [failed(code)];
+    expect((await retry().set(staff()).send({})).status).toBe(202);
+    expect(db.doctorCredential.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ scanStatus: 'PENDING', scanAttempts: 0, scanErrorCode: null }) }));
+  });
+  it.each(['EVIDENCE_INTEGRITY_MISMATCH', 'EVIDENCE_CONTENT_TYPE_INVALID', 'CLOUDMERSIVE_FORMAT_MISMATCH'])('refuses to re-queue the content failure %s', async (code) => {
+    application.credentials = [failed(code)];
+    expect((await retry().set(staff()).send({})).status).toBe(409);
+    expect(db.doctorCredential.update).not.toHaveBeenCalled();
+  });
+  it.each([['SUBMITTED', 'PENDING', 'PENDING_REVIEW'], ['REJECTED', 'REJECTED', 'REJECTED']])('a credential review moves stage %s (status %s) to %s', async (stage, status, expected) => {
+    application.stage = stage; profile.verificationStatus = status;
+    db.doctorApplication.updateMany.mockImplementation(async ({ where, data }) => (where.stage === application.stage ? (Object.assign(application, data), { count: 1 }) : { count: 0 }));
+    const decision = { reviewStatus: 'VERIFIED', sourceName: 'Synthetic authority', reference: 'TEST-REF', note: 'Synthetic test findings only.' };
+    expect((await request(app).post(`/platform/doctors/${professionalId}/credentials/${credentialId}/review`).set(staff()).send(decision)).status).toBe(200);
+    expect(application.stage).toBe(expected);
+  });
+});

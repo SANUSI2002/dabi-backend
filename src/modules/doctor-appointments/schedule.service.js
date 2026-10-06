@@ -1,5 +1,5 @@
 import prisma from '../../config/db.js';
-import { generateSchedule, scheduleSchema } from './schedule.policy.js';
+import { generateSchedule, reconcileSlots, scheduleSchema } from './schedule.policy.js';
 const error = (message, status = 409) => Object.assign(new Error(message), { status });
 const ACTIVE = ['REQUESTED','CONFIRMED'];
 const tx = f => prisma.$transaction(f, { isolationLevel: 'Serializable', timeout: 30000 });
@@ -28,15 +28,14 @@ export const publish = (userId,range,overrideHours) => tx(async db => {
   if (!settings) throw error('Save your working hours first.');
   const blocks = await db.professionalTimeBlock.findMany({where:{professionalId:pro.id,endsAt:{gt:new Date()}}});
   let generated; try { generated = generateSchedule({...settingsToInput(settings),...(overrideHours?{weeklyHours:overrideHours}:{})},range,blocks); } catch(e) { throw error(e.message,400); }
-  let created = 0, existing = 0;
-  for (const slot of generated) {
-    const overlap = await db.doctorAvailabilitySlot.findFirst({where:{doctorProfileId:pro.id,cancelledAt:null,startsAt:{lt:slot.endsAt},endsAt:{gt:slot.startsAt}},select:{startsAt:true,endsAt:true,consultationTypes:true}});
-    if (overlap) {
-      if (+overlap.startsAt === +slot.startsAt && +overlap.endsAt === +slot.endsAt && JSON.stringify([...overlap.consultationTypes].sort()) === JSON.stringify([...slot.consultationTypes].sort())) {existing++;continue;}
-      throw error('New working hours overlap existing slots. Existing appointments have not been changed. Remove unbooked slots or choose another range.');
-    }
-    await db.doctorAvailabilitySlot.create({data:{doctorProfileId:pro.id,...slot}}); created++;
-  }
+  if (!generated.length) { await audit(db,userId,'PROFESSIONAL_SCHEDULE_PUBLISHED',pro.id); return {created:0,existing:0}; }
+  // One read of the live slots in range and one batch insert, instead of a query pair per slot.
+  const from = new Date(Math.min(...generated.map(s => +s.startsAt))), to = new Date(Math.max(...generated.map(s => +s.endsAt)));
+  const live = await db.doctorAvailabilitySlot.findMany({where:{doctorProfileId:pro.id,cancelledAt:null,startsAt:{lt:to},endsAt:{gt:from}},select:{startsAt:true,endsAt:true,consultationTypes:true}});
+  const plan = reconcileSlots(generated, live);
+  if (plan.conflict) throw error('New working hours overlap existing slots. Existing appointments have not been changed. Remove unbooked slots or choose another range.');
+  if (plan.toCreate.length) await db.doctorAvailabilitySlot.createMany({data:plan.toCreate.map(slot => ({doctorProfileId:pro.id,...slot}))});
+  const created = plan.toCreate.length, existing = plan.existing;
   await audit(db,userId,'PROFESSIONAL_SCHEDULE_PUBLISHED',pro.id);return {created,existing};
 });
 export const addBlock = (userId,body) => tx(async db => {

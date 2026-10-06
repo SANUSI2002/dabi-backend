@@ -9,7 +9,7 @@ const appointment = () => ({ id: 'appt', patientId: 'patient', status: 'CONFIRME
 const env = { DAILY_VIDEO_ENABLED: 'true', DAILY_PROCESSING_APPROVED: 'true', DAILY_API_KEY: 'synthetic-key', DAILY_DOMAIN: 'sabihealth' };
 let db, provider, service;
 beforeEach(() => {
-  db = { doctorAppointment: { findFirst: vi.fn().mockResolvedValue(appointment()) }, userRole: { findFirst: vi.fn().mockResolvedValue({ id: 'role' }) }, doctorVideoRoom: { upsert: vi.fn().mockResolvedValue(room), findUnique: vi.fn().mockResolvedValue(room), findMany: vi.fn().mockResolvedValue([room]), updateMany: vi.fn().mockResolvedValue({ count: 1 }) }, activityLog: { create: vi.fn() } };
+  db = { doctorAppointment: { findFirst: vi.fn().mockResolvedValue(appointment()) }, userRole: { findFirst: vi.fn().mockResolvedValue({ id: 'role' }) }, doctorVideoRoom: { createMany: vi.fn().mockResolvedValue({ count: 1 }), findUnique: vi.fn().mockResolvedValue(room), findMany: vi.fn().mockResolvedValue([room]), updateMany: vi.fn().mockResolvedValue({ count: 1 }) }, activityLog: { create: vi.fn() } };
   provider = { ensureRoom: vi.fn().mockResolvedValue({ url: `https://sabihealth.daily.co/${name}` }), token: vi.fn().mockResolvedValue('synthetic-token-for-tests'), revoke: vi.fn() };
   service = createVideoService({ db, provider, env, now: () => time });
 });
@@ -59,9 +59,23 @@ describe('appointment-bound video access', () => {
     expect(provider.token).not.toHaveBeenCalled();
   });
   it('does not issue an already revoked room', async () => {
-    db.doctorVideoRoom.upsert.mockResolvedValue({ ...room, revokedAt: time });
+    db.doctorVideoRoom.findUnique.mockResolvedValue({ ...room, revokedAt: time });
     await expect(service.join('doctor', 'appt', 'doctor', { providerConsent: true })).rejects.toMatchObject({ code: 'VIDEO_WINDOW_ENDED' });
     expect(provider.ensureRoom).not.toHaveBeenCalled();
+  });
+  it('reuses an existing room without inserting another', async () => {
+    await service.join('patient', 'appt', 'patient', { providerConsent: true });
+    expect(db.doctorVideoRoom.createMany).not.toHaveBeenCalled();
+  });
+  it('lets simultaneous first joiners share the one room that wins the insert race', async () => {
+    // Both callers see no room, both insert with ON CONFLICT DO NOTHING, and both read back the winner.
+    const winner = { ...room, roomName: 'sabi-v-' + 'b'.repeat(32) };
+    db.doctorVideoRoom.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValue(winner);
+    const [doctor, patient] = await Promise.all([service.join('doctor', 'appt', 'doctor', { providerConsent: true }), service.join('patient', 'appt', 'patient', { providerConsent: true })]);
+    expect(doctor.token).toBeTruthy(); expect(patient.token).toBeTruthy();
+    expect(db.doctorVideoRoom.createMany).toHaveBeenCalledTimes(2);
+    expect(db.doctorVideoRoom.createMany.mock.calls.every(([args]) => args.skipDuplicates === true && args.data[0].appointmentId === 'appt')).toBe(true);
+    expect(provider.ensureRoom.mock.calls.map(([r]) => r.roomName)).toEqual([winner.roomName, winner.roomName]);
   });
   it('persists cleanup completion, or backs off a provider outage', async () => {
     await service.cleanup(); expect(provider.revoke).toHaveBeenCalledWith(room);

@@ -37,3 +37,27 @@ export function generateSchedule(settings, range, blocks = [], now = new Date())
   }
   return slots;
 }
+
+const sameTypes = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+/**
+ * Matches freshly generated slots against the practitioner's live (uncancelled) slots in the same range.
+ * A generated slot that is already published exactly (same times and consultation types) is kept as is;
+ * one that overlaps anything else is a conflict, so the whole publish is refused rather than half-applied.
+ * Both lists are sorted by start time and swept once, so this is O(n + m) for up to 1000 slots.
+ */
+export function reconcileSlots(generated, live) {
+  const slots = [...generated].sort((a, b) => a.startsAt - b.startsAt);
+  const current = [...live].sort((a, b) => a.startsAt - b.startsAt);
+  const toCreate = [];
+  let existing = 0, first = 0;
+  for (const slot of slots) {
+    while (first < current.length && current[first].endsAt <= slot.startsAt) first++;
+    const overlaps = [];
+    for (let i = first; i < current.length && current[i].startsAt < slot.endsAt; i++) if (current[i].endsAt > slot.startsAt) overlaps.push(current[i]);
+    if (!overlaps.length) { toCreate.push(slot); continue; }
+    const [only] = overlaps;
+    if (overlaps.length === 1 && +only.startsAt === +slot.startsAt && +only.endsAt === +slot.endsAt && sameTypes(only.consultationTypes, slot.consultationTypes)) { existing++; continue; }
+    return { conflict: true, toCreate: [], existing };
+  }
+  return { conflict: false, toCreate, existing };
+}
