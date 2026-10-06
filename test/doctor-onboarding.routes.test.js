@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { PROFESSION_CATALOG, credentialRequirements, capabilities } from '../src/modules/professionals/professionCatalog.js';
 const owner = '11111111-1111-4111-8111-111111111111', reviewer = '22222222-2222-4222-8222-222222222222';
 const id = '33333333-3333-4333-8333-333333333333', professionalId = '44444444-4444-4444-8444-444444444444', credentialId = '55555555-5555-4555-8555-555555555555';
 const db = { user: { create: vi.fn() }, professionalProfile: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() }, doctorApplication: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() }, doctorCredential: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn() }, activityLog: { create: vi.fn() }, notification: {create: vi.fn()}, $queryRaw: vi.fn(), $transaction: vi.fn() };
@@ -24,11 +25,14 @@ const app = express(); app.use(express.json()); app.use('/doctors', doctorOnboar
 const headers = (userId = owner) => ({ Authorization: `Bearer ${jwt.sign({ userId }, 'doctor-onboarding-test')}` });
 const staff = (userId = reviewer) => ({ ...headers(userId), 'X-Test-Platform': 'true', 'X-Test-Mfa': 'true', 'X-Test-Approve': 'true' });
 const bytes = Buffer.from('%PDF-1.7\nsynthetic');
-let profile, application;
+let profile, application, limitIsolation = 0;
 const credential = (kind, extra = {}) => ({ id: kind === 'licence' ? credentialId : '66666666-6666-4666-8666-666666666666', kind, createdAt: new Date(), scanStatus: 'CLEAN', storageBucket: 'sabi-hospital-evidence-clean', storageKey: 'synthetic.pdf', byteSize: bytes.length, contentType: 'application/pdf', sha256: 'f'.repeat(64), reviewStatus: 'VERIFIED', ...extra });
 const body = { firstName: 'Synthetic', lastName: 'Doctor', email: 'synthetic@example.test', phone: '+2348012345678', password: 'Synthetic long passphrase', specialty: 'General Practice', qualification: 'MBBS', university: 'Synthetic University', graduationYear: 2010, registrationNumber: 'TEST-001', practiceState: 'Lagos', city: 'Lagos', licenceType: 'life', declaration: true, termsAccepted: true, country: 'NG', regulator: 'MDCN', consentVersion: 'doctor-registration-v1' };
 beforeEach(() => {
   vi.resetAllMocks();
+  // Each synthetic lifecycle represents a different isolated test account/IP
+  // budget. Production rate limits are tested independently and left intact.
+  vi.stubEnv('RATE_LIMIT_KEY_SECRET', `onboarding-fixture-${++limitIsolation}`);
   vi.stubEnv('JWT_SECRET', 'doctor-onboarding-test'); vi.stubEnv('DOCTOR_REGISTRATION_ENABLED', 'true'); vi.stubEnv('EVIDENCE_SCANNER_ENABLED', 'true'); vi.stubEnv('EVIDENCE_SCANNER_PROVIDER', 'cloudmersive'); vi.stubEnv('CLOUDMERSIVE_API_KEY', 'synthetic-key'); vi.stubEnv('CLOUDMERSIVE_CREDENTIAL_PROCESSING_APPROVED', 'true'); vi.stubEnv('RESEND_API_KEY', 'synthetic-key'); vi.stubEnv('PASSWORD_RESET_EMAIL_FROM', 'no-reply@sabihealth.org');
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
   application = { id, professionalId, submittedAt: new Date(), details: { licenceType: 'life' }, credentials: [credential('licence'), credential('registrationCertificate')] };
@@ -45,6 +49,42 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 describe('doctor credential lifecycle', () => {
+  it.each(PROFESSION_CATALOG.filter(p=>p.type!=='DOCTOR').flatMap(p=>p.disciplines.map(d=>[p.type,d])))('connects %s / %s registration, email, evidence, submission and scoped approval',async(professionType,discipline)=>{
+    const shared={...body};delete shared.regulator;delete shared.licenceType;delete shared.consentVersion;
+    const licensed=['REGISTERED_NURSE','COMMUNITY_HEALTH_PRACTITIONER'].includes(discipline);
+    const details={...shared,professionType,discipline,yearsOfExperience:5,services:'Synthetic professional support',consentVersion:'professional-registration-v1',...(licensed?{licenceType:'annual',licenceExpiry:'2099-12-31'}:{})};
+    profile.professionType=professionType;profile.user.accountStatus='PENDING';profile.user.emailVerifiedAt=null;
+    application.details=details;application.credentials=[];application.stage='DRAFT';application.submittedAt=null;
+    db.doctorApplication.update.mockImplementation(async({data})=>Object.assign(application,data));
+    db.doctorApplication.updateMany.mockImplementation(async({data})=>{Object.assign(application,data);return {count:1};});
+    db.professionalProfile.update.mockImplementation(async({data})=>Object.assign(profile,data));
+    db.doctorCredential.create.mockImplementation(async({data})=>{
+      const doc={...credential(data.kind),...data,id:`77777777-7777-4777-8777-${String(application.credentials.length+1).padStart(12,'0')}`,scanStatus:'PENDING',reviewStatus:'PENDING'};
+      application.credentials.push(doc);return doc;
+    });
+    db.doctorCredential.update.mockImplementation(async({where,data})=>Object.assign(application.credentials.find(c=>c.id===where.id),data));
+    authModel.confirmEmailVerificationToken.mockImplementation(async()=>{profile.user.accountStatus='ACTIVE';profile.user.emailVerifiedAt=new Date();return true;});
+    const registered=await request(app).post('/doctors/register-professional').send(details);
+    expect(registered.status).toBe(201);expect(registered.body.data.emailSent).toBe(true);
+    expect(capabilities(profile,details).appointments).toBe(false);
+    const kinds=credentialRequirements(details).map(c=>c.kind);
+    expect((await request(app).put(`/doctors/applications/${id}/credentials/${kinds[0]}`).set(headers()).type('application/pdf').send(bytes)).status).toBe(403);
+    expect((await request(app).post('/doctors/verify-email').send({uid:owner,token:'a'.repeat(64)})).status).toBe(200);
+    for(const kind of kinds) expect((await request(app).put(`/doctors/applications/${id}/credentials/${kind}`).set(headers()).type('application/pdf').send(bytes)).status).toBe(201);
+    expect((await request(app).post(`/doctors/applications/${id}/submit`).set(headers()).send({})).status).toBe(200);
+    expect(application.stage).toBe('SUBMITTED');
+    expect((await request(app).post(`/platform/doctors/${professionalId}/approve`).set(staff()).send({})).status).toBe(409);
+    for(const doc of application.credentials){
+      // Scanner transport/leases are covered in separate worker tests. Here the
+      // synthetic worker transition is explicit, not a real credential decision.
+      doc.scanStatus='CLEAN';doc.storageBucket='sabi-hospital-evidence-clean';
+      expect((await request(app).post(`/platform/doctors/${professionalId}/credentials/${doc.id}/review`).set(staff()).send({reviewStatus:'VERIFIED',sourceName:'Synthetic authority',reference:'TEST-ONLY',note:'Synthetic test qualification review only.'})).status).toBe(200);
+    }
+    expect(application.stage).toBe('PENDING_REVIEW');
+    expect((await request(app).post(`/platform/doctors/${professionalId}/approve`).set(staff()).send({})).status).toBe(200);
+    expect(application.stage).toBe('APPROVED');
+    expect(capabilities(profile,details)).toMatchObject({appointments:true,availability:true,carePlans:true,prescribe:false,clinicalRecords:false,nutrition:discipline==='DIETITIAN'});
+  });
   it('creates a pending account with a hashed password, no upload capability and a single-use canonical email link', async () => {
     const response = await request(app).post('/doctors/register').send(body);
     expect(response.status).toBe(201); expect(response.body.data.emailSent).toBe(true); expect(response.body.data.uploadToken).toBeUndefined();
