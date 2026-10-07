@@ -44,6 +44,7 @@ model User {
   professionalProfile ProfessionalProfile?
   doctorCareAsPatient DoctorCareRelationship[] @relation("DoctorCarePatient")
   doctorAppointmentsAsPatient DoctorAppointment[] @relation("DoctorAppointmentPatient")
+  consultationNotesAsPatient ConsultationNote[] @relation("ConsultationNotePatient")
   prescriptionsAsPatient Prescription[] @relation("PrescriptionPatient")
   pharmacyAdminOf Pharmacy? @relation("PharmacyAdmin")
   pharmacyComplianceDecisions Pharmacy[] @relation("PharmacyComplianceDecision")
@@ -185,6 +186,7 @@ model ProfessionalProfile {
   careConsents ProfessionalCareConsent[]
   carePlans ProfessionalCarePlan[]
   careTemplates ProfessionalCareTemplate[]
+  consultationNotes ConsultationNote[]
 
   @@index([verificationStatus])
   @@index([professionType])
@@ -1766,10 +1768,13 @@ model DoctorAppointment {
   doctorProfile    ProfessionalProfile     @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
   slot             DoctorAvailabilitySlot  @relation(fields: [slotId], references: [id], onDelete: Restrict)
   videoRoom        DoctorVideoRoom?
+  consultationNote ConsultationNote?
 
   @@index([patientId, startsAt])
   @@index([doctorProfileId, status, startsAt])
   @@index([slotId])
+  // Target of the consultation-note composite FK (see the consultation_notes migration).
+  @@unique([id, patientId, doctorProfileId], map: "doctor_appointments_id_patient_doctor_key")
   @@map("doctor_appointments")
 }
 
@@ -1784,6 +1789,44 @@ model DoctorVideoRoom {
 
   @@index([revokedAt, cleanupAfter])
   @@map("doctor_video_rooms")
+}
+
+// Consultation notes: one per telemedicine appointment, written by the doctor. The draft (private
+// clinical sections + the patient's visit summary) is editable; signing freezes it as an immutable
+// version. Patients only ever receive the visit summary of signed versions. patient_id and
+// doctor_profile_id must match the appointment (composite FK in SQL).
+model ConsultationNote {
+  id              String   @id @default(uuid())
+  appointmentId   String   @unique @map("appointment_id")
+  doctorProfileId String   @map("doctor_profile_id")
+  patientId       String   @map("patient_id")
+  draft           Json
+  revision        Int      @default(1)
+  signedVersion   Int?     @map("signed_version")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  appointment     DoctorAppointment         @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  doctorProfile   ProfessionalProfile       @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
+  patient         User                      @relation("ConsultationNotePatient", fields: [patientId], references: [id], onDelete: Restrict)
+  versions        ConsultationNoteVersion[]
+
+  @@index([doctorProfileId, updatedAt])
+  @@index([patientId, signedVersion])
+  @@map("consultation_notes")
+}
+
+// Append-only (a trigger rejects UPDATE and DELETE).
+model ConsultationNoteVersion {
+  id              String   @id @default(uuid())
+  noteId          String   @map("note_id")
+  number          Int
+  content         Json
+  amendmentReason String?  @map("amendment_reason") @db.VarChar(500)
+  signedAt        DateTime @default(now()) @map("signed_at")
+  note            ConsultationNote @relation(fields: [noteId], references: [id], onDelete: Restrict)
+
+  @@unique([noteId, number])
+  @@map("consultation_note_versions")
 }
 
 // ---------------- EMR foundation (tenant-scoped; RLS + composite FKs live in SQL) ----------------

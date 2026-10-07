@@ -45,6 +45,7 @@ import wellnessRoutes from './modules/wellness/wellness.routes.js';
 import medicalDocumentRoutes, { internalDocumentScanRoutes } from './modules/medical-documents/medical-documents.routes.js';
 import openApiRoutes from './docs/openapi.routes.js';
 import professionalCareRoutes from './modules/professional-care/care.routes.js';
+import consultationNoteRoutes from './modules/consultation-notes/consultation-notes.routes.js';
 
 export const app = express();
 app.set('trust proxy', trustedProxySetting());
@@ -109,6 +110,7 @@ app.use('/api/v1/doctor-appointments', videoPatientRoutes);
 app.use('/api/v1/doctor-appointments', doctorAppointmentRoutes);
 app.use('/api/v1/professional-schedule', scheduleRoutes);
 app.use('/api/v1/professional-care', professionalCareRoutes);
+app.use('/api/v1/consultation-notes', consultationNoteRoutes);
 app.use('/api/v1/prescriptions', prescriptionRoutes);
 app.use('/api/v1/pharmacies', pharmacyRoutes);
 app.use('/api/v1/pharmacies', discoveryRoutes);

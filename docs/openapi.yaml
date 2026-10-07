@@ -48,6 +48,8 @@ tags:
     description: Doctor Care endpoints currently registered by the backend.
   - name: Doctor Appointments
     description: Doctor Appointments endpoints currently registered by the backend.
+  - name: Consultation Notes
+    description: Doctors' notes for telemedicine consultations and the visit summaries patients receive.
   - name: Prescriptions
     description: Prescriptions endpoints currently registered by the backend.
   - name: Pharmacies
@@ -4964,6 +4966,217 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/consultation-notes/practice:
+    get:
+      tags:
+        - Consultation Notes
+      summary: List my consultation notes
+      description: The doctor's notes (most recently edited first) plus up to 20 completed consultations still waiting for a signed note.
+      operationId: get__api_v1_consultation_notes_practice
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Not a verified doctor account.
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/consultation-notes/practice/appointments/{appointmentId}:
+    get:
+      tags:
+        - Consultation Notes
+      summary: Read the note for one of my appointments
+      description: The appointment, its note (draft, revision, signed versions with amendment reasons) or null, whether it can be signed (appointment COMPLETED), and up to five earlier signed notes for the same patient.
+      operationId: get__api_v1_consultation_notes_practice_appointments_appointmentId
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Not a verified doctor account.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      tags:
+        - Consultation Notes
+      summary: Save the draft note
+      description: Creates the note (omit revision) or updates it (revision must match). Allowed for CONFIRMED or COMPLETED appointments. Drafts are never shown to the patient.
+      operationId: put__api_v1_consultation_notes_practice_appointments_appointmentId
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsultationNoteSave"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Not a verified doctor account.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/consultation-notes/practice/appointments/{appointmentId}/sign:
+    post:
+      tags:
+        - Consultation Notes
+      summary: Sign and share the note
+      description: Freezes the draft as a new immutable version and notifies the patient. Needs a COMPLETED appointment, an assessment, a plan and a visit summary. Signing again is an amendment and needs amendmentReason and a real change. Errors carry a code (NOT_COMPLETED, INCOMPLETE with problems[], AMENDMENT_REASON_REQUIRED, NO_CHANGES, STALE).
+      operationId: post__api_v1_consultation_notes_practice_appointments_appointmentId_sign
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsultationNoteSign"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Not a verified doctor account.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/consultation-notes/mine:
+    get:
+      tags:
+        - Consultation Notes
+      summary: List my visit summaries
+      description: Signed visit summaries for the signed-in patient (and their dependants), newest consultation first. Never includes clinical sections, drafts or amendment reasons.
+      operationId: get__api_v1_consultation_notes_mine
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/consultation-notes/mine/{appointmentId}:
+    get:
+      tags:
+        - Consultation Notes
+      summary: Read one visit summary
+      description: The latest signed visit summary for one of my consultations, with the dates of earlier signed versions.
+      operationId: get__api_v1_consultation_notes_mine_appointmentId
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
   /api/v1/prescriptions/patient:
     get:
       tags:
@@ -8826,6 +9039,57 @@ components:
           maxLength: 300
       required:
         - reason
+    ConsultationNoteContent:
+      type: object
+      additionalProperties: false
+      properties:
+        clinical:
+          type: object
+          additionalProperties: false
+          description: Private to the doctor. Never returned to the patient.
+          properties:
+            presentingComplaint: { type: string, maxLength: 2000 }
+            history: { type: string, maxLength: 4000 }
+            findings: { type: string, maxLength: 4000 }
+            assessment: { type: string, maxLength: 2000 }
+            plan: { type: string, maxLength: 4000 }
+        patient:
+          type: object
+          additionalProperties: false
+          description: The visit summary the patient receives once signed.
+          properties:
+            summary: { type: string, maxLength: 3000 }
+            advice: { type: string, maxLength: 3000 }
+            warningSigns: { type: string, maxLength: 1500 }
+            followUp:
+              type: object
+              additionalProperties: false
+              properties:
+                needed: { type: boolean, default: false }
+                timeframe: { type: string, maxLength: 120 }
+                instructions: { type: string, maxLength: 1000 }
+    ConsultationNoteSave:
+      type: object
+      additionalProperties: false
+      required: [content]
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+          description: Omit when starting a note; send the current revision when updating it.
+        content:
+          $ref: "#/components/schemas/ConsultationNoteContent"
+    ConsultationNoteSign:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        amendmentReason:
+          type: string
+          minLength: 5
+          maxLength: 500
+          description: Required when the note has been signed before.
     Empty:
       type: object
       additionalProperties: false
