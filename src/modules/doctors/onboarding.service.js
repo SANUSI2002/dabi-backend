@@ -16,7 +16,7 @@ export const enabled = () => process.env.DOCTOR_REGISTRATION_ENABLED === 'true' 
 export const audit = (tx, userId, type, meta) => tx.activityLog.create({ data: { userId, type, description: 'Doctor credential onboarding action', meta } });
 const profileInclude = { user: { select: { id: true, email: true, full_name: true, emailVerifiedAt: true, accountStatus: true } }, doctorApplication: { include: { credentials: true } } };
 export const doctorPortal = () => {
-  const url = process.env.DOCTOR_PORTAL_URL || 'https://telemedicine.sabihealth.org/doctor-portal';
+  const url = process.env.DOCTOR_PORTAL_URL || 'https://doctor.sabihealth.org';
   const parsed = new URL(url);
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) fail('Doctor portal email URL is not configured.', 503);
   return url.replace(/\/$/, '');

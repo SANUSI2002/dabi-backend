@@ -91,7 +91,7 @@ describe('doctor credential lifecycle', () => {
     expect(db.user.create.mock.calls[0][0].data).toMatchObject({ accountStatus: 'PENDING', password: 'HASH_ONLY_NOT_PASSWORD' });
     expect(db.professionalProfile.create.mock.calls[0][0].data.doctorApplication.create.details.password).toBeUndefined();
     const mail = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
-    expect(mail.text).toContain('https://telemedicine.sabihealth.org/doctor-portal/verify-email/'); expect(mail.text).not.toContain(body.password);
+    expect(mail.text).toContain('https://doctor.sabihealth.org/verify-email/'); expect(mail.text).not.toContain(body.password);
     expect(authModel.createEmailVerificationToken.mock.calls[0][1]).toMatch(/^[a-f0-9]{64}$/);
   });
   it('does not create an account when intake is disabled or storage is public', async () => {
@@ -162,7 +162,7 @@ describe('doctor credential lifecycle', () => {
     application.credentials[0].reviewStatus = 'VERIFIED'; expect((await request(app).post(path).set(staff(owner)).send({})).status).toBe(403);
     const response = await request(app).post(path).set(staff()).send({}); expect(response.status).toBe(200); expect(response.body.data.emailSent).toBe(true);
     expect(db.professionalProfile.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ verificationStatus: 'VERIFIED', decidedByUserId: reviewer }) }));
-    const mail = JSON.parse(globalThis.fetch.mock.calls.at(-1)[1].body); expect(mail.text).toContain('/doctor-portal/login'); expect(mail.text).not.toContain(body.password);
+    const mail = JSON.parse(globalThis.fetch.mock.calls.at(-1)[1].body); expect(mail.text).toContain('https://doctor.sabihealth.org/login'); expect(mail.text).not.toContain(body.password);
   });
   it('never exposes private keys or raw DB errors', async () => {
     db.professionalProfile.findFirst.mockRejectedValue(new Error('database-password-secret'));
