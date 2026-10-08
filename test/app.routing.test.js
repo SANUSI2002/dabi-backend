@@ -50,6 +50,9 @@ describe('application route order', () => {
   it('serves the API reference and health check', async () => {
     expect((await request(app).get('/api/openapi.json')).status).toBe(200);
     expect((await request(app).get('/api/docs/')).status).toBe(200);
-    expect((await request(app).get('/api/health')).status).toBe(200);
+    const health = await request(app).get('/api/health');
+    expect(health.status).toBe(200);
+    expect(health.headers['cache-control']).toBe('no-store');
+    expect(health.body.release.capabilities).toContain('consultation-notes-v1');
   });
 });

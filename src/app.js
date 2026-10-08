@@ -72,7 +72,14 @@ app.use(express.json());
 
 // --- MODULAR BUCKET ROUTING ---
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'success', message: 'Sabi Health backend is running securely' });
+  res.set('Cache-Control', 'no-store');
+  const revision = process.env.RENDER_GIT_COMMIT;
+  res.json({ status: 'success', message: 'Sabi Health backend is running securely',
+    release: {
+      revision: /^[a-f0-9]{40}$/i.test(revision || '') ? revision : null,
+      capabilities: ['consultation-notes-v1', 'emr-v1', 'activity-session-v1'],
+    },
+  });
 });
 
 app.use('/api/v1/hospitals', hospitalPlanRoutes);
