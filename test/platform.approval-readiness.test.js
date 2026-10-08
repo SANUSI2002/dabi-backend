@@ -10,7 +10,7 @@ const application = {
   status: 'UNDER_REVIEW', emailVerifiedAt: new Date('2026-09-24'), details,
   packageVersion: { status: 'PUBLISHED', moduleKeys: ['emr'] }, evidence: [],
 };
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 describe('EMR approval readiness', () => {
   it('requires the applicable server-side document set', () => {
@@ -68,6 +68,10 @@ describe('EMR approval readiness', () => {
     vi.stubEnv('HOSPITAL_UNSCANNED_EXCEPTION_ENABLED', 'true');
     vi.stubEnv('HOSPITAL_UNSCANNED_EXCEPTION_UNTIL', '2026-10-08T12:00:00Z');
     const now = new Date('2026-09-24T12:00:00Z');
+    // The workflow gate also checks wall-clock time; keep this historical test
+    // deterministic without extending the live exception deadline.
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     const evidence = requiredEvidence(details).map((requirementKey) => ({
       id: requirementKey, requirementKey, createdAt: now, storageBucket: 'sabi-hospital-evidence-quarantine',
       scanStatus: 'UNSCANNED_EXCEPTION', unscannedExceptionByUserId: 'reviewer', unscannedExceptionAt: now,

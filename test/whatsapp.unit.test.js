@@ -68,7 +68,7 @@ describe('Cloud API provider', () => {
 
   it('sends a template to the number without the plus sign', async () => {
     configure();
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ messages: [{ id: 'wamid.X' }] }), { status: 200 }));
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new globalThis.Response(JSON.stringify({ messages: [{ id: 'wamid.X' }] }), { status: 200 }));
     const result = await whatsappProvider().sendTemplate('+2348031234567', { name: 'sabi_update', components: [] });
     expect(result).toEqual({ messageId: 'wamid.X' });
     const [url, init] = fetch.mock.calls[0];
@@ -79,7 +79,7 @@ describe('Cloud API provider', () => {
 
   it('retries rate limits and server errors but not a number that is not on WhatsApp', async () => {
     configure();
-    const reply = (status, code) => new Response(JSON.stringify({ error: { code } }), { status });
+    const reply = (status, code) => new globalThis.Response(JSON.stringify({ error: { code } }), { status });
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(reply(429, 130429)).mockResolvedValueOnce(reply(500, 1)).mockResolvedValueOnce(reply(400, 131026));
     const provider = whatsappProvider();
     await expect(provider.sendText('+2348031234567', 'x')).rejects.toMatchObject({ transient: true });
