@@ -10,6 +10,7 @@
 // - Doctors see only the minimum identity of their own patients (name + Sabi patient ID).
 import prisma from '../../config/db.js';
 import { PORTAL_PROFESSIONS } from '../professionals/professionCatalog.js';
+import { recordAudit } from '../audit/audit.service.js';
 
 const DAY = 86400000;
 const ACTIVE = ['REQUESTED', 'CONFIRMED'];
@@ -241,7 +242,15 @@ export const practiceAppointmentDetail = async (userId, id) => {
   const doctorId = await requireDoctor(prisma, userId);
   const item = await prisma.doctorAppointment.findFirst({ where: { id, doctorProfileId: doctorId }, select: doctorView });
   if (!item) throw fail('NOT_FOUND');
+  // The patient's Activity log shows who opened their appointment (repeat views within 15 minutes count once).
+  await recordAudit(prisma, { actorUserId: userId, subjectUserId: item.patient.id, action: 'APPOINTMENT_VIEWED', resourceType: 'doctor_appointment', resourceId: id }, { dedupeMinutes: 15 });
   return toDoctorAppointment(item);
+};
+
+// Professional decisions that change a patient's appointment, as they appear in both Activity logs.
+const AUDITED_TRANSITIONS = {
+  DOCTOR_APPOINTMENT_CONFIRMED: 'APPOINTMENT_CONFIRMED', DOCTOR_APPOINTMENT_DECLINED: 'APPOINTMENT_DECLINED',
+  DOCTOR_APPOINTMENT_CANCELLED: 'APPOINTMENT_CANCELLED', DOCTOR_APPOINTMENT_COMPLETED: 'APPOINTMENT_COMPLETED',
 };
 
 const doctorTransition = (type, buildWhere, buildData, after) => (userId, id, body = {}) => transaction(async (tx) => {
@@ -251,7 +260,9 @@ const doctorTransition = (type, buildWhere, buildData, after) => (userId, id, bo
   changed(await tx.doctorAppointment.updateMany({ where: { id, doctorProfileId: doctorId, ...buildWhere() }, data: buildData(body) }));
   await audit(tx, userId, type, id);
   if (after) await after(tx, id);
-  return toDoctorAppointment(await tx.doctorAppointment.findFirst({ where: { id }, select: doctorView }));
+  const item = await tx.doctorAppointment.findFirst({ where: { id }, select: doctorView });
+  if (AUDITED_TRANSITIONS[type]) await recordAudit(tx, { actorUserId: userId, subjectUserId: item.patient.id, action: AUDITED_TRANSITIONS[type], resourceType: 'doctor_appointment', resourceId: id });
+  return toDoctorAppointment(item);
 });
 
 export const confirm = doctorTransition(

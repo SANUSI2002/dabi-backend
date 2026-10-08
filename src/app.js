@@ -46,6 +46,9 @@ import medicalDocumentRoutes, { internalDocumentScanRoutes } from './modules/med
 import openApiRoutes from './docs/openapi.routes.js';
 import professionalCareRoutes from './modules/professional-care/care.routes.js';
 import consultationNoteRoutes from './modules/consultation-notes/consultation-notes.routes.js';
+import auditRoutes from './modules/audit/audit.routes.js';
+import { auditRequestScope } from './modules/audit/audit.context.js';
+import { auditActivity } from './modules/audit/audit.activity.js';
 
 export const app = express();
 app.set('trust proxy', trustedProxySetting());
@@ -69,6 +72,10 @@ app.use('/api/v1/internal/document-scans', internalDocumentScanRoutes);
 // Private onboarding documents have a bounded parser before the default 100 KiB parser.
 app.use('/api/v1/organisations', organisationRoutes);
 app.use(express.json());
+// Audit trail: every request carries its IP/device/location for audit entries, and changes made by a
+// signed-in person are recorded unless a more specific entry already describes them.
+app.use(auditRequestScope);
+app.use(auditActivity);
 
 // --- MODULAR BUCKET ROUTING ---
 app.get('/api/health', (req, res) => {
@@ -118,6 +125,7 @@ app.use('/api/v1/doctor-appointments', doctorAppointmentRoutes);
 app.use('/api/v1/professional-schedule', scheduleRoutes);
 app.use('/api/v1/professional-care', professionalCareRoutes);
 app.use('/api/v1/consultation-notes', consultationNoteRoutes);
+app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/prescriptions', prescriptionRoutes);
 app.use('/api/v1/pharmacies', pharmacyRoutes);
 app.use('/api/v1/pharmacies', discoveryRoutes);

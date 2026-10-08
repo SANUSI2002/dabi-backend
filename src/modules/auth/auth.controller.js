@@ -7,6 +7,8 @@ import { activeSession, createSession, listSessions, revokeSession, revokeUserSe
 import { passwordResetEmailAllowedFor, passwordResetEmailConfigured, sendPasswordResetEmail, sendEmailVerificationEmail, verificationEmailAllowedFor, verificationEmailConfigured } from './auth.email.js';
 import { activeMembershipFor, membershipsFor } from '../identity/identity.service.js';
 import { beginLoginChallenge, hasActiveMfa } from './auth.mfa.js';
+import prisma from '../../config/db.js';
+import { recordAudit } from '../audit/audit.service.js';
 
 const toUserResponse = (user) => ({
   id: user.id,
@@ -51,6 +53,8 @@ export const login = async (req, res, next) => {
     const { email, password } = req.body;
     const user = await AuthModel.findUserByEmail(email);
     if (!user || !(await bcrypt.compare(password, user.password))) {
+      // The account holder sees attempts on their account; unknown emails leave no trace to look up.
+      if (user) await recordAudit(prisma, { actorUserId: user.id, action: 'SIGN_IN_FAILED' });
       return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
     }
     if (user.accountStatus === 'PENDING' && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT' || role === 'PROFESSIONAL')) {
@@ -63,6 +67,7 @@ export const login = async (req, res, next) => {
       return res.status(202).json({ status: 'mfa_required', challengeToken, methods: ['totp', 'recovery_code'] });
     }
     const { session, refreshToken } = await createSession(user, req.get('user-agent') || '');
+    await recordAudit(prisma, { actorUserId: user.id, action: 'SIGNED_IN', resourceType: 'session', resourceId: session.id });
     const accessToken = generateAccessToken(user, { sessionId: session.id });
     if (browserRequest(req)) setRefreshCookie(res, refreshToken);
     return res.status(200).json({ status: 'success', message: 'Login successful', accessToken, ...(!browserRequest(req) ? { refreshToken } : {}), user: toUserResponse(user) });
@@ -99,7 +104,8 @@ export const logout = async (req, res, next) => {
   try {
     const refreshToken = readRefreshCookie(req) || req.body.refreshToken;
     const sessionId = await sessionIdForRefresh(refreshToken);
-    if (sessionId) await revokeSession(sessionId);
+    const userId = sessionId ? (await prisma.authSession.findUnique({ where: { id: sessionId }, select: { userId: true } }))?.userId : null;
+    if (sessionId && await revokeSession(sessionId) && userId) await recordAudit(prisma, { actorUserId: userId, action: 'SIGNED_OUT', resourceType: 'session', resourceId: sessionId });
     clearRefreshCookie(res);
     return res.status(200).json({ status: 'success', message: 'Logged out successfully' });
   } catch (error) {
@@ -119,6 +125,7 @@ export const revokeDeviceSession = async (req, res, next) => {
     const session = await activeSession(req.params.id, req.user.id, { touch: false });
     if (!session) return res.status(404).json({ status: 'error', message: 'Session not found' });
     await revokeSession(session.id);
+    await recordAudit(prisma, { actorUserId: req.user.id, action: session.id === req.user.sessionId ? 'SIGNED_OUT' : 'SESSION_REVOKED', resourceType: 'session', resourceId: session.id });
     if (session.id === req.user.sessionId) clearRefreshCookie(res);
     return res.json({ status: 'success', message: 'Session revoked' });
   } catch (error) { return next(error); }
@@ -127,6 +134,7 @@ export const revokeDeviceSession = async (req, res, next) => {
 export const logoutOtherDevices = async (req, res, next) => {
   try {
     const count = await revokeUserSessions(req.user.id, req.user.sessionId);
+    await recordAudit(prisma, { actorUserId: req.user.id, action: 'SIGNED_OUT_OTHERS' });
     return res.json({ status: 'success', revoked: count });
   } catch (error) { return next(error); }
 };
@@ -134,6 +142,7 @@ export const logoutOtherDevices = async (req, res, next) => {
 export const logoutEverywhere = async (req, res, next) => {
   try {
     const count = await revokeUserSessions(req.user.id);
+    await recordAudit(prisma, { actorUserId: req.user.id, action: 'SIGNED_OUT_EVERYWHERE' });
     clearRefreshCookie(res);
     return res.json({ status: 'success', revoked: count });
   } catch (error) { return next(error); }
@@ -205,6 +214,7 @@ export const confirmPasswordReset = async (req, res, next) => {
     await AuthModel.revokeOtherPasswordResetTokens(uid, reset.id);
     await AuthModel.revokeRefreshTokens(uid);
     await revokeUserSessions(uid);
+    await recordAudit(prisma, { actorUserId: uid, action: 'PASSWORD_RESET' });
     return res.status(200).json({ status: 'success', message: 'Password reset successfully' });
   } catch (error) { return next(error); }
 };

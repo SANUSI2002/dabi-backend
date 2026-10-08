@@ -12,7 +12,7 @@ const prisma = {
   user: { create: fn(), findUnique: fn(), findFirst: fn() },
   organizationMembership: { findMany: fn() },
   careRelationship: { findMany: fn(), count: fn(), findFirst: fn(), create: fn(), update: fn(), updateMany: fn() },
-  activityLog: { create: fn() }, refreshToken: { create: fn() },
+  activityLog: { create: fn() }, auditEvent: { create: fn(), findFirst: fn() }, refreshToken: { create: fn() },
   authDevice: { create: fn() }, authSession: { create: fn(), findFirst: fn() }, authRefreshCredential: { create: fn() }, $transaction: fn(),
   mfaTotp: { findUnique: fn() },
   mfaLoginChallenge: { create: fn() },

@@ -970,6 +970,33 @@ model Category {
   @@map("record_categories")
 }
 
+// Portal audit trail shown to patients and professionals in their Activity log. Append-only (SQL
+// trigger). User ids are plain columns, not foreign keys, so the trail outlives account changes.
+// actor = who did it; subject = whose health record it concerned; related = the other person involved
+// (e.g. the professional a patient gave access to). Each of them can see the entry.
+model AuditEvent {
+  id            String   @id @default(uuid())
+  actorUserId   String   @map("actor_user_id")
+  subjectUserId String?  @map("subject_user_id")
+  relatedUserId String?  @map("related_user_id")
+  category      String   @db.VarChar(32)
+  action        String   @db.VarChar(64)
+  summary       String   @db.VarChar(300)
+  resourceType  String?  @map("resource_type") @db.VarChar(64)
+  resourceId    String?  @map("resource_id") @db.VarChar(64)
+  ipAddress     String?  @map("ip_address") @db.VarChar(64)
+  device        String?  @db.VarChar(160)
+  city          String?  @db.VarChar(120)
+  region        String?  @db.VarChar(16)
+  country       String?  @db.VarChar(2)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([subjectUserId, createdAt(sort: Desc)])
+  @@index([relatedUserId, createdAt(sort: Desc)])
+  @@map("audit_events")
+}
+
 model ActivityLog {
   id          String   @id @default(uuid())
   userId      String   @map("user_id")

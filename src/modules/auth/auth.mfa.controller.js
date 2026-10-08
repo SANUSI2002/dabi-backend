@@ -3,6 +3,7 @@ import * as AuthModel from './auth.model.js';
 import { generateAccessToken } from './auth.token.js';
 import { browserRequest, setRefreshCookie } from './auth.cookie.js';
 import { createSession, revokeUserSessions } from './auth.session.js';
+import { recordAudit } from '../audit/audit.service.js';
 import { beginEnrollment, confirmEnrollment, consumeLoginChallenge, disableMfa, hasActiveMfa, markStepUp, regenerateRecoveryCodes } from './auth.mfa.js';
 
 const respondError = (error, res, next) => {
@@ -18,6 +19,7 @@ export const verifyMfaLogin = async (req, res, next) => {
     const user = await AuthModel.findUserById(userId);
     if (!user || user.accountStatus !== 'ACTIVE') return res.status(401).json({ status: 'error', message: 'Verification failed' });
     const { session, refreshToken } = await createSession(user, req.get('user-agent') || '', { mfaVerified: true });
+    await recordAudit(prisma, { actorUserId: user.id, action: 'SIGNED_IN_MFA', resourceType: 'session', resourceId: session.id });
     if (browserRequest(req)) setRefreshCookie(res, refreshToken);
     return res.json({ status: 'success', accessToken: generateAccessToken(user, { sessionId: session.id }), ...(!browserRequest(req) ? { refreshToken } : {}), user: { id: user.id, email: user.email, patientId: user.patientId, roles: user.roles.map(({ role }) => role) } });
   } catch (error) { return respondError(error, res, next); }

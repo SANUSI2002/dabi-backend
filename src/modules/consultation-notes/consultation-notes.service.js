@@ -14,6 +14,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import prisma from '../../config/db.js';
 import { contentSchema, patientVisitSummary, signingProblems } from './consultation-notes.policy.js';
+import { recordAudit } from '../audit/audit.service.js';
 
 const fail = (status, code, message, extra = {}) => { throw Object.assign(new Error(message), { status, code, ...extra }); };
 const DRAFTABLE = ['CONFIRMED', 'COMPLETED'];
@@ -53,6 +54,8 @@ const toDoctorNote = (note) => note && ({
 export function createConsultationNotesService(db = prisma) {
   const transaction = (work) => db.$transaction(work, { isolationLevel: 'Serializable', timeout: 30000 });
   const audit = (tx, userId, type, appointmentId) => tx.activityLog.create({ data: { userId, type, description: 'Consultation note action', meta: { appointmentId } } });
+  // The patient's Activity log shows every time their notes are opened or changed.
+  const trail = (tx, userId, appointment, action, options) => recordAudit(tx, { actorUserId: userId, subjectUserId: appointment.patientId, action, resourceType: 'consultation_note', resourceId: appointment.id }, options);
 
   async function doctor(tx, userId) {
     const profile = await tx.professionalProfile.findFirst({
@@ -120,7 +123,9 @@ export function createConsultationNotesService(db = prisma) {
 
     detail: async (userId, appointmentId) => {
       const { id: doctorId } = await doctor(db, userId);
-      return detailView(db, doctorId, await ownedAppointment(db, doctorId, appointmentId));
+      const appointment = await ownedAppointment(db, doctorId, appointmentId);
+      await trail(db, userId, appointment, 'CONSULTATION_NOTE_VIEWED', { dedupeMinutes: 15 });
+      return detailView(db, doctorId, appointment);
     },
 
     save: (userId, appointmentId, { revision, content }) => transaction(async (tx) => {
@@ -138,6 +143,7 @@ export function createConsultationNotesService(db = prisma) {
         await tx.consultationNote.create({ data: { appointmentId, doctorProfileId: doctorId, patientId: appointment.patientId, draft } });
       }
       await audit(tx, userId, 'CONSULTATION_NOTE_DRAFT_SAVED', appointmentId);
+      await trail(tx, userId, appointment, 'CONSULTATION_NOTE_SAVED');
       return detailView(tx, doctorId, appointment);
     }),
 
@@ -167,6 +173,7 @@ export function createConsultationNotesService(db = prisma) {
           : { userId: appointment.patientId, title: 'Your visit summary is ready', message: `${doctorName} shared the summary of your consultation. Open Appointments in Sabi Health to read it.` },
       });
       await audit(tx, userId, latest ? 'CONSULTATION_NOTE_AMENDED' : 'CONSULTATION_NOTE_SIGNED', appointmentId);
+      await trail(tx, userId, appointment, 'CONSULTATION_NOTE_SIGNED');
       return detailView(tx, profile.id, appointment);
     }),
 

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import prisma from '../../config/db.js';
+import { recordAudit } from '../audit/audit.service.js';
 
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const randomToken = () => crypto.randomBytes(48).toString('base64url');
@@ -44,7 +45,7 @@ export const activeSession = async (sessionId, userId, { touch = true } = {}) =>
   const session = await prisma.authSession.findFirst({ where: { id: sessionId, userId, revokedAt: null, expiresAt: { gt: now }, user: { accountStatus: 'ACTIVE' } } });
   if (!session) return null;
   if (isIdle(session, now)) {
-    await revokeSession(session.id);
+    await revokeIdleSession(session.id, session.userId);
     return null;
   }
   if (touch && now.getTime() - new Date(session.lastUsedAt).getTime() >= TOUCH_INTERVAL_MS) {
@@ -68,7 +69,7 @@ export const rotateRefreshToken = async (rawToken) => {
   const now = new Date();
   if (credential.revokedAt || credential.expiresAt <= now || credential.session.revokedAt || credential.session.expiresAt <= now) throw invalid();
   if (isIdle(credential.session, now)) {
-    await revokeSession(credential.sessionId);
+    await revokeIdleSession(credential.sessionId, credential.session.userId);
     throw Object.assign(invalid(), { code: 'SESSION_IDLE' });
   }
   const nextToken = randomToken();
@@ -97,12 +98,19 @@ export const rotateRefreshToken = async (rawToken) => {
   return result;
 };
 
+/** Ends a session; resolves to true when it was still open. */
 export const revokeSession = async (sessionId) => {
   const now = new Date();
-  await prisma.$transaction([
+  const [sessions] = await prisma.$transaction([
     prisma.authSession.updateMany({ where: { id: sessionId, revokedAt: null }, data: { revokedAt: now } }),
     prisma.authRefreshCredential.updateMany({ where: { sessionId, revokedAt: null }, data: { revokedAt: now } }),
   ]);
+  return sessions.count > 0;
+};
+
+// An idle session is ended wherever it is noticed first; only that first ending is recorded.
+const revokeIdleSession = async (sessionId, userId) => {
+  if (await revokeSession(sessionId)) await recordAudit(prisma, { actorUserId: userId, action: 'SIGNED_OUT_IDLE', resourceType: 'session', resourceId: sessionId });
 };
 
 export const revokeUserSessions = async (userId, exceptSessionId) => {
@@ -141,6 +149,6 @@ export const userIdForRefresh = async (rawToken) => {
   }
   const now = new Date();
   if (!credential || credential.revokedAt || credential.expiresAt <= now || credential.session.revokedAt || credential.session.expiresAt <= now) return null;
-  if (isIdle(credential.session, now)) { await revokeSession(credential.sessionId); return null; }
+  if (isIdle(credential.session, now)) { await revokeIdleSession(credential.sessionId, credential.session.userId); return null; }
   return credential?.session?.userId ?? null;
 };

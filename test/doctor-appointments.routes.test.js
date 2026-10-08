@@ -14,6 +14,7 @@ const db = {
   doctorAppointment: { findFirst: f(), findMany: f(), count: f(), create: f(), updateMany: f() },
   activityLog: { create: f() },
   domainEvent: { create: f() },
+  auditEvent: { create: f(), findFirst: f() },
   $transaction: f(),
 };
 vi.mock('../src/config/db.js', () => ({ default: db }));
@@ -36,7 +37,7 @@ beforeEach(() => {
   db.doctorAvailabilitySlot.findFirst.mockResolvedValue(openSlot);
   db.doctorAvailabilitySlot.findMany.mockResolvedValue([]);
   db.doctorAppointment.create.mockImplementation(async ({ data }) => ({ id: appt, ...data, status: 'REQUESTED', doctorProfile: { id: doctorProfile, specialty: 'Cardiology', practiceName: 'Heart Clinic', practiceAddress: null, user: { full_name: 'Dr Ada' } } }));
-  db.doctorAppointment.findFirst.mockResolvedValue({ id: appt, status: 'CONFIRMED', patient: { full_name: 'Pat Ient', patientId: '#SHM1' }, dependent: null });
+  db.doctorAppointment.findFirst.mockResolvedValue({ id: appt, status: 'CONFIRMED', patient: { id: patient, full_name: 'Pat Ient', patientId: '#SHM1' }, dependent: null });
   db.doctorAppointment.updateMany.mockResolvedValue({ count: 1 });
   db.activityLog.create.mockResolvedValue({});
 });
@@ -97,6 +98,8 @@ describe('doctor workspace', () => {
     const result = await request(app).get(`/doctor-appointments/practice/appointments/${appt}`).set(auth(doctorUser));
     expect(result.status).toBe(200);
     expect(db.doctorAppointment.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: appt, doctorProfileId: doctorProfile } }));
+    // The patient can see who opened their appointment.
+    expect(db.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ actorUserId: doctorUser, subjectUserId: patient, action: 'APPOINTMENT_VIEWED', category: 'RECORD_ACCESS' }) });
     db.doctorAppointment.findFirst.mockResolvedValueOnce(null);
     expect((await request(app).get(`/doctor-appointments/practice/appointments/${uid(99)}`).set(auth(doctorUser))).status).toBe(404);
     expect((await request(app).get(`/doctor-appointments/practice/appointments/${appt}`).set(auth(patient))).status).toBe(403);
@@ -137,6 +140,7 @@ describe('doctor workspace', () => {
     const call = db.doctorAppointment.updateMany.mock.calls[0][0];
     expect(call.where).toMatchObject({ id: appt, doctorProfileId: doctorProfile, status: 'REQUESTED' });
     expect(call.data).toMatchObject({ status: 'CONFIRMED', meetingUrl: 'https://meet.example.com/abc' });
+    expect(db.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ actorUserId: doctorUser, subjectUserId: patient, action: 'APPOINTMENT_CONFIRMED', category: 'RECORD_CHANGE' }) });
     expect((await request(app).post(`/doctor-appointments/practice/appointments/${appt}/confirm`).set(auth(doctorUser)).send({ meetingUrl: 'http://insecure.example.com' })).status).toBe(400);
     expect((await request(app).post(`/doctor-appointments/practice/appointments/${appt}/confirm`).set(auth(doctorUser)).send({ meetingUrl: 'javascript:alert(1)' })).status).toBe(400);
     db.doctorAppointment.updateMany.mockResolvedValueOnce({ count: 0 });

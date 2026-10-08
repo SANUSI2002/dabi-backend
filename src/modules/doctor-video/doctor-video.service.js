@@ -3,6 +3,7 @@ import { setInterval, clearInterval } from 'node:timers';
 import prisma from '../../config/db.js';
 import { PORTAL_PROFESSIONS } from '../professionals/professionCatalog.js';
 import { createDailyProvider, dailyConfigured, videoError } from './daily.provider.js';
+import { recordAudit } from '../audit/audit.service.js';
 const MINUTE = 60000;
 // The telemedicine consent wording each side accepts before joining (versioned in the portals' call screen).
 // Older clients send no version; their join is still consented and is logged as the original notice.
@@ -61,6 +62,10 @@ export function createVideoService({ db = prisma, provider = createDailyProvider
       const latest = await db.doctorVideoRoom.findUnique({ where: { appointmentId: id } });
       if (latest?.revokedAt) throw videoError('VIDEO_WINDOW_ENDED', 409);
       await db.activityLog.create({ data: { userId, type: 'DOCTOR_VIDEO_JOIN_AUTHORIZED', description: 'Private consultation access issued', meta: { appointmentId: id, role, consentVersion: consent.consentVersion || LEGACY_CONSENT } } });
+      // Both Activity logs show the join; reconnecting within ten minutes counts once.
+      await recordAudit(db, role === 'doctor'
+        ? { actorUserId: userId, subjectUserId: appointment.patientId, action: 'VIDEO_JOINED', resourceType: 'doctor_appointment', resourceId: id }
+        : { actorUserId: userId, subjectUserId: userId, relatedUserId: appointment.doctorProfile.userId, action: 'VIDEO_JOINED', resourceType: 'doctor_appointment', resourceId: id }, { dedupeMinutes: 10 });
       return { url: remote.url, token, expiresAt: room.expiresAt };
     },
     cleanup: async () => {

@@ -4,8 +4,8 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const f = () => vi.fn();
-const tx = { professionalProfile: { findFirst: f() }, doctorCareRelationship: { findFirst: f() }, prescription: { create: f(), findFirst: f(), update: f(), updateMany: f() }, activityLog: { create: f() } };
-const prisma = { prescription: { findFirst: f(), findMany: f(), count: f() }, $transaction: f() };
+const tx = { professionalProfile: { findFirst: f() }, doctorCareRelationship: { findFirst: f() }, prescription: { create: f(), findFirst: f(), update: f(), updateMany: f() }, activityLog: { create: f() }, auditEvent: { create: f(), findFirst: f() } };
+const prisma = { prescription: { findFirst: f(), findMany: f(), count: f() }, auditEvent: { create: f(), findFirst: f() }, $transaction: f() };
 vi.mock('../src/config/db.js', () => ({ default: prisma }));
 const { default: routes } = await import('../src/modules/prescriptions/prescriptions.routes.js');
 process.env.JWT_SECRET = 'prescription-test';
@@ -32,6 +32,8 @@ describe('doctor-issued prescriptions', () => {
     expect(tx.prescription.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ patientId: patient, doctorProfileId: doctorProfile }) }));
     expect((await request(app).put(`/prescriptions/${prescriptionId}`).set(auth(doctorUser)).send({ items: body.items, instructions: 'Updated' })).status).toBe(200);
     expect((await request(app).post(`/prescriptions/${prescriptionId}/issue`).set(auth(doctorUser)).send({})).status).toBe(200);
+    // Each step shows in the patient's Activity log, attributed to the prescriber.
+    expect(tx.auditEvent.create.mock.calls.map(([{ data }]) => [data.action, data.actorUserId, data.subjectUserId])).toEqual([['PRESCRIPTION_DRAFTED', doctorUser, patient], ['PRESCRIPTION_UPDATED', doctorUser, patient], ['PRESCRIPTION_ISSUED', doctorUser, patient]]);
     expect(tx.doctorCareRelationship.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ patientId: patient, doctorProfileId: doctorProfile, status: 'ACTIVE' }) }));
   });
   it('scopes patient issued reads and doctor-owned reads and lists', async () => {

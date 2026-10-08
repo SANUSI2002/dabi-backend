@@ -28,6 +28,7 @@ const prisma = {
     }),
   },
   $transaction: vi.fn(async (arg) => typeof arg === 'function' ? arg(prisma) : Promise.all(arg)),
+  auditEvent: { create: vi.fn(async ({ data }) => data), findFirst: vi.fn() },
 };
 vi.mock('../src/config/db.js', () => ({ default: prisma }));
 const { activeSession, createSession, revokeSession, rotateRefreshToken } = await import('../src/modules/auth/auth.session.js');
@@ -61,6 +62,7 @@ describe('server-backed sessions', () => {
     expect(await activeSession(issued.session.id, 'user-1')).toBeNull();
     expect(state.session.revokedAt).toBeInstanceOf(Date);
     expect(state.credentials[0].revokedAt).toBeInstanceOf(Date);
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ actorUserId: 'user-1', action: 'SIGNED_OUT_IDLE', category: 'SIGN_IN' }) });
   });
 
   it('records activity at most every 30 seconds and never when only inspecting', async () => {

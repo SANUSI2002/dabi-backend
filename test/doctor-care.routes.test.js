@@ -4,7 +4,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const f = () => vi.fn();
-const tx = { professionalProfile: { findFirst: f() }, userRole: { findFirst: f() }, doctorCareRelationship: { findFirst: f(), create: f(), updateMany: f() }, activityLog: { create: f() } };
+const tx = { auditEvent: { create: f(), findFirst: f() }, professionalProfile: { findFirst: f(), findUnique: f() }, userRole: { findFirst: f() }, doctorCareRelationship: { findFirst: f(), create: f(), updateMany: f() }, activityLog: { create: f() } };
 const prisma = { professionalProfile: { findMany: f(), count: f(), findFirst: f() }, doctorCareRelationship: { findMany: f() }, $transaction: f() };
 vi.mock('../src/config/db.js', () => ({ default: prisma }));
 const { default: routes } = await import('../src/modules/doctor-care/doctor-care.routes.js');
@@ -18,7 +18,7 @@ const app = express(); app.use(express.json()); app.use('/doctor-care', routes);
 beforeEach(() => {
   vi.clearAllMocks(); prisma.$transaction.mockImplementation((callback) => callback(tx));
   prisma.professionalProfile.findMany.mockResolvedValue([]); prisma.professionalProfile.count.mockResolvedValue(0); prisma.professionalProfile.findFirst.mockResolvedValue(null); prisma.doctorCareRelationship.findMany.mockResolvedValue([]);
-  tx.professionalProfile.findFirst.mockResolvedValue({ id: doctor }); tx.userRole.findFirst.mockResolvedValue({ id: 'role' }); tx.doctorCareRelationship.findFirst.mockResolvedValue(null); tx.doctorCareRelationship.create.mockResolvedValue({ id: relation, status: 'PENDING' }); tx.doctorCareRelationship.updateMany.mockResolvedValue({ count: 1 }); tx.activityLog.create.mockResolvedValue({});
+  tx.professionalProfile.findFirst.mockResolvedValue({ id: doctor }); tx.professionalProfile.findUnique.mockResolvedValue({ userId: 'doctor-user' }); tx.userRole.findFirst.mockResolvedValue({ id: 'role' }); tx.doctorCareRelationship.findFirst.mockResolvedValue(null); tx.doctorCareRelationship.create.mockResolvedValue({ id: relation, status: 'PENDING' }); tx.doctorCareRelationship.updateMany.mockResolvedValue({ count: 1 }); tx.activityLog.create.mockResolvedValue({});
 });
 
 describe('doctor care', () => {
@@ -26,6 +26,8 @@ describe('doctor care', () => {
     expect((await request(app).get('/doctor-care/doctors?page=1&limit=5').set(auth(patient))).status).toBe(200);
     expect(prisma.professionalProfile.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ professionType: 'DOCTOR', verificationStatus: 'VERIFIED' }), orderBy: { createdAt: 'asc' }, take: 5 }));
     expect((await request(app).post('/doctor-care/relationships').set(auth(patient)).send({ doctorProfileId: doctor })).status).toBe(201);
+    // Both the patient and the doctor see the request in their Activity log.
+    expect(tx.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ actorUserId: patient, subjectUserId: patient, relatedUserId: 'doctor-user', action: 'CARE_REQUESTED', category: 'PERMISSION' }) });
     expect(tx.doctorCareRelationship.create).toHaveBeenCalledWith(expect.objectContaining({ data: { patientId: patient, doctorProfileId: doctor } }));
   });
   it('scopes patient and doctor relationship lists and permits valid accept, decline, and revocation transitions', async () => {

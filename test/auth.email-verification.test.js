@@ -11,6 +11,8 @@ const mail = vi.hoisted(() => ({
 }));
 vi.mock('../src/modules/auth/auth.model.js', () => model);
 vi.mock('../src/modules/auth/auth.email.js', () => mail);
+const audit = vi.hoisted(() => ({ recordAudit: vi.fn() }));
+vi.mock('../src/modules/audit/audit.service.js', () => audit);
 const { registerPatient, login, requestEmailVerification, confirmEmailVerification } = await import('../src/modules/auth/auth.controller.js');
 
 const response = () => {
@@ -58,6 +60,7 @@ describe('patient email verification', () => {
     const invalid = response();
     await login({ body: { email: 'patient@example.test', password: 'wrong' } }, invalid, vi.fn());
     expect(invalid.statusCode).toBe(401);
+    expect(audit.recordAudit).toHaveBeenCalledWith(expect.anything(), { actorUserId: patient(password).id, action: 'SIGN_IN_FAILED' });
     const pending = response();
     await login({ body: { email: 'patient@example.test', password: 'CorrectPassword123!' } }, pending, vi.fn());
     expect(pending.statusCode).toBe(403);

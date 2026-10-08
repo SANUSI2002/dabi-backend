@@ -48,6 +48,8 @@ tags:
     description: Doctor Care endpoints currently registered by the backend.
   - name: Doctor Appointments
     description: Doctor Appointments endpoints currently registered by the backend.
+  - name: Audit
+    description: The signed-in person's Activity log - sign-ins, access to their health record, permission changes and other account activity.
   - name: Consultation Notes
     description: Doctors' notes for telemedicine consultations and the visit summaries patients receive.
   - name: Prescriptions
@@ -4962,6 +4964,52 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/audit/mine:
+    get:
+      tags:
+        - Audit
+      summary: My Activity log
+      description: >-
+        Newest first. Includes what the signed-in person did, entries about their health record made by others
+        (for example a professional opening their consultation note), and entries where they are the other party
+        (for example a patient giving them access). `text` is worded for the reader. `device`, a masked `ip` and an
+        approximate `location` appear only on entries the reader made themselves. Entries are append-only.
+      operationId: get__api_v1_audit_mine
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 30
+        - name: cursor
+          in: query
+          description: The `nextCursor` of the previous page.
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [SIGN_IN, RECORD_ACCESS, RECORD_CHANGE, PERMISSION, ACCOUNT, ACTIVITY]
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":

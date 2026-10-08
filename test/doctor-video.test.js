@@ -9,7 +9,7 @@ const appointment = () => ({ id: 'appt', patientId: 'patient', status: 'CONFIRME
 const env = { DAILY_VIDEO_ENABLED: 'true', DAILY_PROCESSING_APPROVED: 'true', DAILY_API_KEY: 'synthetic-key', DAILY_DOMAIN: 'sabihealth' };
 let db, provider, service;
 beforeEach(() => {
-  db = { doctorAppointment: { findFirst: vi.fn().mockResolvedValue(appointment()) }, userRole: { findFirst: vi.fn().mockResolvedValue({ id: 'role' }) }, doctorVideoRoom: { createMany: vi.fn().mockResolvedValue({ count: 1 }), findUnique: vi.fn().mockResolvedValue(room), findMany: vi.fn().mockResolvedValue([room]), updateMany: vi.fn().mockResolvedValue({ count: 1 }) }, activityLog: { create: vi.fn() } };
+  db = { doctorAppointment: { findFirst: vi.fn().mockResolvedValue(appointment()) }, userRole: { findFirst: vi.fn().mockResolvedValue({ id: 'role' }) }, doctorVideoRoom: { createMany: vi.fn().mockResolvedValue({ count: 1 }), findUnique: vi.fn().mockResolvedValue(room), findMany: vi.fn().mockResolvedValue([room]), updateMany: vi.fn().mockResolvedValue({ count: 1 }) }, activityLog: { create: vi.fn() }, auditEvent: { create: vi.fn(), findFirst: vi.fn() } };
   provider = { ensureRoom: vi.fn().mockResolvedValue({ url: `https://sabihealth.daily.co/${name}` }), token: vi.fn().mockResolvedValue('synthetic-token-for-tests'), revoke: vi.fn() };
   service = createVideoService({ db, provider, env, now: () => time });
 });
