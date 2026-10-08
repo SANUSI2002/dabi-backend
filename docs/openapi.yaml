@@ -50,6 +50,10 @@ tags:
     description: Doctor Appointments endpoints currently registered by the backend.
   - name: Audit
     description: The signed-in person's Activity log - sign-ins, access to their health record, permission changes and other account activity.
+  - name: Medication Schedules
+    description: When patients take their medicines, the dose records made from that, and recording doses as taken or skipped.
+  - name: WhatsApp
+    description: Meta WhatsApp Cloud API webhook (signed).
   - name: Consultation Notes
     description: Doctors' notes for telemedicine consultations and the visit summaries patients receive.
   - name: Prescriptions
@@ -5014,6 +5018,444 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/notifications/settings:
+    get:
+      tags:
+        - Notifications
+      summary: My notification settings
+      description: WhatsApp availability, the linked number (masked), a code being verified, the kinds of updates sent to WhatsApp and the consent on record. The in-app bell always receives everything.
+      operationId: get__api_v1_notifications_settings
+      security:
+        - bearerAuth: []
+      responses:
+        "200": &a1
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      tags:
+        - Notifications
+      summary: Change notification settings
+      description: Choose which kinds of update go to WhatsApp, whether reminders may name the medicine (off by default; reminders then say "your morning medicine"), and the time zone used for new schedules.
+      operationId: put__api_v1_notifications_settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                whatsappCategories:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - MEDICATION
+                      - APPOINTMENT
+                      - CARE
+                showMedicationDetails:
+                  type: boolean
+                timezone:
+                  type: string
+                  example: Africa/Lagos
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/notifications/settings/whatsapp:
+    post:
+      tags:
+        - Notifications
+      summary: Send a WhatsApp verification code
+      description: "Step 1 of enabling WhatsApp or changing the number: the patient agrees to WhatsApp notifications and Sabi sends a 6-digit code by WhatsApp authentication template. Codes expire after 10 minutes; at most 5 per hour. A number linked to another account is refused (409 NUMBER_IN_USE). The current number keeps working until the new one is verified."
+      operationId: post__api_v1_notifications_settings_whatsapp
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+                - consent
+              additionalProperties: false
+              properties:
+                phone:
+                  type: string
+                  example: 0803 123 4567
+                consent:
+                  const: true
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags:
+        - Notifications
+      summary: Turn off WhatsApp notifications
+      description: Unlinks the number and cancels WhatsApp messages still waiting to be sent. In-app notifications are unaffected.
+      operationId: delete__api_v1_notifications_settings_whatsapp
+      security:
+        - bearerAuth: []
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/notifications/settings/whatsapp/resend:
+    post:
+      tags:
+        - Notifications
+      summary: Send the code again
+      description: Available 60 seconds after the previous code.
+      operationId: post__api_v1_notifications_settings_whatsapp_resend
+      security:
+        - bearerAuth: []
+      responses:
+        "200": *a1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/notifications/settings/whatsapp/verify:
+    post:
+      tags:
+        - Notifications
+      summary: Verify the WhatsApp code
+      description: "Step 2: the number becomes the patient's WhatsApp number, any previous number is revoked, and the consent version and time are recorded. Five wrong codes end the attempt."
+      operationId: post__api_v1_notifications_settings_whatsapp_verify
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              additionalProperties: false
+              properties:
+                code:
+                  type: string
+                  pattern: ^\d{6}$
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/medication-schedules:
+    get:
+      tags:
+        - Medication Schedules
+      summary: My medicines and their schedules
+      description: Live schedules, plus ones stopped or completed in the last 30 days.
+      operationId: get__api_v1_medication_schedules
+      security:
+        - bearerAuth: []
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags:
+        - Medication Schedules
+      summary: Set up a medicine
+      description: From an issued prescription item (`prescriptionItemId`; name and dose come from the prescription) or a medicine the patient adds (`name`). "As needed" medicines are listed without times or reminders. Doses are created up to 48 hours ahead, each with a reminder.
+      operationId: post__api_v1_medication_schedules
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                prescriptionItemId:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                  maxLength: 120
+                dosage:
+                  type: string
+                  maxLength: 64
+                instructions:
+                  type: string
+                  maxLength: 500
+                asNeeded:
+                  type: boolean
+                times: &a3
+                  type: array
+                  maxItems: 8
+                  items:
+                    type: string
+                    pattern: ^([01]\d|2[0-3]):[0-5]\d$
+                  description: Clock times in the patient time zone, e.g. ["08:00","20:00"].
+                startDate: &a2
+                  type: string
+                  format: date
+                endDate: *a2
+                remindersEnabled:
+                  type: boolean
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/medication-schedules/suggestions:
+    get:
+      tags:
+        - Medication Schedules
+      summary: Prescribed medicines not set up yet
+      description: Issued prescription items with times suggested from the prescribed frequency and a last day from the duration. "As needed" medicines have no suggested times.
+      operationId: get__api_v1_medication_schedules_suggestions
+      security:
+        - bearerAuth: []
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/medication-schedules/{id}:
+    patch:
+      tags:
+        - Medication Schedules
+      summary: Change a medicine
+      description: "Any change creates a new version: future doses and reminders of the old version are cancelled and new ones made. Pausing stops reminders until resumed."
+      operationId: patch__api_v1_medication_schedules_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                dosage:
+                  type: string
+                instructions:
+                  type: string
+                times: *a3
+                endDate: *a2
+                remindersEnabled:
+                  type: boolean
+                paused:
+                  type: boolean
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/medication-schedules/{id}/stop:
+    post:
+      tags:
+        - Medication Schedules
+      summary: Stop a medicine
+      description: Cancels future doses and reminders; past doses stay on record. Cancelling a prescription stops its medicines automatically.
+      operationId: post__api_v1_medication_schedules_id_stop
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200": *a1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/medication-schedules/doses:
+    get:
+      tags:
+        - Medication Schedules
+      summary: Doses for a day
+      description: Doses on one calendar day in the patient time zone (today by default), each with what the patient reported (NOT_CONFIRMED, TAKEN, SKIPPED) and the reminder state. A reminder being delivered or read never counts as taken.
+      operationId: get__api_v1_medication_schedules_doses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: day
+          in: query
+          schema: *a2
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/medication-schedules/doses/{id}/taken:
+    post:
+      tags:
+        - Medication Schedules
+      summary: Record a dose as taken
+      description: "Idempotent: recording it again returns `alreadyRecorded: true`. Cancels the dose's pending reminder. Allowed from two hours before the dose is due."
+      operationId: post__api_v1_medication_schedules_doses_id_taken
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200": *a1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/medication-schedules/doses/{id}/skipped:
+    post:
+      tags:
+        - Medication Schedules
+      summary: Record a dose as skipped
+      description: Same rules as taken.
+      operationId: post__api_v1_medication_schedules_doses_id_skipped
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200": *a1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/whatsapp/webhook:
+    get:
+      tags:
+        - WhatsApp
+      summary: Webhook subscription check
+      description: Meta calls this when the webhook is configured; it answers `hub.challenge` only when `hub.verify_token` matches.
+      operationId: get__api_v1_whatsapp_webhook
+      security: []
+      responses:
+        "200":
+          description: The challenge
+          content:
+            text/plain:
+              schema:
+                type: string
+        "403":
+          description: Wrong verify token
+    post:
+      tags:
+        - WhatsApp
+      summary: WhatsApp Cloud API webhook
+      description: Delivery status updates and patients' replies from Meta. The X-Hub-Signature-256 header (HMAC-SHA256 of the raw body with the app secret) is required. Each event is applied once. Button replies are accepted only from the number currently linked to the patient the reminder belongs to. Returns 500 when an item could not be handled so Meta retries it.
+      operationId: post__api_v1_whatsapp_webhook
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Handled
+        "401":
+          description: Missing or wrong signature
+        "500":
+          description: An item failed; Meta will retry
   /api/v1/consultation-notes/practice:
     get:
       tags:

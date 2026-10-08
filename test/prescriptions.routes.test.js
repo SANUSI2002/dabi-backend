@@ -4,7 +4,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const f = () => vi.fn();
-const tx = { professionalProfile: { findFirst: f() }, doctorCareRelationship: { findFirst: f() }, prescription: { create: f(), findFirst: f(), update: f(), updateMany: f() }, activityLog: { create: f() }, auditEvent: { create: f(), findFirst: f() } };
+const tx = { professionalProfile: { findFirst: f() }, doctorCareRelationship: { findFirst: f() }, prescription: { create: f(), findFirst: f(), update: f(), updateMany: f() }, activityLog: { create: f() }, auditEvent: { create: f(), findFirst: f() }, notification: { findFirst: f(), create: f() }, notificationPreference: { findUnique: f() }, notificationDelivery: { create: f() }, medicationSchedule: { findMany: f(), update: f() } };
 const prisma = { prescription: { findFirst: f(), findMany: f(), count: f() }, auditEvent: { create: f(), findFirst: f() }, $transaction: f() };
 vi.mock('../src/config/db.js', () => ({ default: prisma }));
 const { default: routes } = await import('../src/modules/prescriptions/prescriptions.routes.js');
@@ -23,6 +23,7 @@ beforeEach(() => {
   vi.clearAllMocks(); prisma.$transaction.mockImplementation((callback) => callback(tx));
   tx.professionalProfile.findFirst.mockResolvedValue({ id: doctorProfile }); tx.doctorCareRelationship.findFirst.mockResolvedValue({ id: 'care' });
   tx.prescription.create.mockResolvedValue({ id: prescriptionId, status: 'DRAFT' }); tx.prescription.findFirst.mockResolvedValue({ id: prescriptionId, patientId: patient, status: 'DRAFT' }); tx.prescription.update.mockResolvedValue({ id: prescriptionId, status: 'DRAFT' }); tx.prescription.updateMany.mockResolvedValue({ count: 1 }); tx.activityLog.create.mockResolvedValue({});
+  tx.notification.findFirst.mockResolvedValue(null); tx.notification.create.mockResolvedValue({ id: 'notification' }); tx.notificationPreference.findUnique.mockResolvedValue(null); tx.medicationSchedule.findMany.mockResolvedValue([]);
   prisma.prescription.findFirst.mockResolvedValue(null); prisma.prescription.findMany.mockResolvedValue([]); prisma.prescription.count.mockResolvedValue(0);
 });
 
@@ -34,7 +35,9 @@ describe('doctor-issued prescriptions', () => {
     expect((await request(app).post(`/prescriptions/${prescriptionId}/issue`).set(auth(doctorUser)).send({})).status).toBe(200);
     // Each step shows in the patient's Activity log, attributed to the prescriber.
     expect(tx.auditEvent.create.mock.calls.map(([{ data }]) => [data.action, data.actorUserId, data.subjectUserId])).toEqual([['PRESCRIPTION_DRAFTED', doctorUser, patient], ['PRESCRIPTION_UPDATED', doctorUser, patient], ['PRESCRIPTION_ISSUED', doctorUser, patient]]);
-    expect(tx.doctorCareRelationship.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ patientId: patient, doctorProfileId: doctorProfile, status: 'ACTIVE' }) }));
+    expect(tx.doctorCareRelationship.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ patientId: patient, doctorProfileId: doctorProfile, status: 'ACTIVE' }) }));    // Issuing tells the patient in the app (and on WhatsApp if they chose it), once per prescription.
+    expect(tx.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: patient, eventType: 'prescription.issued', eventKey: `prescription.issued:${prescriptionId}`, category: 'CARE' }) });
+    expect(tx.notificationDelivery.create).not.toHaveBeenCalled();
   });
   it('scopes patient issued reads and doctor-owned reads and lists', async () => {
     prisma.prescription.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: prescriptionId, patientId: patient, status: 'ISSUED' });

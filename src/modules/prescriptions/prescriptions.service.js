@@ -3,6 +3,8 @@ import * as auditLog from './prescriptions.audit.js';
 import * as policy from './prescriptions.policy.js';
 import * as repository from './prescriptions.repository.js';
 import prisma from '../../config/db.js';
+import { notify } from '../notifications/notify.service.js';
+import { stopSchedulesForPrescriptionItems } from '../medication-schedules/schedule.service.js';
 
 const reference = () => `RX-${randomUUID()}`;
 const itemData = (items) => items.map((item) => ({ medicationName: item.medicationName, dosage: item.dosage, frequency: item.frequency, route: item.route, duration: item.duration, quantity: item.quantity, indication: item.indication }));
@@ -35,6 +37,10 @@ export const issue = (doctorUserId, id) => repository.transaction(async (tx) => 
   if (!(await repository.issue(tx, id, doctor.id)).count) throw policy.error('NOT_FOUND');
   await auditLog.audit(tx, doctorUserId, 'PRESCRIPTION_ISSUED', id);
   await auditLog.trail(tx, doctorUserId, draft.patientId, 'PRESCRIPTION_ISSUED', id);
+  await notify(tx, {
+    userId: draft.patientId, eventType: 'prescription.issued', eventKey: `prescription.issued:${id}`, link: '/medications',
+    title: 'New prescription', message: 'Your doctor issued you a prescription. Open Medicines in Sabi to see it and set up reminders.',
+  });
   return repository.findDoctor(tx, id, doctor.id);
 });
 
@@ -44,6 +50,8 @@ export const cancel = (doctorUserId, id) => repository.transaction(async (tx) =>
   if (!prescription || !(await repository.cancel(tx, id, doctor.id)).count) throw policy.error('NOT_FOUND');
   await auditLog.audit(tx, doctorUserId, 'PRESCRIPTION_CANCELLED', id);
   await auditLog.trail(tx, doctorUserId, prescription.patientId, 'PRESCRIPTION_CANCELLED', id);
+  // Reminders for a cancelled prescription stop at once.
+  await stopSchedulesForPrescriptionItems(tx, (prescription.items ?? []).map((item) => item.id));
 });
 
 export const patientList = (patientId, query) => repository.listPatient(patientId, query.page, query.limit);

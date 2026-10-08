@@ -68,6 +68,10 @@ model User {
   medicalDocumentSharesReceived MedicalDocumentShare[] @relation("MedicalDocumentShareRecipient")
   professionalCareConsents ProfessionalCareConsent[]
   professionalCarePlans ProfessionalCarePlan[]
+  notificationPreference NotificationPreference?
+  whatsappConnections WhatsAppConnection[]
+  medicationSchedules MedicationSchedule[]
+  medicationDoses MedicationDose[]
 
   @@map("users")
 }
@@ -1010,17 +1014,180 @@ model ActivityLog {
   @@map("activity_logs")
 }
 
+// In-app notification (the bell). Saved first for every event; other channels (WhatsApp, later push)
+// are NotificationDelivery rows, so a failed channel never removes or delays the in-app item.
+// event_key makes an event idempotent per person (the same reminder is never created twice).
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  title     String
-  message   String
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now()) @map("created_at")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  title      String
+  message    String
+  isRead     Boolean  @default(false)
+  category   String   @default("GENERAL") @db.VarChar(32)
+  eventType  String?  @map("event_type") @db.VarChar(64)
+  eventKey   String?  @map("event_key") @db.VarChar(160)
+  link       String?  @db.VarChar(300)
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
 
+  @@unique([userId, eventKey])
   @@index([userId])
   @@map("notifications")
+}
+
+// One row per channel attempt for a notification. Status only moves forward
+// (PENDING → SENT → DELIVERED → READ, or FAILED / SKIPPED / CANCELLED). Delivery status is never
+// treated as medication adherence.
+model NotificationDelivery {
+  id                String       @id @default(uuid())
+  notificationId    String       @map("notification_id")
+  userId            String       @map("user_id")
+  channel           String       @db.VarChar(16)
+  status            String       @default("PENDING") @db.VarChar(16)
+  connectionId      String?      @map("connection_id")
+  reminderJobId     String?      @map("reminder_job_id")
+  providerMessageId String?      @unique @map("provider_message_id") @db.VarChar(128)
+  attempts          Int          @default(0)
+  nextAttemptAt     DateTime     @default(now()) @map("next_attempt_at")
+  lastError         String?      @map("last_error") @db.VarChar(300)
+  sentAt            DateTime?    @map("sent_at")
+  deliveredAt       DateTime?    @map("delivered_at")
+  readAt            DateTime?    @map("read_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at")
+  notification      Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notification_deliveries")
+}
+
+// What each patient allows. whatsappCategories lists the kinds of updates they accept on WhatsApp;
+// the in-app bell always receives everything. Consent version and time are kept from when WhatsApp
+// was enabled.
+model NotificationPreference {
+  userId                String    @id @map("user_id")
+  whatsappEnabled       Boolean   @default(false) @map("whatsapp_enabled")
+  whatsappCategories    String[]  @default(["MEDICATION"]) @map("whatsapp_categories")
+  showMedicationDetails Boolean   @default(false) @map("show_medication_details")
+  timezone              String    @default("Africa/Lagos") @db.VarChar(64)
+  consentVersion        String?   @map("consent_version") @db.VarChar(64)
+  consentedAt           DateTime? @map("consented_at")
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at")
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+// A patient's WhatsApp number. PENDING while the 6-digit code is outstanding, ACTIVE once verified,
+// REVOKED when disabled or replaced. At most one ACTIVE connection per patient and per number
+// (partial unique indexes in SQL). Buttons sent on WhatsApp carry the connection id, so a reply to a
+// message sent to a replaced number is rejected.
+model WhatsAppConnection {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  phone         String    @db.VarChar(20)
+  status        String    @db.VarChar(16)
+  codeHash      String?   @map("code_hash") @db.VarChar(128)
+  codeExpiresAt DateTime? @map("code_expires_at")
+  codeAttempts  Int       @default(0) @map("code_attempts")
+  codesSent     Int       @default(0) @map("codes_sent")
+  codeSentAt    DateTime? @map("code_sent_at")
+  verifiedAt    DateTime? @map("verified_at")
+  revokedAt     DateTime? @map("revoked_at")
+  revokedReason String?   @map("revoked_reason") @db.VarChar(32)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([phone, status])
+  @@map("whatsapp_connections")
+}
+
+// When a medicine should be taken: from an issued prescription item (the patient picks the times) or
+// a medicine the patient added. "As needed" medicines have no times and never get reminders.
+// Every change bumps version; doses and reminders made for an older version are cancelled.
+model MedicationSchedule {
+  id                 String           @id @default(uuid())
+  userId             String           @map("user_id")
+  source             String           @db.VarChar(16)
+  prescriptionItemId String?          @map("prescription_item_id")
+  medicationId       String?          @map("medication_id")
+  name               String           @db.VarChar(120)
+  dosage             String?          @db.VarChar(64)
+  instructions       String?          @db.VarChar(500)
+  asNeeded           Boolean          @default(false) @map("as_needed")
+  times              String[]
+  timezone           String           @default("Africa/Lagos") @db.VarChar(64)
+  startDate          DateTime         @map("start_date") @db.Date
+  endDate            DateTime?        @map("end_date") @db.Date
+  status             String           @default("ACTIVE") @db.VarChar(16)
+  remindersEnabled   Boolean          @default(true) @map("reminders_enabled")
+  version            Int              @default(1)
+  materializedUntil  DateTime?        @map("materialized_until")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @default(now()) @updatedAt @map("updated_at")
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doses              MedicationDose[]
+
+  @@index([userId, status])
+  @@index([status, materializedUntil])
+  @@map("medication_schedules")
+}
+
+// One scheduled dose. Status is what the patient reported (NOT_CONFIRMED / TAKEN / SKIPPED /
+// CANCELLED), kept apart from whether a reminder was sent or delivered.
+model MedicationDose {
+  id              String             @id @default(uuid())
+  scheduleId      String             @map("schedule_id")
+  userId          String             @map("user_id")
+  scheduleVersion Int                @map("schedule_version")
+  scheduledFor    DateTime           @map("scheduled_for")
+  localTime       String             @map("local_time") @db.VarChar(5)
+  status          String             @default("NOT_CONFIRMED") @db.VarChar(16)
+  confirmedAt     DateTime?          @map("confirmed_at")
+  confirmedVia    String?            @map("confirmed_via") @db.VarChar(16)
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @default(now()) @updatedAt @map("updated_at")
+  schedule        MedicationSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminder        ReminderJob?
+
+  @@unique([scheduleId, scheduledFor])
+  @@index([userId, scheduledFor])
+  @@map("medication_doses")
+}
+
+// The durable reminder queue (one job per dose). Claimed with FOR UPDATE SKIP LOCKED, so it survives
+// restarts and several API instances never send the same reminder twice. Snoozing moves due_at only.
+model ReminderJob {
+  id            String         @id @default(uuid())
+  doseId        String         @unique @map("dose_id")
+  userId        String         @map("user_id")
+  dueAt         DateTime       @map("due_at")
+  originalDueAt DateTime       @map("original_due_at")
+  status        String         @default("SCHEDULED") @db.VarChar(16)
+  snoozeCount   Int            @default(0) @map("snooze_count")
+  lastError     String?        @map("last_error") @db.VarChar(300)
+  processedAt   DateTime?      @map("processed_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at")
+  dose          MedicationDose @relation(fields: [doseId], references: [id], onDelete: Cascade)
+
+  @@index([status, dueAt])
+  @@map("reminder_jobs")
+}
+
+// Webhook events already handled (message ids, and status updates as "<message id>:<status>"), so
+// an event Meta sends again is never applied twice.
+model WhatsAppWebhookEvent {
+  id         String   @id @db.VarChar(200)
+  kind       String   @db.VarChar(16)
+  receivedAt DateTime @default(now()) @map("received_at")
+
+  @@map("whatsapp_webhook_events")
 }
 
 

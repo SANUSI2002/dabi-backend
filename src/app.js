@@ -49,6 +49,9 @@ import consultationNoteRoutes from './modules/consultation-notes/consultation-no
 import auditRoutes from './modules/audit/audit.routes.js';
 import { auditRequestScope } from './modules/audit/audit.context.js';
 import { auditActivity } from './modules/audit/audit.activity.js';
+import notificationSettingsRoutes from './modules/notifications/notification-settings.routes.js';
+import medicationScheduleRoutes from './modules/medication-schedules/schedule.routes.js';
+import { whatsappSimulatorRoutes, whatsappWebhookRoutes } from './modules/whatsapp/whatsapp.routes.js';
 
 export const app = express();
 app.set('trust proxy', trustedProxySetting());
@@ -68,6 +71,9 @@ app.use('/api/', globalLimiter);
 app.post('/api/v1/payments/paystack/webhook', paystackWebhook, paymentController.webhook);
 // Scanner callbacks are signed over the raw body, so they must precede the JSON parser.
 app.use('/api/v1/internal/document-scans', internalDocumentScanRoutes);
+// WhatsApp webhooks are signed over the raw body too.
+app.use('/api/v1/whatsapp/webhook', whatsappWebhookRoutes);
+app.use('/api/v1/whatsapp/simulator', whatsappSimulatorRoutes);
 
 // Private onboarding documents have a bounded parser before the default 100 KiB parser.
 app.use('/api/v1/organisations', organisationRoutes);
@@ -84,7 +90,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'success', message: 'Sabi Health backend is running securely',
     release: {
       revision: /^[a-f0-9]{40}$/i.test(revision || '') ? revision : null,
-      capabilities: ['consultation-notes-v1', 'emr-v1', 'activity-session-v1'],
+      capabilities: ['consultation-notes-v1', 'emr-v1', 'activity-session-v1', 'notifications-v2', 'medication-schedules-v1'],
     },
   });
 });
@@ -106,7 +112,9 @@ app.use('/api/v1/applications', publicApplicationRoutes);
 app.use('/api/v1/platform/applications', platformApplicationRoutes);
 app.use('/api/v1/profile', profileRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/notifications/settings', notificationSettingsRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
+app.use('/api/v1/medication-schedules', medicationScheduleRoutes);
 app.use('/api/v1/appointments', appointmentsRoutes);
 app.use('/api/v1/medications', medicationsRoutes);
 app.use('/api/v1/vitals', vitalsRoutes);

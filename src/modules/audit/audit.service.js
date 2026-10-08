@@ -53,6 +53,17 @@ const ACTIONS = {
   CARE_PLAN_ACCESS_GRANTED: ['PERMISSION', { actor: 'You allowed {related} to write care plans for you', related: '{actor} allowed you to write care plans for them' }],
   CARE_PLAN_ACCESS_REVOKED: ['PERMISSION', { actor: "You removed {related}'s permission to write care plans for you", related: '{actor} removed your permission to write care plans for them' }],
 
+  WHATSAPP_ENABLED: ['ACCOUNT', { actor: 'You turned on WhatsApp notifications and verified your number' }],
+  WHATSAPP_NUMBER_CHANGED: ['ACCOUNT', { actor: 'You changed the number Sabi uses for WhatsApp notifications' }],
+  WHATSAPP_DISABLED: ['ACCOUNT', { actor: 'You turned off WhatsApp notifications' }],
+  NOTIFICATION_SETTINGS_CHANGED: ['ACCOUNT', { actor: 'You changed your notification settings' }],
+  // Medicines: worded per entry (the summary names the medicine and time).
+  MEDICATION_SCHEDULE_SAVED: ['ACTIVITY', {}],
+  MEDICATION_SCHEDULE_STOPPED: ['ACTIVITY', {}],
+  MEDICATION_DOSE_TAKEN: ['ACTIVITY', {}],
+  MEDICATION_DOSE_SKIPPED: ['ACTIVITY', {}],
+  MEDICATION_REMINDER_SNOOZED: ['ACTIVITY', {}],
+
   ACTIVITY: ['ACTIVITY', {}],
 };
 
