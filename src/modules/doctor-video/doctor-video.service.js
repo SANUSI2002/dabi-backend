@@ -4,6 +4,10 @@ import prisma from '../../config/db.js';
 import { PORTAL_PROFESSIONS } from '../professionals/professionCatalog.js';
 import { createDailyProvider, dailyConfigured, videoError } from './daily.provider.js';
 const MINUTE = 60000;
+// The telemedicine consent wording each side accepts before joining (versioned in the portals' call screen).
+// Older clients send no version; their join is still consented and is logged as the original notice.
+export const CONSENT_VERSIONS = { patient: 'telemedicine-patient-v1', doctor: 'telemedicine-professional-v1' };
+const LEGACY_CONSENT = 'daily-video-v1';
 const select = { id: true, patientId: true, startsAt: true, endsAt: true, status: true, consultationType: true,
   patient: { select: { accountStatus: true, emailVerifiedAt: true } },
   doctorProfile: { select: { userId: true, professionType: true, verificationStatus: true, user: { select: { accountStatus: true, emailVerifiedAt: true } } } } };
@@ -46,6 +50,8 @@ export function createVideoService({ db = prisma, provider = createDailyProvider
       const appointment = await authorize(userId, id, role);
       if (!dailyConfigured(env)) throw videoError('VIDEO_UNAVAILABLE');
       if (!consent.providerConsent) throw videoError('VIDEO_CONSENT_REQUIRED', 400);
+      // A patient cannot accept the professional notice or the other way round.
+      if (consent.consentVersion && consent.consentVersion !== CONSENT_VERSIONS[role]) throw videoError('VIDEO_CONSENT_REQUIRED', 400);
       const room = await roomFor(appointment);
       if (room.revokedAt || new Date(room.expiresAt) <= now()) throw videoError('VIDEO_WINDOW_ENDED', 409);
       const remote = await provider.ensureRoom(room, appointment.startsAt);
@@ -54,7 +60,7 @@ export function createVideoService({ db = prisma, provider = createDailyProvider
       await authorize(userId, id, role);
       const latest = await db.doctorVideoRoom.findUnique({ where: { appointmentId: id } });
       if (latest?.revokedAt) throw videoError('VIDEO_WINDOW_ENDED', 409);
-      await db.activityLog.create({ data: { userId, type: 'DOCTOR_VIDEO_JOIN_AUTHORIZED', description: 'Private consultation access issued', meta: { appointmentId: id, role, consentVersion: 'daily-video-v1' } } });
+      await db.activityLog.create({ data: { userId, type: 'DOCTOR_VIDEO_JOIN_AUTHORIZED', description: 'Private consultation access issued', meta: { appointmentId: id, role, consentVersion: consent.consentVersion || LEGACY_CONSENT } } });
       return { url: remote.url, token, expiresAt: room.expiresAt };
     },
     cleanup: async () => {

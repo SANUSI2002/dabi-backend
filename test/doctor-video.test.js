@@ -63,6 +63,17 @@ describe('appointment-bound video access', () => {
     await expect(service.join('doctor', 'appt', 'doctor', { providerConsent: true })).rejects.toMatchObject({ code: 'VIDEO_WINDOW_ENDED' });
     expect(provider.ensureRoom).not.toHaveBeenCalled();
   });
+  it('records which consent wording each side accepted, and refuses the other side\'s', async () => {
+    const consentLogged = (version) => expect(db.activityLog.create).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ type: 'DOCTOR_VIDEO_JOIN_AUTHORIZED', meta: expect.objectContaining({ consentVersion: version }) }) }));
+    await service.join('patient', 'appt', 'patient', { providerConsent: true, consentVersion: 'telemedicine-patient-v1' });
+    consentLogged('telemedicine-patient-v1');
+    await service.join('doctor', 'appt', 'doctor', { providerConsent: true, consentVersion: 'telemedicine-professional-v1' });
+    consentLogged('telemedicine-professional-v1');
+    await expect(service.join('patient', 'appt', 'patient', { providerConsent: true, consentVersion: 'telemedicine-professional-v1' })).rejects.toMatchObject({ code: 'VIDEO_CONSENT_REQUIRED', status: 400 });
+    // Clients from before the versioned notice still consent; their join is logged as the original notice.
+    await service.join('patient', 'appt', 'patient', { providerConsent: true });
+    consentLogged('daily-video-v1');
+  });
   it('reuses an existing room without inserting another', async () => {
     await service.join('patient', 'appt', 'patient', { providerConsent: true });
     expect(db.doctorVideoRoom.createMany).not.toHaveBeenCalled();
