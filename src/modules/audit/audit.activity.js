@@ -15,7 +15,7 @@ const AREAS = {
   'doctor-appointments': 'a doctor appointment', 'hospital-appointments': 'a hospital appointment', appointments: 'an appointment',
   'hospital-enrollments': 'a hospital enrolment', wellness: 'a wellness booking', 'medical-documents': 'a medical document',
   'medical-records': 'your medical record', profile: 'your profile', vitals: 'vitals', 'health-metrics': 'a health reading',
-  medications: 'a medication', 'family-care': 'your family care circle', notifications: 'a notification',
+  medications: 'a medication', 'medication-schedules': 'a medicine', 'family-care': 'your family care circle', notifications: 'a notification',
   'professional-schedule': 'your schedule', 'professional-care': 'a care plan', prescriptions: 'a prescription',
   'pharmacy-requests': 'a pharmacy request', reservations: 'a medicine reservation', orders: 'an order', delivery: 'a delivery',
   'doctor-care': 'a care relationship', 'consultation-notes': 'a consultation note', doctors: 'your professional application',
@@ -42,6 +42,8 @@ const EXACT = {
   'POST family-care/invitations/accept': 'You accepted a family care circle invitation',
   'POST hospital-enrollments': 'You applied to enrol with a hospital',
   'POST vitals': 'You recorded your vitals',
+  'POST notifications/settings/whatsapp': 'You asked for a WhatsApp verification code',
+  'POST notifications/settings/whatsapp/resend': 'You asked for a new WhatsApp verification code',
 };
 const DEFAULT_VERB ={ POST: 'added', PUT: 'updated', PATCH: 'updated', DELETE: 'removed' };
 

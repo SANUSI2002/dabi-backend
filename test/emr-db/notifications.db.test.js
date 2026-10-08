@@ -95,6 +95,8 @@ describe('WhatsApp settings and consent', () => {
     expect(stored).toMatchObject({ phone, codeHash: null });
     const [audit] = (await as(who).get('/api/v1/audit/mine?category=ACCOUNT')).body.data.items;
     expect(audit.action).toBe('WHATSAPP_ENABLED');
+    const activity = (await as(who).get('/api/v1/audit/mine?category=ACTIVITY')).body.data.items.map((item) => item.text);
+    expect(activity).toContain('You asked for a WhatsApp verification code');
   });
 
   it('refuses a number already linked to another account, and expired or exhausted codes', async () => {
