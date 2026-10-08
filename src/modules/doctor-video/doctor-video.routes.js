@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { protect } from '../../middleware/authMiddleware.js';
 import { createLimiter } from '../../middleware/rateLimitMiddleware.js';
 import { validate } from '../../middleware/validateMiddleware.js';
-import { videoService } from './doctor-video.service.js';
+import { CONSENT_VERSIONS, videoService } from './doctor-video.service.js';
 const params = z.object({ id: z.uuid() }).strict();
 const query = z.object({}).strict();
-const join = z.object({ params, query, body: z.object({ providerConsent: z.literal(true) }).strict() });
+const join = z.object({ params, query, body: z.object({ providerConsent: z.literal(true), consentVersion: z.enum(Object.values(CONSENT_VERSIONS)).optional() }).strict() });
 const status = z.object({ params, query });
 const messages = {
   VIDEO_NOT_FOUND: 'Consultation not found.', VIDEO_ACCESS_DENIED: 'Only the assigned verified doctor and patient can join.',
