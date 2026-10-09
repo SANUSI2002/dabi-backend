@@ -279,11 +279,11 @@ export async function recordDose(userId, doseId, status, { via = 'APP', now = ne
     if (dose.scheduledFor.getTime() - now.getTime() > EARLY_MS) fail(409, 'TOO_EARLY', 'A dose can be recorded from two hours before it is due.');
     await tx.medicationDose.update({ where: { id: doseId }, data: { status, confirmedAt: now, confirmedVia: via } });
     await cancelReminder(tx, dose.reminder?.id, `Dose ${status.toLowerCase()}`);
-    const where = via === 'WHATSAPP' ? ' on WhatsApp' : '';
+    const where = via === 'WHATSAPP' ? ' on WhatsApp' : via === 'PUSH' ? ' from a notification' : '';
     await recordAudit(tx, {
       actorUserId: userId, action: DOSE_ACTIONS[status], resourceType: 'medication_dose', resourceId: doseId,
       summary: `You recorded your ${T.clockLabel(dose.localTime)} dose of ${dose.schedule.name} as ${status === 'TAKEN' ? 'taken' : 'skipped'}${where}`,
-    }, { req: via === 'WHATSAPP' ? null : req });
+    }, { req: via === 'APP' ? req : null });
     const updated = await tx.medicationDose.findUnique({ where: { id: doseId }, include: { schedule: true, reminder: true } });
     return { dose: doseView(updated), alreadyRecorded: false };
   });

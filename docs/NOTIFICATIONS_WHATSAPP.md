@@ -71,6 +71,18 @@ discontinuing a schedule bumps its version and cancels future doses and jobs.
 
 WhatsApp messages never name the doctor, the reason for a visit or (unless the patient allows it) the medicine.
 
+## Phone and computer notifications (Web Push)
+
+Patients turn them on per device in Settings → Notifications (on iPhone the app must be installed to the
+home screen first). Every kind of update they keep switched on (`pushCategories`, all by default) also appears
+as a normal notification. Medicine reminders carry **Taken** and **Remind me later** buttons that work from the
+lock screen: each button holds a signed, 12-hour token naming that reminder, so the service worker needs no
+sign-in. Lock-screen text follows the same privacy choice as WhatsApp ("your morning medicine" unless the patient
+allows details). Devices the push service reports as gone (404/410) are forgotten; temporary failures are retried.
+
+Setup: `npx web-push generate-vapid-keys`, then set `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY` and
+`WEB_PUSH_SUBJECT` on the API. Without them the settings page says notifications are not available yet.
+
 ## Meta setup (owner's checklist)
 
 1. Meta Business portfolio (verified business) and a WhatsApp Business Account.

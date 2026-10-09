@@ -6,7 +6,7 @@ import { validate } from '../../middleware/validateMiddleware.js';
 import { accountOrIpKey, createLimiter } from '../../middleware/rateLimitMiddleware.js';
 import { isTimeZone } from '../medication-schedules/schedule.time.js';
 import * as W from '../whatsapp/whatsapp.connection.js';
-import { WHATSAPP_CATEGORIES } from './notify.service.js';
+import { PUSH_CATEGORIES, WHATSAPP_CATEGORIES } from './notify.service.js';
 
 export const respond = (work) => async (req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -25,6 +25,7 @@ export const respond = (work) => async (req, res, next) => {
 const preferencesSchema = z.object({ body: z.object({
   whatsappCategories: z.array(z.enum(WHATSAPP_CATEGORIES)).max(WHATSAPP_CATEGORIES.length).optional(),
   showMedicationDetails: z.boolean().optional(),
+  pushCategories: z.array(z.enum(PUSH_CATEGORIES)).max(PUSH_CATEGORIES.length).optional(),
   timezone: z.string().max(64).refine(isTimeZone, 'Unknown time zone').optional(),
 }).strict().refine((body) => Object.keys(body).length > 0, 'Nothing to change') });
 const startSchema = z.object({ body: z.object({ phone: z.string().trim().min(6).max(24), consent: z.literal(true) }).strict() });

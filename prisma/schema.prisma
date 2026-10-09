@@ -72,6 +72,7 @@ model User {
   whatsappConnections WhatsAppConnection[]
   medicationSchedules MedicationSchedule[]
   medicationDoses MedicationDose[]
+  pushSubscriptions PushSubscription[]
 
   @@map("users")
 }
@@ -1073,6 +1074,7 @@ model NotificationPreference {
   whatsappEnabled       Boolean   @default(false) @map("whatsapp_enabled")
   whatsappCategories    String[]  @default(["MEDICATION"]) @map("whatsapp_categories")
   showMedicationDetails Boolean   @default(false) @map("show_medication_details")
+  pushCategories        String[]  @default(["MEDICATION", "APPOINTMENT", "CARE"]) @map("push_categories")
   timezone              String    @default("Africa/Lagos") @db.VarChar(64)
   consentVersion        String?   @map("consent_version") @db.VarChar(64)
   consentedAt           DateTime? @map("consented_at")
@@ -1179,6 +1181,24 @@ model ReminderJob {
 
   @@index([status, dueAt])
   @@map("reminder_jobs")
+}
+
+// A browser or installed app that allowed phone/computer notifications (Web Push). The endpoint is
+// the push service's address for that device; keys encrypt the message so only the device can read it.
+model PushSubscription {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  endpoint      String    @unique @db.VarChar(1000)
+  p256dh        String    @db.VarChar(200)
+  auth          String    @db.VarChar(100)
+  device        String?   @db.VarChar(160)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  lastSuccessAt DateTime? @map("last_success_at")
+  revokedAt     DateTime? @map("revoked_at")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("push_subscriptions")
 }
 
 // Webhook events already handled (message ids, and status updates as "<message id>:<status>"), so

@@ -4,7 +4,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const f = () => vi.fn();
-const tx = { professionalProfile: { findFirst: f() }, doctorCareRelationship: { findFirst: f() }, prescription: { create: f(), findFirst: f(), update: f(), updateMany: f() }, activityLog: { create: f() }, auditEvent: { create: f(), findFirst: f() }, notification: { findFirst: f(), create: f() }, notificationPreference: { findUnique: f() }, notificationDelivery: { create: f() }, medicationSchedule: { findMany: f(), update: f() } };
+const tx = { professionalProfile: { findFirst: f() }, doctorCareRelationship: { findFirst: f() }, prescription: { create: f(), findFirst: f(), update: f(), updateMany: f() }, activityLog: { create: f() }, auditEvent: { create: f(), findFirst: f() }, notification: { findFirst: f(), create: f() }, notificationPreference: { findUnique: f() }, notificationDelivery: { create: f() }, pushSubscription: { count: f() }, medicationSchedule: { findMany: f(), update: f() } };
 const prisma = { prescription: { findFirst: f(), findMany: f(), count: f() }, auditEvent: { create: f(), findFirst: f() }, $transaction: f() };
 vi.mock('../src/config/db.js', () => ({ default: prisma }));
 const { default: routes } = await import('../src/modules/prescriptions/prescriptions.routes.js');
@@ -23,7 +23,7 @@ beforeEach(() => {
   vi.clearAllMocks(); prisma.$transaction.mockImplementation((callback) => callback(tx));
   tx.professionalProfile.findFirst.mockResolvedValue({ id: doctorProfile }); tx.doctorCareRelationship.findFirst.mockResolvedValue({ id: 'care' });
   tx.prescription.create.mockResolvedValue({ id: prescriptionId, status: 'DRAFT' }); tx.prescription.findFirst.mockResolvedValue({ id: prescriptionId, patientId: patient, status: 'DRAFT' }); tx.prescription.update.mockResolvedValue({ id: prescriptionId, status: 'DRAFT' }); tx.prescription.updateMany.mockResolvedValue({ count: 1 }); tx.activityLog.create.mockResolvedValue({});
-  tx.notification.findFirst.mockResolvedValue(null); tx.notification.create.mockResolvedValue({ id: 'notification' }); tx.notificationPreference.findUnique.mockResolvedValue(null); tx.medicationSchedule.findMany.mockResolvedValue([]);
+  tx.notification.findFirst.mockResolvedValue(null); tx.notification.create.mockResolvedValue({ id: 'notification' }); tx.notificationPreference.findUnique.mockResolvedValue(null); tx.medicationSchedule.findMany.mockResolvedValue([]); tx.pushSubscription.count.mockResolvedValue(0);
   prisma.prescription.findFirst.mockResolvedValue(null); prisma.prescription.findMany.mockResolvedValue([]); prisma.prescription.count.mockResolvedValue(0);
 });
 

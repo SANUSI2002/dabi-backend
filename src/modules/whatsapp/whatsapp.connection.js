@@ -30,6 +30,7 @@ const preferenceView = (p) => ({
   whatsappEnabled: Boolean(p?.whatsappEnabled),
   whatsappCategories: p?.whatsappCategories ?? ['MEDICATION'],
   showMedicationDetails: Boolean(p?.showMedicationDetails),
+  pushCategories: p?.pushCategories ?? ['MEDICATION', 'APPOINTMENT', 'CARE'],
   timezone: p?.timezone ?? DEFAULT_TIMEZONE,
   consentVersion: p?.consentVersion ?? null,
   consentedAt: p?.consentedAt ?? null,
@@ -64,6 +65,7 @@ export async function updatePreferences(userId, input) {
   const data = {
     ...(input.whatsappCategories ? { whatsappCategories: [...new Set(input.whatsappCategories)] } : {}),
     ...(input.showMedicationDetails !== undefined ? { showMedicationDetails: input.showMedicationDetails } : {}),
+    ...(input.pushCategories ? { pushCategories: [...new Set(input.pushCategories)] } : {}),
     ...(input.timezone ? { timezone: input.timezone } : {}),
   };
   await prisma.$transaction(async (tx) => {

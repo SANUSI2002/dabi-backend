@@ -5044,6 +5044,149 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/notifications/push/config:
+    get:
+      tags:
+        - Notifications
+      summary: Phone notification settings
+      description: Whether phone/computer notifications are available, the VAPID public key a browser needs to subscribe, and the devices that allowed them.
+      operationId: get__api_v1_notifications_push_config
+      security:
+        - bearerAuth: []
+      responses:
+        "200": &a1
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/notifications/push/subscriptions:
+    post:
+      tags:
+        - Notifications
+      summary: Allow notifications on this device
+      description: Saves the browser's push subscription. Every kind of update the patient chose (pushCategories in notification settings) then also appears as a notification on this device.
+      operationId: post__api_v1_notifications_push_subscriptions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - endpoint
+                - keys
+              properties:
+                endpoint: &a2
+                  type: string
+                  format: uri
+                  description: The push service endpoint from PushSubscription.toJSON().
+                keys:
+                  type: object
+                  required:
+                    - p256dh
+                    - auth
+                  properties:
+                    p256dh:
+                      type: string
+                    auth:
+                      type: string
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags:
+        - Notifications
+      summary: Stop notifications on this device
+      description: Removes the device; nothing more is sent to it.
+      operationId: delete__api_v1_notifications_push_subscriptions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - endpoint
+              properties:
+                endpoint: *a2
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/notifications/push/test:
+    post:
+      tags:
+        - Notifications
+      summary: Send a test notification
+      description: Sends "Notifications are on" to every device the patient allowed. 409 NO_DEVICE when none.
+      operationId: post__api_v1_notifications_push_test
+      security:
+        - bearerAuth: []
+      responses:
+        "200": *a1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/notifications/push/action:
+    post:
+      tags:
+        - Notifications
+      summary: Taken / Remind me later from a notification
+      description: "Used by the service worker when the patient taps a button on a medicine reminder. No sign-in: the signed, short-lived token in the notification names the reminder and the patient. Taken is idempotent; Remind me later moves only the reminder."
+      operationId: post__api_v1_notifications_push_action
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - action
+              properties:
+                token:
+                  type: string
+                action:
+                  type: string
+                  enum:
+                    - taken
+                    - snooze
+      responses:
+        "200": *a1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
   /api/v1/notifications/settings:
     get:
       tags:
