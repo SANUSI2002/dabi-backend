@@ -48,6 +48,8 @@ tags:
     description: Doctor Care endpoints currently registered by the backend.
   - name: Doctor Appointments
     description: Doctor Appointments endpoints currently registered by the backend.
+  - name: Waitlist
+    description: Join the waitlist for a product that is not open yet (Sabi AI). Contact details only.
   - name: Audit
     description: The signed-in person's Activity log - sign-ins, access to their health record, permission changes and other account activity.
   - name: Medication Schedules
@@ -4990,6 +4992,59 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /api/v1/waitlist:
+    post:
+      tags:
+        - Waitlist
+      summary: Join a product waitlist
+      description: >-
+        Public. Saves contact details for a product that is not open yet (product "sabi-ai"). One entry per product
+        and email; joining again updates the details and returns the same answer, so the endpoint never reveals
+        whether an address is already listed. Never send health information. Rate-limited per IP.
+      operationId: post__api_v1_waitlist
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [product, email, role, consent]
+              properties:
+                product:
+                  type: string
+                  enum: [sabi-ai]
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                  maxLength: 120
+                role:
+                  type: string
+                  enum: [PROFESSIONAL, PATIENT, CAREGIVER, ORGANISATION, OTHER]
+                organisation:
+                  type: string
+                  maxLength: 160
+                consent:
+                  const: true
+                source:
+                  type: string
+                  maxLength: 64
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":

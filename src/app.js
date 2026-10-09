@@ -51,6 +51,7 @@ import { auditRequestScope } from './modules/audit/audit.context.js';
 import { auditActivity } from './modules/audit/audit.activity.js';
 import notificationSettingsRoutes from './modules/notifications/notification-settings.routes.js';
 import pushRoutes from './modules/notifications/push.routes.js';
+import waitlistRoutes from './modules/waitlist/waitlist.routes.js';
 import medicationScheduleRoutes from './modules/medication-schedules/schedule.routes.js';
 import { whatsappSimulatorRoutes, whatsappWebhookRoutes } from './modules/whatsapp/whatsapp.routes.js';
 
@@ -96,6 +97,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Public: product waitlists (before the /api/v1 routers that require sign-in).
+app.use('/api/v1/waitlist', waitlistRoutes);
 app.use('/api/v1/hospitals', hospitalPlanRoutes);
 app.use('/api/v1/hospital-enrollments', hospitalEnrollmentRoutes);
 app.use('/api/v1/hospital-appointments', hospitalAppointmentRoutes);

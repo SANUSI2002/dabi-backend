@@ -3158,3 +3158,20 @@ model ProfessionalTimeBlock {
   createdAt DateTime @default(now())
   @@index([professionalId, startsAt, endsAt])
 }
+
+// Waitlists for products that are not open yet (first: Sabi AI). Contact details only.
+model WaitlistSignup {
+  id           String   @id @default(uuid())
+  product      String   @db.VarChar(32)
+  email        String   @db.VarChar(254)
+  fullName     String?  @map("full_name") @db.VarChar(120)
+  role         String   @db.VarChar(32)
+  organisation String?  @db.VarChar(160)
+  consentedAt  DateTime @map("consented_at")
+  source       String?  @db.VarChar(64)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([product, email])
+  @@map("waitlist_signups")
+}
