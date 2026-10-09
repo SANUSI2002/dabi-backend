@@ -3,7 +3,8 @@ import crypto from 'crypto';
 import * as AuthModel from './auth.model.js';
 import { generateAccessToken } from './auth.token.js';
 import { browserRequest, clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './auth.cookie.js';
-import { activeSession, createSession, listSessions, revokeSession, revokeUserSessions, rotateRefreshToken, sessionIdForRefresh, userIdForRefresh } from './auth.session.js';
+import { SIGNED_IN_ELSEWHERE, activeSession, createSession, listSessions, revokeSession, revokeUserSessions, rotateRefreshToken, sessionIdForRefresh, userIdForRefresh } from './auth.session.js';
+import { SIGNED_IN_ELSEWHERE_MESSAGE } from '../../middleware/authMiddleware.js';
 import { passwordResetEmailAllowedFor, passwordResetEmailConfigured, sendPasswordResetEmail, sendEmailVerificationEmail, verificationEmailAllowedFor, verificationEmailConfigured } from './auth.email.js';
 import { activeMembershipFor, membershipsFor } from '../identity/identity.service.js';
 import { beginLoginChallenge, hasActiveMfa } from './auth.mfa.js';
@@ -66,8 +67,9 @@ export const login = async (req, res, next) => {
       res.set('Cache-Control', 'no-store');
       return res.status(202).json({ status: 'mfa_required', challengeToken, methods: ['totp', 'recovery_code'] });
     }
-    const { session, refreshToken } = await createSession(user, req.get('user-agent') || '');
+    const { session, refreshToken, replaced } = await createSession(user, req.get('user-agent') || '');
     await recordAudit(prisma, { actorUserId: user.id, action: 'SIGNED_IN', resourceType: 'session', resourceId: session.id });
+    if (replaced) await recordAudit(prisma, { actorUserId: user.id, action: 'SIGNED_OUT_ELSEWHERE', resourceType: 'session', resourceId: session.id });
     const accessToken = generateAccessToken(user, { sessionId: session.id });
     if (browserRequest(req)) setRefreshCookie(res, refreshToken);
     return res.status(200).json({ status: 'success', message: 'Login successful', accessToken, ...(!browserRequest(req) ? { refreshToken } : {}), user: toUserResponse(user) });
@@ -95,6 +97,7 @@ export const refreshAccessToken = async (req, res, next) => {
     if (browserRequest(req) || readRefreshCookie(req)) setRefreshCookie(res, rotated.refreshToken);
     return res.status(200).json({ status: 'success', message: 'Access token refreshed successfully', accessToken: generateAccessToken(user, { sessionId: rotated.sessionId, organizationId }), ...(!browserRequest(req) && !readRefreshCookie(req) ? { refreshToken: rotated.refreshToken } : {}) });
   } catch (error) {
+    if (error?.code === SIGNED_IN_ELSEWHERE) return res.status(401).json({ status: 'error', code: SIGNED_IN_ELSEWHERE, message: SIGNED_IN_ELSEWHERE_MESSAGE });
     if (['SESSION_INVALID', 'SESSION_REPLAY', 'SESSION_IDLE'].includes(error?.code)) return res.status(401).json({ status: 'error', message: 'Invalid or revoked refresh token' });
     return next(error);
   }

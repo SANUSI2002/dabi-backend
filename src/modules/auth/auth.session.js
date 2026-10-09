@@ -18,11 +18,20 @@ const isIdle = (session, now) => now.getTime() - new Date(session.lastUsedAt).ge
 // Recording use on every request would write once per API call; once per 30 seconds is precise enough.
 const TOUCH_INTERVAL_MS = 30_000;
 
+// One device at a time: signing in ends the account's other sessions. Their next request (or the
+// clients' session check, every few seconds) is refused with SIGNED_IN_ELSEWHERE so they can say why.
+// SINGLE_DEVICE_SESSIONS=false allows several devices again.
+export const SIGNED_IN_ELSEWHERE = 'SIGNED_IN_ELSEWHERE';
+const singleDevice = () => process.env.SINGLE_DEVICE_SESSIONS !== 'false';
+
+/** Resolves to { session, refreshToken, replaced } — `replaced` counts sessions ended on other devices. */
 export const createSession = async (user, userAgent = '', { mfaVerified = false } = {}) => {
   const refreshToken = randomToken();
   const expiresAt = sessionExpiry();
   const agent = userAgent.slice(0, 512);
   return prisma.$transaction(async (tx) => {
+    // Two sign-ins at the same moment queue here, so exactly one session survives.
+    if (singleDevice()) await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${user.id} FOR UPDATE`;
     const device = await tx.authDevice.create({ data: {
       userId: user.id,
       label: agent ? agent.slice(0, 160) : 'Unknown browser',
@@ -30,9 +39,24 @@ export const createSession = async (user, userAgent = '', { mfaVerified = false 
     } });
     const session = await tx.authSession.create({ data: { userId: user.id, deviceId: device.id, expiresAt, ...(mfaVerified ? { mfaVerifiedAt: new Date() } : {}) } });
     await tx.authRefreshCredential.create({ data: { sessionId: session.id, tokenHash: hash(refreshToken), expiresAt } });
-    return { session, refreshToken };
+    let replaced = 0;
+    if (singleDevice()) {
+      const now = new Date();
+      const others = (await tx.authSession.findMany({ where: { userId: user.id, revokedAt: null, id: { not: session.id } }, select: { id: true } })).map(({ id }) => id);
+      if (others.length) {
+        await tx.authSession.updateMany({ where: { id: { in: others }, revokedAt: null }, data: { revokedAt: now, revokedReason: SIGNED_IN_ELSEWHERE } });
+        await tx.authRefreshCredential.updateMany({ where: { sessionId: { in: others }, revokedAt: null }, data: { revokedAt: now } });
+        replaced = others.length;
+      }
+    }
+    return { session, refreshToken, replaced };
   });
 };
+
+/** Why a session ended (e.g. SIGNED_IN_ELSEWHERE), or null. */
+export const sessionEndReason = async (sessionId) => (sessionId
+  ? (await prisma.authSession.findUnique({ where: { id: sessionId }, select: { revokedReason: true } }))?.revokedReason ?? null
+  : null);
 
 /**
  * The live session behind an access token, or null when it is revoked, expired, suspended or idle.
@@ -67,6 +91,7 @@ export const rotateRefreshToken = async (rawToken) => {
     throw Object.assign(invalid(), { code: 'SESSION_REPLAY' });
   }
   const now = new Date();
+  if (credential.session.revokedReason === SIGNED_IN_ELSEWHERE) throw Object.assign(invalid(), { code: SIGNED_IN_ELSEWHERE });
   if (credential.revokedAt || credential.expiresAt <= now || credential.session.revokedAt || credential.session.expiresAt <= now) throw invalid();
   if (isIdle(credential.session, now)) {
     await revokeIdleSession(credential.sessionId, credential.session.userId);

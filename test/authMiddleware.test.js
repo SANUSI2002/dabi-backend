@@ -4,7 +4,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const activeSession = vi.fn();
-vi.mock('../src/modules/auth/auth.session.js', () => ({ activeSession }));
+vi.mock('../src/modules/auth/auth.session.js', () => ({ activeSession, sessionEndReason: vi.fn(async () => null), SIGNED_IN_ELSEWHERE: 'SIGNED_IN_ELSEWHERE' }));
 const { protect } = await import('../src/middleware/authMiddleware.js');
 
 const SECRET = 'auth-middleware-test-secret';

@@ -18,6 +18,7 @@ const ACTIONS = {
   SIGN_IN_FAILED: ['SIGN_IN', { actor: 'Someone tried to sign in to your account with a wrong password' }],
   SIGNED_OUT: ['SIGN_IN', { actor: 'You signed out' }],
   SIGNED_OUT_IDLE: ['SIGN_IN', { actor: 'You were signed out after a period of inactivity' }],
+  SIGNED_OUT_ELSEWHERE: ['SIGN_IN', { actor: 'Signing in here signed your account out on your other device' }],
   SESSION_REVOKED: ['SIGN_IN', { actor: 'You signed out one of your devices' }],
   SIGNED_OUT_OTHERS: ['SIGN_IN', { actor: 'You signed out all your other devices' }],
   SIGNED_OUT_EVERYWHERE: ['SIGN_IN', { actor: 'You signed out on every device' }],

@@ -287,6 +287,32 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/auth/session:
+    get:
+      tags:
+        - Auth
+      summary: Check that this device is still signed in
+      description: >-
+        Lightweight check the portals run every few seconds. It does not count as activity, so it never keeps an
+        unattended session alive. An account is signed in on one device at a time (unless SINGLE_DEVICE_SESSIONS=false):
+        signing in elsewhere ends this session, and this check, any other request and a refresh then answer 401 with
+        code SIGNED_IN_ELSEWHERE.
+      operationId: get__api_v1_auth_session
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Still signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
   /api/v1/auth/register/caregiver:
     post:
       tags:

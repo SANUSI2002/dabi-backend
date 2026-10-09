@@ -9,7 +9,8 @@ const prisma = {
   authSession: {
     create: vi.fn(async ({ data }) => { state.session = { id: 'session-1', createdAt: new Date(), revokedAt: null, ...data }; return state.session; }),
     findFirst: vi.fn(async ({ where }) => state.session?.id === where.id && state.session.userId === where.userId && !state.session.revokedAt ? state.session : null),
-    findMany: vi.fn(async () => state.session && !state.session.revokedAt ? [{ id: state.session.id }] : []),
+    findMany: vi.fn(async ({ where }) => state.session && !state.session.revokedAt && where?.id?.not !== state.session.id ? [{ id: state.session.id }] : []),
+    findUnique: vi.fn(async ({ where }) => (state.session?.id === where.id ? state.session : null)),
     updateMany: vi.fn(async ({ where, data }) => {
       if (state.session?.id !== where.id && where.id?.in && !where.id.in.includes(state.session?.id)) return { count: 0 };
       if (state.session?.revokedAt) return { count: 0 };
@@ -28,6 +29,7 @@ const prisma = {
     }),
   },
   $transaction: vi.fn(async (arg) => typeof arg === 'function' ? arg(prisma) : Promise.all(arg)),
+  $queryRaw: vi.fn(async () => []),
   auditEvent: { create: vi.fn(async ({ data }) => data), findFirst: vi.fn() },
 };
 vi.mock('../src/config/db.js', () => ({ default: prisma }));

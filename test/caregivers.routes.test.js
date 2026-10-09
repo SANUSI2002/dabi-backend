@@ -13,7 +13,7 @@ const prisma = {
   organizationMembership: { findMany: fn() },
   careRelationship: { findMany: fn(), count: fn(), findFirst: fn(), create: fn(), update: fn(), updateMany: fn() },
   activityLog: { create: fn() }, auditEvent: { create: fn(), findFirst: fn() }, refreshToken: { create: fn() },
-  authDevice: { create: fn() }, authSession: { create: fn(), findFirst: fn() }, authRefreshCredential: { create: fn() }, $transaction: fn(),
+  authDevice: { create: fn() }, authSession: { create: fn(), findFirst: fn(), findMany: fn(async () => []), updateMany: fn() }, authRefreshCredential: { create: fn(), updateMany: fn() }, $transaction: fn(), $queryRaw: fn(async () => []),
   mfaTotp: { findUnique: fn() },
   mfaLoginChallenge: { create: fn() },
 };
@@ -79,6 +79,7 @@ beforeEach(() => {
   prisma.authDevice.create.mockResolvedValue({ id: '55555555-5555-4555-8555-555555555555' });
   prisma.authSession.create.mockResolvedValue({ id: '66666666-6666-4666-8666-666666666666' });
   prisma.authSession.findFirst.mockResolvedValue({ id: '66666666-6666-4666-8666-666666666666' });
+  prisma.authSession.findMany.mockResolvedValue([]); prisma.$queryRaw.mockResolvedValue([]);
   prisma.authRefreshCredential.create.mockResolvedValue({}); prisma.activityLog.create.mockResolvedValue({});
   prisma.mfaTotp.findUnique.mockResolvedValue(null);
   prisma.mfaLoginChallenge.create.mockResolvedValue({});

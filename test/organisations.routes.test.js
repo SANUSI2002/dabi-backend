@@ -73,6 +73,7 @@ beforeEach(() => {
   prisma.authDevice.create.mockResolvedValue({ id: '99999999-9999-4999-8999-999999999999' });
   prisma.authSession.create.mockResolvedValue({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' });
   prisma.authSession.findFirst.mockResolvedValue({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' });
+  prisma.authSession.findMany.mockResolvedValue([]); prisma.$queryRaw = vi.fn(async () => []);
   prisma.authRefreshCredential.create.mockResolvedValue({});
   prisma.mfaTotp.findUnique.mockResolvedValue(null);
   prisma.$transaction.mockImplementation(async (work) => {

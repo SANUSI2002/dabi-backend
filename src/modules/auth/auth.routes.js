@@ -1,5 +1,5 @@
 import express from 'express';
-import { protect } from '../../middleware/authMiddleware.js';
+import { checkSession, protect } from '../../middleware/authMiddleware.js';
 import { validate } from '../../middleware/validateMiddleware.js';
 import { confirmEmailVerification, confirmPasswordReset, getCurrentUser, getSessions, login, logout, logoutEverywhere, logoutOtherDevices, refreshAccessToken, registerPatient, requestEmailVerification, requestPasswordReset, revokeDeviceSession } from './auth.controller.js';
 import { emailVerificationConfirmSchema, emailVerificationRequestSchema, loginSchema, mfaConfirmSchema, mfaEnrollSchema, mfaFactorSchema, mfaLoginSchema, passwordResetConfirmSchema, passwordResetRequestSchema, refreshTokenSchema, registerPatientSchema, sessionIdSchema } from './auth.validator.js';
@@ -36,6 +36,8 @@ router.post('/sessions/:id/revoke', protect, validate(sessionIdSchema), revokeDe
 router.post('/password-reset/request', resetRequestLimiter, validate(passwordResetRequestSchema), requestPasswordReset);
 router.post('/password-reset/confirm', resetConfirmLimiter, validate(passwordResetConfirmSchema), confirmPasswordReset);
 router.get('/me', protect, getCurrentUser);
+// Background check used by the portals to notice within seconds that this device was signed out.
+router.get('/session', checkSession, (req, res) => res.set('Cache-Control', 'no-store').json({ status: 'success', data: { active: true } }));
 router.get('/organizations', protect, organizations);
 router.post('/organizations/switch', protect, validate(switchOrganizationSchema), switchOrganization);
 router.get('/organizations/:organizationId/emr-access', protect, validate(managedOrganizationSchema), requireOrganization, emrAccess);

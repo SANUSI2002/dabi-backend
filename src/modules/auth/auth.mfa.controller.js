@@ -18,8 +18,9 @@ export const verifyMfaLogin = async (req, res, next) => {
     const userId = await consumeLoginChallenge(req.body.challengeToken, req.body);
     const user = await AuthModel.findUserById(userId);
     if (!user || user.accountStatus !== 'ACTIVE') return res.status(401).json({ status: 'error', message: 'Verification failed' });
-    const { session, refreshToken } = await createSession(user, req.get('user-agent') || '', { mfaVerified: true });
+    const { session, refreshToken, replaced } = await createSession(user, req.get('user-agent') || '', { mfaVerified: true });
     await recordAudit(prisma, { actorUserId: user.id, action: 'SIGNED_IN_MFA', resourceType: 'session', resourceId: session.id });
+    if (replaced) await recordAudit(prisma, { actorUserId: user.id, action: 'SIGNED_OUT_ELSEWHERE', resourceType: 'session', resourceId: session.id });
     if (browserRequest(req)) setRefreshCookie(res, refreshToken);
     return res.json({ status: 'success', accessToken: generateAccessToken(user, { sessionId: session.id }), ...(!browserRequest(req) ? { refreshToken } : {}), user: { id: user.id, email: user.email, patientId: user.patientId, roles: user.roles.map(({ role }) => role) } });
   } catch (error) { return respondError(error, res, next); }

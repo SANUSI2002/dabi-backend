@@ -1,7 +1,11 @@
 import jwt from 'jsonwebtoken';
-import { activeSession } from '../modules/auth/auth.session.js';
+import { SIGNED_IN_ELSEWHERE, activeSession, sessionEndReason } from '../modules/auth/auth.session.js';
 
-export const protect = async (req, res, next) => {
+export const SIGNED_IN_ELSEWHERE_MESSAGE = 'You were signed out because your account was signed in on another device.';
+
+// `touch: false` checks a session without counting the request as activity (used by the clients'
+// background session check, which must not keep an unattended session alive).
+const authenticate = ({ touch }) => async (req, res, next) => {
   const authorization = req.get('authorization');
   const match = /^Bearer ([^\s]+)$/.exec(authorization || '');
 
@@ -34,12 +38,20 @@ export const protect = async (req, res, next) => {
     // clients discard a valid token and refresh (or sign out) during a brief outage.
     let session;
     try {
-      session = await activeSession(decoded.sid, userId);
+      session = await activeSession(decoded.sid, userId, { touch });
     } catch {
       return res.status(503).json({ status: 'error', code: 'AUTH_UNAVAILABLE', message: 'Authentication is temporarily unavailable. Please retry.' });
     }
-    if (!session) return res.status(401).json({ status: 'error', message: 'Not authorized, session expired or revoked' });
+    if (!session) {
+      if (await sessionEndReason(decoded.sid).catch(() => null) === SIGNED_IN_ELSEWHERE) {
+        return res.status(401).json({ status: 'error', code: SIGNED_IN_ELSEWHERE, message: SIGNED_IN_ELSEWHERE_MESSAGE });
+      }
+      return res.status(401).json({ status: 'error', message: 'Not authorized, session expired or revoked' });
+    }
   }
   req.user = { id: userId, sessionId: decoded.sid, organizationId: typeof decoded.organizationId === 'string' ? decoded.organizationId : undefined };
   return next();
 };
+
+export const protect = authenticate({ touch: true });
+export const checkSession = authenticate({ touch: false });
