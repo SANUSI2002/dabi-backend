@@ -22,6 +22,7 @@ export const EVENTS = {
   'appointment.cancelled': { category: 'APPOINTMENT' },
   'appointment.reminder': { category: 'APPOINTMENT' },
   'account.notice': { category: 'ACCOUNT' },
+  'emergency.accessed': { category: 'ACCOUNT' },
 };
 
 export const wantsWhatsApp = (preference, category) => Boolean(preference?.whatsappEnabled && preference.whatsappCategories?.includes(category));

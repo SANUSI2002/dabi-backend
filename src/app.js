@@ -91,7 +91,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'success', message: 'Sabi Health backend is running securely',
     release: {
       revision: /^[a-f0-9]{40}$/i.test(revision || '') ? revision : null,
-      capabilities: ['consultation-notes-v1', 'emr-v1', 'activity-session-v1', 'notifications-v2', 'medication-schedules-v1', 'web-push-v1', 'single-device-v1'],
+      capabilities: ['consultation-notes-v1', 'emr-v1', 'activity-session-v1', 'notifications-v2', 'medication-schedules-v1', 'web-push-v1', 'single-device-v1', 'emergency-card-v1'],
     },
   });
 });

@@ -17,8 +17,12 @@ import {
 } from './profile.validator.js';
 import { sensitiveLimiter } from '../../middleware/rateLimitMiddleware.js';
 import { requireRecentMfaIfEnrolled } from '../../middleware/mfaMiddleware.js';
+import emergencyCardRoutes from './emergency-card.routes.js';
 
 const router = express.Router();
+
+// The same profile emergency flow, including its own authentication and denial audit.
+router.use('/emergency-card', emergencyCardRoutes);
 
 // Every profile route requires a valid JWT.
 router.use(protect);

@@ -7,13 +7,16 @@ export const byReference = (tx, patientId) => tx.user.findUnique({ where: { pati
 export const memberSelect = {
   id: true, patientId: true, caregiverId: true, caregiverEmail: true, relationshipType: true,
   relationshipLabel: true, permissionLevel: true, requestedPermissions: true, invitationKind: true,
-  joinRequestedAt: true, permissions: true, status: true, expiresAt: true, respondedAt: true, revokedAt: true, createdAt: true,
+  joinRequestedAt: true, permissions: true, emergencyAccessGrantedAt: true, accessExpiresAt: true, status: true, expiresAt: true, respondedAt: true, revokedAt: true, createdAt: true,
 };
 export const members = (tx, where) => tx.careRelationship.findMany({ where, select: memberSelect, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] });
 export const member = (tx, where) => tx.careRelationship.findFirst({ where, select: memberSelect });
 export const byToken = (tx, invitationTokenHash) => member(tx, { invitationTokenHash });
-export const createMember = (tx, data) => tx.careRelationship.create({ data, select: memberSelect });
-export const changeMember = (tx, where, data) => tx.careRelationship.updateMany({ where, data });
+// Removing EMERGENCY_SUMMARY revokes access immediately. Preserve the last grant's timestamp
+// as history; the timestamp alone never authorizes lookup without the current permission.
+export const explicitEmergencyGrant = (data) => data.permissions?.includes('EMERGENCY_SUMMARY') ? { ...data, emergencyAccessGrantedAt: new Date() } : data;
+export const createMember = (tx, data) => tx.careRelationship.create({ data: explicitEmergencyGrant(data), select: memberSelect });
+export const changeMember = (tx, where, data) => tx.careRelationship.updateMany({ where, data: explicitEmergencyGrant(data) });
 export const dependentSelect = {
   id: true, patientId: true, fullName: true, nickname: true, dateOfBirth: true, gender: true,
   bloodGroup: true, genotype: true, allergies: true, conditions: true, careType: true,

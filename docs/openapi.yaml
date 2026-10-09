@@ -292,11 +292,7 @@ paths:
       tags:
         - Auth
       summary: Check that this device is still signed in
-      description: >-
-        Lightweight check the portals run every few seconds. It does not count as activity, so it never keeps an
-        unattended session alive. An account is signed in on one device at a time (unless SINGLE_DEVICE_SESSIONS=false):
-        signing in elsewhere ends this session, and this check, any other request and a refresh then answer 401 with
-        code SIGNED_IN_ELSEWHERE.
+      description: "Lightweight check the portals run every few seconds. It does not count as activity, so it never keeps an unattended session alive. An account is signed in on one device at a time (unless SINGLE_DEVICE_SESSIONS=false): signing in elsewhere ends this session, and this check, any other request and a refresh then answer 401 with code SIGNED_IN_ELSEWHERE."
       operationId: get__api_v1_auth_session
       security:
         - bearerAuth: []
@@ -5003,11 +4999,7 @@ paths:
       tags:
         - Audit
       summary: My Activity log
-      description: >-
-        Newest first. Includes what the signed-in person did, entries about their health record made by others
-        (for example a professional opening their consultation note), and entries where they are the other party
-        (for example a patient giving them access). `text` is worded for the reader. `device`, a masked `ip` and an
-        approximate `location` appear only on entries the reader made themselves. Entries are append-only.
+      description: Newest first. Includes what the signed-in person did, entries about their health record made by others (for example a professional opening their consultation note), and entries where they are the other party (for example a patient giving them access). `text` is worded for the reader. `device`, a masked `ip` and an approximate `location` appear only on entries the reader made themselves. Entries are append-only.
       operationId: get__api_v1_audit_mine
       security:
         - bearerAuth: []
@@ -5028,7 +5020,13 @@ paths:
           in: query
           schema:
             type: string
-            enum: [SIGN_IN, RECORD_ACCESS, RECORD_CHANGE, PERMISSION, ACCOUNT, ACTIVITY]
+            enum:
+              - SIGN_IN
+              - RECORD_ACCESS
+              - RECORD_CHANGE
+              - PERMISSION
+              - ACCOUNT
+              - ACTIVITY
       responses:
         "200":
           description: Successful response
@@ -5054,7 +5052,7 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "200": &a1
+        "200":
           description: Successful response
           content:
             application/json:
@@ -5085,7 +5083,7 @@ paths:
                 - endpoint
                 - keys
               properties:
-                endpoint: &a2
+                endpoint:
                   type: string
                   format: uri
                   description: The push service endpoint from PushSubscription.toJSON().
@@ -5100,7 +5098,12 @@ paths:
                     auth:
                       type: string
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5124,9 +5127,17 @@ paths:
               required:
                 - endpoint
               properties:
-                endpoint: *a2
+                endpoint:
+                  type: string
+                  format: uri
+                  description: The push service endpoint from PushSubscription.toJSON().
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5143,7 +5154,12 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "409":
@@ -5178,7 +5194,12 @@ paths:
                     - taken
                     - snooze
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5197,7 +5218,7 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "200": &a1
+        "200":
           description: Successful response
           content:
             application/json:
@@ -5239,7 +5260,12 @@ paths:
                   type: string
                   example: Africa/Lagos
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5272,7 +5298,12 @@ paths:
                 consent:
                   const: true
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5292,7 +5323,12 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5309,7 +5345,12 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -5341,7 +5382,12 @@ paths:
                   type: string
                   pattern: ^\d{6}$
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5364,7 +5410,12 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5401,21 +5452,28 @@ paths:
                   maxLength: 500
                 asNeeded:
                   type: boolean
-                times: &a3
+                times:
                   type: array
                   maxItems: 8
                   items:
                     type: string
                     pattern: ^([01]\d|2[0-3]):[0-5]\d$
                   description: Clock times in the patient time zone, e.g. ["08:00","20:00"].
-                startDate: &a2
+                startDate:
                   type: string
                   format: date
-                endDate: *a2
+                endDate:
+                  type: string
+                  format: date
                 remindersEnabled:
                   type: boolean
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5436,7 +5494,12 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5473,14 +5536,27 @@ paths:
                   type: string
                 instructions:
                   type: string
-                times: *a3
-                endDate: *a2
+                times:
+                  type: array
+                  maxItems: 8
+                  items:
+                    type: string
+                    pattern: ^([01]\d|2[0-3]):[0-5]\d$
+                  description: Clock times in the patient time zone, e.g. ["08:00","20:00"].
+                endDate:
+                  type: string
+                  format: date
                 remindersEnabled:
                   type: boolean
                 paused:
                   type: boolean
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5508,7 +5584,12 @@ paths:
             type: string
             format: uuid
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -5527,9 +5608,16 @@ paths:
       parameters:
         - name: day
           in: query
-          schema: *a2
+          schema:
+            type: string
+            format: date
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -5553,7 +5641,12 @@ paths:
             type: string
             format: uuid
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -5579,7 +5672,12 @@ paths:
             type: string
             format: uuid
       responses:
-        "200": *a1
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -7894,6 +7992,202 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/profile/emergency-card:
+    get:
+      tags:
+        - Profile
+      summary: Get own Emergency Card identifier and consent preferences
+      description: Active PATIENT account only. Sharing and phone notification default off. Response is private/no-store.
+      operationId: get__api_v1_profile_emergency_card
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Emergency information is unavailable or the account is not authorized; no patient identity is disclosed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          description: Emergency service is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      tags:
+        - Profile
+      summary: Save own Emergency Card consent and independent notification preferences
+      operationId: put__api_v1_profile_emergency_card
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmergencyCardUpdate"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Emergency information is unavailable or the account is not authorized; no patient identity is disclosed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          description: Emergency service is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/v1/profile/emergency-card/replace-code:
+    post:
+      tags:
+        - Profile
+      summary: Replace own emergency identifier; invalidate every prior card
+      operationId: post__api_v1_profile_emergency_card_replace_code
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmergencyCodeReplacement"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Emergency information is unavailable or the account is not authorized; no patient identity is disclosed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          description: Emergency service is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/v1/profile/emergency-card/responder:
+    get:
+      tags:
+        - Profile
+      summary: List the signed-in responder’s eligible clinical hospital memberships
+      operationId: get__api_v1_profile_emergency_card_responder
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Emergency information is unavailable or the account is not authorized; no patient identity is disclosed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          description: Emergency service is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/v1/profile/emergency-card/lookup:
+    post:
+      tags:
+        - Profile
+      summary: Retrieve a consenting patient’s read-only emergency summary
+      description: Identifier is not authorization. Every request checks current patient sharing, explicit active Care Circle permission or verified hospital clinical membership/professional qualification. Hospital reason required. Generic 403 for denied/unknown identifiers. Audit and in-app patient notice saved; provider delivery is asynchronous. private/no-store; 12/account/minute and 100/IP/15 minutes on one API instance.
+      operationId: post__api_v1_profile_emergency_card_lookup
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmergencyLookup"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Emergency information is unavailable or the account is not authorized; no patient identity is disclosed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          description: Emergency service is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -9707,30 +10001,53 @@ components:
           additionalProperties: false
           description: Private to the doctor. Never returned to the patient.
           properties:
-            presentingComplaint: { type: string, maxLength: 2000 }
-            history: { type: string, maxLength: 4000 }
-            findings: { type: string, maxLength: 4000 }
-            assessment: { type: string, maxLength: 2000 }
-            plan: { type: string, maxLength: 4000 }
+            presentingComplaint:
+              type: string
+              maxLength: 2000
+            history:
+              type: string
+              maxLength: 4000
+            findings:
+              type: string
+              maxLength: 4000
+            assessment:
+              type: string
+              maxLength: 2000
+            plan:
+              type: string
+              maxLength: 4000
         patient:
           type: object
           additionalProperties: false
           description: The visit summary the patient receives once signed.
           properties:
-            summary: { type: string, maxLength: 3000 }
-            advice: { type: string, maxLength: 3000 }
-            warningSigns: { type: string, maxLength: 1500 }
+            summary:
+              type: string
+              maxLength: 3000
+            advice:
+              type: string
+              maxLength: 3000
+            warningSigns:
+              type: string
+              maxLength: 1500
             followUp:
               type: object
               additionalProperties: false
               properties:
-                needed: { type: boolean, default: false }
-                timeframe: { type: string, maxLength: 120 }
-                instructions: { type: string, maxLength: 1000 }
+                needed:
+                  type: boolean
+                  default: false
+                timeframe:
+                  type: string
+                  maxLength: 120
+                instructions:
+                  type: string
+                  maxLength: 1000
     ConsultationNoteSave:
       type: object
       additionalProperties: false
-      required: [content]
+      required:
+        - content
       properties:
         revision:
           type: integer
@@ -9741,9 +10058,12 @@ components:
     ConsultationNoteSign:
       type: object
       additionalProperties: false
-      required: [revision]
+      required:
+        - revision
       properties:
-        revision: { type: integer, minimum: 1 }
+        revision:
+          type: integer
+          minimum: 1
         amendmentReason:
           type: string
           minLength: 5
@@ -9829,6 +10149,64 @@ components:
       required:
         - offeringId
         - requestedAt
+    EmergencyCardUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        sharingEnabled:
+          type: boolean
+        notificationEnabled:
+          type: boolean
+        scopes:
+          type: object
+          additionalProperties: false
+          properties:
+            careCircle:
+              type: boolean
+            hospitals:
+              type: boolean
+          required:
+            - careCircle
+            - hospitals
+        consentVersion:
+          const: emergency-card-v1
+      required:
+        - version
+    EmergencyCodeReplacement:
+      type: object
+      additionalProperties: false
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        confirmation:
+          const: REPLACE
+      required:
+        - version
+        - confirmation
+    EmergencyLookup:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          maxLength: 80
+        hospitalId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 300
+      required:
+        - code
   responses:
     BadRequest:
       description: Invalid request

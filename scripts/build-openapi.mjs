@@ -5,6 +5,11 @@ import YAML from 'yaml';
 const tags = ['Auth','Profile','Dashboard','Notifications','Appointments','Medications','Vitals','Health Metrics','Medical Records','Medical Documents','Family Care','Caregivers','Professionals','Organisations','Hospitals','Hospital Enrollments','Hospital Appointments','Doctor Care','Doctor Appointments','Prescriptions','Pharmacies','Inventory','Pharmacy Requests and Quotes','Reservations','Checkout Pricing','Orders','Payments','Fulfilments','Delivery','Wellness'];
 const r = (method, route, tag, summary, options = {}) => ({ method, route, tag, summary, ...options });
 const routes = [
+  r('get','/api/v1/profile/emergency-card','Profile','Get own Emergency Card identifier and consent preferences',{description:'Active PATIENT account only. Sharing and phone notification default off. Response is private/no-store.'}),
+  r('put','/api/v1/profile/emergency-card','Profile','Save own Emergency Card consent and independent notification preferences',{body:'EmergencyCardUpdate'}),
+  r('post','/api/v1/profile/emergency-card/replace-code','Profile','Replace own emergency identifier; invalidate every prior card',{body:'EmergencyCodeReplacement'}),
+  r('get','/api/v1/profile/emergency-card/responder','Profile','List the signed-in responder’s eligible clinical hospital memberships'),
+  r('post','/api/v1/profile/emergency-card/lookup','Profile','Retrieve a consenting patient’s read-only emergency summary',{body:'EmergencyLookup',description:'Identifier is not authorization. Every request checks current patient sharing, explicit active Care Circle permission or verified hospital clinical membership/professional qualification. Hospital reason required. Generic 403 for denied/unknown identifiers. Audit and in-app patient notice saved; provider delivery is asynchronous. private/no-store; 12/account/minute and 100/IP/15 minutes on one API instance.'}),
   r('get','/api/health','Dashboard','Service health check',{public:true,description:'Database-independent liveness response.'}),
   r('post','/api/v1/auth/register/patient','Auth','Register a patient',{public:true,body:'PatientRegistration'}), r('post','/api/v1/auth/login','Auth','Log in',{public:true,body:'Login'}), r('post','/api/v1/auth/refresh','Auth','Refresh an access token',{public:true,body:'RefreshToken'}), r('post','/api/v1/auth/logout','Auth','Revoke a refresh token',{public:true,body:'RefreshToken'}), r('post','/api/v1/auth/password-reset/request','Auth','Request a password reset',{public:true,body:'Email'}), r('post','/api/v1/auth/password-reset/confirm','Auth','Confirm a password reset',{public:true,body:'PasswordReset'}), r('get','/api/v1/auth/me','Auth','Get the authenticated account'),
   r('post','/api/v1/auth/register/caregiver','Caregivers','Register a caregiver',{public:true,body:'CaregiverRegistration'}), r('get','/api/v1/caregivers/me','Caregivers','Get caregiver onboarding state'),
@@ -41,6 +46,9 @@ const string = { type: 'string' }, uuid = { type: 'string', format: 'uuid' }, da
 const obj = (properties, required = Object.keys(properties)) => ({ type: 'object', additionalProperties: false, properties, ...(required.length ? { required } : {}) });
 const enumString = (...values) => ({ type: 'string', enum: values });
 const schemas = {
+  EmergencyCardUpdate: obj({version:{type:'integer',minimum:1},displayName:{type:'string',minLength:1,maxLength:120},sharingEnabled:{type:'boolean'},notificationEnabled:{type:'boolean'},scopes:obj({careCircle:{type:'boolean'},hospitals:{type:'boolean'}}),consentVersion:{const:'emergency-card-v1'}},['version']),
+  EmergencyCodeReplacement: obj({version:{type:'integer',minimum:1},confirmation:{const:'REPLACE'}}),
+  EmergencyLookup: obj({code:{type:'string',maxLength:80},hospitalId:uuid,reason:{type:'string',minLength:5,maxLength:300}},['code']),
   Error: obj({ status: { const: 'error' }, message: string, code: string }, ['status','message']),
   Success: obj({ status: { const: 'success' }, data: {} }, ['status']),
   PatientRegistration: obj({ email: { type:'string',format:'email',maxLength:320 }, password: { type:'string',format:'password',minLength:8,maxLength:128 }, firstName:{type:'string',maxLength:100}, lastName:{type:'string',maxLength:100}, phoneNumber:{type:'string',minLength:7,maxLength:30}, dateOfBirth:{type:'string',format:'date'}, gender:{type:'string',maxLength:50}, consentGiven:{const:true} }, ['email','password','firstName','lastName','consentGiven']),
@@ -95,6 +103,10 @@ const responses = (route) => {
   const result = {[successCode]:success};
   if (route.body || route.query || route.route.includes('{')) result['400'] = {$ref:'#/components/responses/BadRequest'};
   if (!route.public) result['401'] = {$ref:'#/components/responses/Unauthorized'};
+  if (route.route.includes('/emergency-card')) {
+    result['403'] = {description:'Emergency information is unavailable or the account is not authorized; no patient identity is disclosed',content:{'application/json':{schema:{$ref:'#/components/schemas/Error'}}}};
+    result['503'] = {description:'Emergency service is temporarily unavailable',content:{'application/json':{schema:{$ref:'#/components/schemas/Error'}}}};
+  }
   if (route.route.includes('{') || route.description?.toLowerCase().includes('owner')) result['404'] = {$ref:'#/components/responses/NotFound'};
   if (route.method !== 'get') result['409'] = {$ref:'#/components/responses/Conflict'};
   result['429'] = {$ref:'#/components/responses/RateLimited'};
@@ -111,5 +123,17 @@ for (const route of routes) {
 }
 const response = (description) => ({description,content:{'application/json':{schema:{$ref:'#/components/schemas/Error'}}}});
 const document = { openapi:'3.1.0',info:{title:'Sabi Health Backend API',version:'1.0.0',license:{name:'Proprietary',identifier:'LicenseRef-Proprietary'},description:'Canonical frontend and operations reference generated from the registered Express routes and validation contracts. All currency values ending in Minor are NGN minor units (kobo).'},servers:[{url:'/',description:'Current environment'}],tags:tags.map((name)=>({name,description:`${name} endpoints currently registered by the backend.`})),paths,components:{securitySchemes:{bearerAuth:{type:'http',scheme:'bearer',bearerFormat:'JWT',description:'Use an access token. Example: Bearer <access-token>'}},schemas,responses:{BadRequest:response('Invalid request'),Unauthorized:response('Authentication required or token invalid'),NotFound:response('Resource is absent or hidden by authorization scope'),Conflict:response('State conflict'),RateLimited:response('Rate limit exceeded'),ServerError:response('Safe module-scoped server error'),StorageUnavailable:{description:'Private document storage is not configured or available',content:{'application/json':{schema:{$ref:'#/components/schemas/Error'},example:{status:'error',code:'DOCUMENT_STORAGE_UNAVAILABLE',message:'Document storage is unavailable'}}}}}}};
-fs.writeFileSync(path.resolve('docs/openapi.yaml'), YAML.stringify(document,{lineWidth:0,aliasDuplicateObjects:false}));
+// Some newer module contracts are maintained directly in openapi.yaml. Preserve those
+// operations/schemas rather than deleting them when this older registry is regenerated.
+const destination = path.resolve('docs/openapi.yaml');
+if (fs.existsSync(destination)) {
+  const existing = YAML.parse(fs.readFileSync(destination, 'utf8'));
+  const emergencyPaths = Object.fromEntries(Object.entries(document.paths).filter(([key]) => key.includes('/profile/emergency-card')));
+  document.paths = { ...document.paths, ...existing.paths, ...emergencyPaths };
+  document.components.schemas = { ...document.components.schemas, ...existing.components?.schemas,
+    ...Object.fromEntries(Object.entries(schemas).filter(([key]) => ['EmergencyCardUpdate', 'EmergencyCodeReplacement', 'EmergencyLookup'].includes(key))) };
+  document.components.responses = { ...document.components.responses, ...existing.components?.responses };
+  document.tags = [...new Map([...document.tags, ...(existing.tags || [])].map((tag) => [tag.name, tag])).values()];
+}
+fs.writeFileSync(destination, YAML.stringify(document,{lineWidth:0,aliasDuplicateObjects:false}));
 console.log(`Wrote docs/openapi.yaml with ${routes.length} operations across ${tags.length} tags.`);

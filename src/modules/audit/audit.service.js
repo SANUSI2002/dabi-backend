@@ -66,6 +66,10 @@ const ACTIONS = {
   MEDICATION_REMINDER_SNOOZED: ['ACTIVITY', {}],
 
   ACTIVITY: ['ACTIVITY', {}],
+  EMERGENCY_CARD_CHANGED: ['PERMISSION', { actor: 'You changed your Emergency Card preferences' }],
+  EMERGENCY_CODE_REPLACED: ['PERMISSION', { actor: 'You replaced your emergency code; previous cards no longer work' }],
+  EMERGENCY_SUMMARY_ACCESSED: ['RECORD_ACCESS', { actor: "You accessed {subject}'s emergency summary", subject: '{actor} accessed your emergency summary' }],
+  EMERGENCY_ACCESS_DENIED: ['RECORD_ACCESS', { actor: 'An emergency summary lookup was denied' }],
 };
 
 /**
@@ -73,7 +77,7 @@ const ACTIONS = {
  * `dedupeMinutes` skips a repeat of the same view by the same person within that window, so opening a
  * record ten times in a minute is one entry, not ten.
  */
-export async function recordAudit(db, { actorUserId, subjectUserId = null, relatedUserId = null, action, summary, resourceType = null, resourceId = null }, { dedupeMinutes, req = currentRequest() } = {}) {
+export async function recordAudit(db, { actorUserId, subjectUserId = null, relatedUserId = null, action, summary, resourceType = null, resourceId = null, context }, { dedupeMinutes, req = currentRequest() } = {}) {
   const definition = ACTIONS[action];
   if (!definition) throw new Error(`Unknown audit action ${action}`);
   if (req) req.auditRecorded = true;
@@ -85,6 +89,7 @@ export async function recordAudit(db, { actorUserId, subjectUserId = null, relat
   return db.auditEvent.create({ data: {
     actorUserId, subjectUserId, relatedUserId, category: definition[0], action, summary: String(text).slice(0, 300),
     resourceType, resourceId: resourceId ? String(resourceId).slice(0, 64) : null, ...requestContext(req),
+    ...(context ? { context } : {}),
   } });
 }
 

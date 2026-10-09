@@ -53,7 +53,7 @@ export const addMember = (userId, data) => r.transaction(async (tx) => {
   const item = await r.createMember(tx, {
     patientId: userId, caregiverEmail: email, relationshipType: 'CAREGIVER', invitationKind: 'DIRECT',
     relationshipLabel: data.relationship ?? null, permissionLevel: data.permissionLevel,
-    permissions: data.permissionLevel === 'emergency-only' ? [] : data.permissions,
+    permissions: data.permissionLevel === 'emergency-only' ? data.permissions.filter((p) => p === 'EMERGENCY_SUMMARY') : data.permissions,
     invitationTokenHash: hash(token), expiresAt: new Date(Date.now() + 7 * 86400000),
   });
   await r.audit(tx, userId, 'CARE_INVITED', item.id);
