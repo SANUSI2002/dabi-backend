@@ -50,8 +50,12 @@ export const cancel = (doctorUserId, id) => repository.transaction(async (tx) =>
   if (!prescription || !(await repository.cancel(tx, id, doctor.id)).count) throw policy.error('NOT_FOUND');
   await auditLog.audit(tx, doctorUserId, 'PRESCRIPTION_CANCELLED', id);
   await auditLog.trail(tx, doctorUserId, prescription.patientId, 'PRESCRIPTION_CANCELLED', id);
-  // Reminders for a cancelled prescription stop at once.
+  // Reminders for a cancelled prescription stop at once, and the patient is told.
   await stopSchedulesForPrescriptionItems(tx, (prescription.items ?? []).map((item) => item.id));
+  await notify(tx, {
+    userId: prescription.patientId, eventType: 'prescription.cancelled', eventKey: `prescription.cancelled:${id}`, link: '/prescriptions',
+    title: 'A prescription was cancelled', message: 'Your doctor cancelled a prescription. Any reminders for it have stopped. Open Prescriptions in Sabi for details.',
+  });
 });
 
 export const patientList = (patientId, query) => repository.listPatient(patientId, query.page, query.limit);

@@ -4,7 +4,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const f = () => vi.fn();
-const tx = { auditEvent: { create: f(), findFirst: f() }, professionalProfile: { findFirst: f(), findUnique: f() }, userRole: { findFirst: f() }, doctorCareRelationship: { findFirst: f(), create: f(), updateMany: f() }, activityLog: { create: f() } };
+const tx = { auditEvent: { create: f(), findFirst: f() }, professionalProfile: { findFirst: f(), findUnique: f() }, userRole: { findFirst: f() }, doctorCareRelationship: { findFirst: f(), create: f(), updateMany: f() }, activityLog: { create: f() }, notification: { findFirst: f(), create: f() }, notificationPreference: { findUnique: f() }, notificationDelivery: { create: f() } };
 const prisma = { professionalProfile: { findMany: f(), count: f(), findFirst: f() }, doctorCareRelationship: { findMany: f() }, $transaction: f() };
 vi.mock('../src/config/db.js', () => ({ default: prisma }));
 const { default: routes } = await import('../src/modules/doctor-care/doctor-care.routes.js');

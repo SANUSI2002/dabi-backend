@@ -62,6 +62,16 @@ export function updateMessage(title) {
   };
 }
 
+/** `what` is "video consultation" or "in-person appointment"; `when` is "tomorrow at 10:00 am". No doctor or reason. */
+export function appointmentReminderMessage({ what, when }) {
+  const { templates } = whatsappConfig();
+  return {
+    name: templates.appointment,
+    components: [body(what, when)],
+    preview: `Reminder: your ${what} is ${when}. Open Sabi to join or manage it.`,
+  };
+}
+
 export const REPLIES = {
   recorded: (time) => `Recorded: dose taken at ${time}. Well done.`,
   alreadyRecorded: 'Already recorded. You do not need to do anything else.',

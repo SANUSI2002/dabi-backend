@@ -59,6 +59,18 @@ active connection, then records the dose (a second tap answers "Already recorded
 reminder 30 minutes (up to 3 times). Snoozing never moves the prescribed schedule. Changing or
 discontinuing a schedule bumps its version and cancels future doses and jobs.
 
+## What patients are told
+
+| Event | When | WhatsApp (if that kind is switched on) |
+|---|---|---|
+| `medication.dose_due` | A dose is due (and after each "Remind me later") | Reminder with Taken / Remind me later |
+| `appointment.confirmed` / `.declined` / `.cancelled` | The doctor decides | "You have a new update in Sabi: …" |
+| `appointment.reminder` | 24 h to 3 h before (skipped right after a late confirmation) and about 1 h before | Appointment reminder template; re-checked at send time, nothing for a cancelled or started appointment |
+| `prescription.issued` / `.cancelled` | Doctor issues or cancels | Update template |
+| `visit_summary.ready`, `care_plan.published`, `care.accepted` / `.declined` | Doctor or professional acts | Update template |
+
+WhatsApp messages never name the doctor, the reason for a visit or (unless the patient allows it) the medicine.
+
 ## Meta setup (owner's checklist)
 
 1. Meta Business portfolio (verified business) and a WhatsApp Business Account.
@@ -72,6 +84,8 @@ discontinuing a schedule bumps its version and cancels future doses and jobs.
    - `sabi_medication_reminder` — **Utility**, body "It's time for your {{1}} dose ({{2}}).", quick replies
      **Taken** and **Remind me later**.
    - `sabi_update` — **Utility**, body "You have a new update in Sabi: {{1}}. Open Sabi to view it."
+   - `sabi_appointment_reminder` — **Utility**, body "Reminder: your {{1}} is {{2}}. Open Sabi to join or manage it."
+     ({{1}} = "video consultation" / "in-person appointment", {{2}} = "tomorrow at 10:00 am").
 6. Payment method on the WhatsApp Business Account (template conversations are charged).
 
 ## Environment
@@ -85,5 +99,5 @@ discontinuing a schedule bumps its version and cancels future doses and jobs.
 | `WHATSAPP_VERIFY_TOKEN` | Webhook subscription handshake. |
 | `WHATSAPP_API_VERSION` | Graph API version, e.g. `v21.0`. |
 | `WHATSAPP_TEMPLATE_LANGUAGE` | Template language code, default `en`. |
-| `WHATSAPP_TEMPLATE_VERIFICATION` / `_REMINDER` / `_UPDATE` | Template names if different from the defaults. |
+| `WHATSAPP_TEMPLATE_VERIFICATION` / `_REMINDER` / `_UPDATE` / `_APPOINTMENT` | Template names if different from the defaults. |
 | `NOTIFICATION_WORKER` | `true` to run the scheduler in this process (on by default in production). |

@@ -2,6 +2,7 @@ import prisma from '../../config/db.js';
 import { capabilities, PORTAL_PROFESSIONS } from '../professionals/professionCatalog.js';
 import { contentSchema, patientPlan } from './care.policy.js';
 import { recordAudit } from '../audit/audit.service.js';
+import { notify } from '../notifications/notify.service.js';
 const fail = (message,status=409) => { throw Object.assign(new Error(message),{status}); };
 const ACTIVE_APPOINTMENTS = ['CONFIRMED','COMPLETED'];
 export function createCareService(db=prisma) {
@@ -73,7 +74,7 @@ export function createCareService(db=prisma) {
       const number=(plan.publishedVersion||0)+1;
       await tx.professionalCareVersion.create({data:{planId:id,number,content}});
       const saved=await tx.professionalCarePlan.update({where:{id},data:{publishedVersion:number,revision:{increment:1}}});
-      await tx.notification.create({data:{userId:plan.patientId,title:pro.kind==='NUTRITION'?'Dietician Table updated':'Your care plan is ready',message:`Your professional has published version ${number} of your plan. Open Sabi Health to review it.`}});
+      await notify(tx,{userId:plan.patientId,eventType:'care_plan.published',eventKey:`care_plan.published:${id}:${number}`,link:pro.kind==='NUTRITION'?'/prescriptions/dietician-table':'/care-plans',title:pro.kind==='NUTRITION'?'Dietician Table updated':'Your care plan is ready',message:`Your professional has published version ${number} of your plan. Open Sabi Health to review it.`});
       await audit(tx,userId,'CARE_PLAN_PUBLISHED',id);await trail(tx,userId,plan.patientId,'CARE_PLAN_PUBLISHED',id);return saved;
     }),
     archive: (userId,id,revision) => transaction(async tx => {const {plan}=await owned(tx,userId,id,true);checkRevision(plan,revision);const saved=await tx.professionalCarePlan.update({where:{id},data:{archivedAt:new Date(),revision:{increment:1}}});await audit(tx,userId,'CARE_PLAN_ARCHIVED',id);await trail(tx,userId,plan.patientId,'CARE_PLAN_ARCHIVED',id);return saved;}),

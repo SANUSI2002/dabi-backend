@@ -11,11 +11,14 @@ import { clockLabel, partOfDay } from '../medication-schedules/schedule.time.js'
 import { ACTIONS, buttonPayload, reminderMessage, updateMessage } from '../whatsapp/whatsapp.messages.js';
 import { whatsappProvider } from '../whatsapp/whatsapp.provider.js';
 import { wantsWhatsApp } from './notify.service.js';
+import { prepareAppointmentReminder } from './appointment.notices.js';
 
 const LEASE_MS = 2 * 60_000;
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
 const REMINDER_STALE_MS = 2 * 3_600_000;
 const UPDATE_STALE_MS = 24 * 3_600_000;
+// Events whose WhatsApp message has its own template and must be re-checked just before sending.
+const PREPARERS = { 'appointment.reminder': prepareAppointmentReminder };
 
 async function claimDue(limit, now) {
   return prisma.$transaction(async (tx) => {
@@ -42,6 +45,11 @@ async function prepare(delivery, now) {
   if (!connection) return { skip: ['SKIPPED', 'No WhatsApp number linked'] };
   if (!delivery.reminderJobId) {
     if (age > UPDATE_STALE_MS) return { skip: ['SKIPPED', 'Too old to send'] };
+    const custom = PREPARERS[notification.eventType];
+    if (custom) {
+      const prepared = await custom(prisma, notification, { now });
+      return prepared.skip ? { skip: prepared.skip } : { connection, message: prepared.message };
+    }
     return { connection, message: updateMessage(notification.title) };
   }
   const job = await prisma.reminderJob.findUnique({ where: { id: delivery.reminderJobId }, include: { dose: { include: { schedule: true } } } });

@@ -15,6 +15,7 @@ import { isDeepStrictEqual } from 'node:util';
 import prisma from '../../config/db.js';
 import { contentSchema, patientVisitSummary, signingProblems } from './consultation-notes.policy.js';
 import { recordAudit } from '../audit/audit.service.js';
+import { notify } from '../notifications/notify.service.js';
 
 const fail = (status, code, message, extra = {}) => { throw Object.assign(new Error(message), { status, code, ...extra }); };
 const DRAFTABLE = ['CONFIRMED', 'COMPLETED'];
@@ -167,10 +168,11 @@ export function createConsultationNotesService(db = prisma) {
       await tx.consultationNoteVersion.create({ data: { noteId: note.id, number, content, amendmentReason: latest ? amendmentReason : null } });
       await tx.consultationNote.update({ where: { id: note.id }, data: { draft: content, signedVersion: number, revision: { increment: 1 } } });
       const doctorName = profile.user?.full_name || 'Your doctor';
-      await tx.notification.create({
-        data: latest
-          ? { userId: appointment.patientId, title: 'Your visit summary was updated', message: `${doctorName} updated the summary of your consultation. Open Appointments in Sabi Health to read it.` }
-          : { userId: appointment.patientId, title: 'Your visit summary is ready', message: `${doctorName} shared the summary of your consultation. Open Appointments in Sabi Health to read it.` },
+      await notify(tx, {
+        userId: appointment.patientId, eventType: 'visit_summary.ready', eventKey: `visit_summary.ready:${appointmentId}:${number}`, link: '/appointments',
+        ...(latest
+          ? { title: 'Your visit summary was updated', message: `${doctorName} updated the summary of your consultation. Open Appointments in Sabi Health to read it.` }
+          : { title: 'Your visit summary is ready', message: `${doctorName} shared the summary of your consultation. Open Appointments in Sabi Health to read it.` }),
       });
       await audit(tx, userId, latest ? 'CONSULTATION_NOTE_AMENDED' : 'CONSULTATION_NOTE_SIGNED', appointmentId);
       await trail(tx, userId, appointment, 'CONSULTATION_NOTE_SIGNED');

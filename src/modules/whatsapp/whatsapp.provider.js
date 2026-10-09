@@ -26,6 +26,7 @@ export const whatsappConfig = () => ({
     verification: process.env.WHATSAPP_TEMPLATE_VERIFICATION || 'sabi_verification_code',
     reminder: process.env.WHATSAPP_TEMPLATE_REMINDER || 'sabi_medication_reminder',
     update: process.env.WHATSAPP_TEMPLATE_UPDATE || 'sabi_update',
+    appointment: process.env.WHATSAPP_TEMPLATE_APPOINTMENT || 'sabi_appointment_reminder',
   },
 });
 

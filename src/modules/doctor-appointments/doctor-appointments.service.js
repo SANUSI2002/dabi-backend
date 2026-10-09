@@ -11,6 +11,7 @@
 import prisma from '../../config/db.js';
 import { PORTAL_PROFESSIONS } from '../professionals/professionCatalog.js';
 import { recordAudit } from '../audit/audit.service.js';
+import { notifyAppointmentChange } from '../notifications/appointment.notices.js';
 
 const DAY = 86400000;
 const ACTIVE = ['REQUESTED', 'CONFIRMED'];
@@ -262,6 +263,8 @@ const doctorTransition = (type, buildWhere, buildData, after) => (userId, id, bo
   if (after) await after(tx, id);
   const item = await tx.doctorAppointment.findFirst({ where: { id }, select: doctorView });
   if (AUDITED_TRANSITIONS[type]) await recordAudit(tx, { actorUserId: userId, subjectUserId: item.patient.id, action: AUDITED_TRANSITIONS[type], resourceType: 'doctor_appointment', resourceId: id });
+  // The patient hears about confirmations, declines and cancellations (in the app, and on WhatsApp if they chose it).
+  if (AUDITED_TRANSITIONS[type]) await notifyAppointmentChange(tx, id, item.status);
   return toDoctorAppointment(item);
 });
 
