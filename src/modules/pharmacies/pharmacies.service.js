@@ -13,4 +13,15 @@ export const mine = (userId) => repository.transaction(async (tx) => { await pol
 export const publicList = (query) => repository.publicList(query);
 export const publicDetail = (id) => repository.publicDetail(id);
 export const complianceList = (userId, query) => repository.transaction(async (tx) => { await policy.complianceAdmin(tx, userId); return repository.complianceList(query); });
-export const decision = (userId, id, data) => repository.transaction(async (tx) => { await policy.complianceAdmin(tx, userId); const pharmacy = await repository.findForDecision(tx, id); if (!pharmacy || pharmacy.adminUserId === userId) throw policy.error('NOT_FOUND'); const allowed = { VERIFIED: ['PENDING', 'REJECTED', 'SUSPENDED'], REJECTED: ['PENDING'], SUSPENDED: ['VERIFIED'] }; if (!allowed[data.status].includes(pharmacy.complianceStatus)) throw policy.error('INVALID'); const updated = await repository.updateDecision(tx, id, { complianceStatus: data.status, decisionNote: data.note ?? null, decidedByUserId: userId, decidedAt: new Date() }); await auditLog.audit(tx, userId, `PHARMACY_${data.status}`, id); return updated; });
+export const decision = (userId, id, data) => repository.transaction(async (tx) => {
+  await policy.complianceAdmin(tx, userId);
+  const pharmacy = await repository.findForDecision(tx, id);
+  if (!pharmacy || pharmacy.adminUserId === userId) throw policy.error('NOT_FOUND');
+  // Portal applications must use evidence-gated, MFA-protected platform review.
+  if (data.status === 'VERIFIED' && pharmacy.registrationDetails) throw policy.error('INVALID');
+  const allowed = { VERIFIED: ['PENDING', 'REJECTED', 'SUSPENDED'], REJECTED: ['PENDING'], SUSPENDED: ['VERIFIED'] };
+  if (!allowed[data.status].includes(pharmacy.complianceStatus)) throw policy.error('INVALID');
+  const updated = await repository.updateDecision(tx, id, { complianceStatus: data.status, decisionNote: data.note ?? null, decidedByUserId: userId, decidedAt: new Date() });
+  await auditLog.audit(tx, userId, `PHARMACY_${data.status}`, id);
+  return updated;
+});

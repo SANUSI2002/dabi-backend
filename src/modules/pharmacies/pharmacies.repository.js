@@ -7,7 +7,7 @@ export const nextPatientId = (tx, patientId) => tx.user.findUnique({ where: { pa
 export const createAdmin = (tx, data) => tx.user.create({ data, select: { id: true, email: true, full_name: true } });
 export const create = (tx, data) => tx.pharmacy.create({ data, select: adminSelect });
 export const mine = (tx, adminUserId) => tx.pharmacy.findFirst({ where: { adminUserId }, select: adminSelect });
-export const findForDecision = (tx, id) => tx.pharmacy.findUnique({ where: { id }, select: adminSelect });
+export const findForDecision = (tx, id) => tx.pharmacy.findUnique({ where: { id }, select: { ...adminSelect, registrationDetails: true } });
 export const updateDecision = (tx, id, data) => tx.pharmacy.update({ where: { id }, data, select: adminSelect });
 export const publicDetail = (id) => prisma.pharmacy.findFirst({ where: { id, complianceStatus: 'VERIFIED' }, select: publicSelect });
 const filters = (query, status = 'VERIFIED') => ({ complianceStatus: status, ...(query.country ? { country: { equals: query.country, mode: 'insensitive' } } : {}), ...(query.state ? { state: { equals: query.state, mode: 'insensitive' } } : {}), ...(query.city ? { city: { equals: query.city, mode: 'insensitive' } } : {}) });

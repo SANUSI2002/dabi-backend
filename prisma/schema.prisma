@@ -135,6 +135,7 @@ enum UserAccountStatus {
   LOCKED
   DISABLED
   DEACTIVATED
+  BANNED
 }
 
 enum IdentityOrganizationType {
@@ -339,6 +340,13 @@ model Pharmacy {
   contactPhone     String                   @map("contact_phone")
   latitude         Float?
   longitude        Float?
+  tierLevel        Int? @map("tier_level")
+  tier             PharmacyTier? @relation(fields: [tierLevel], references: [level], onDelete: Restrict)
+  branches         PharmacyBranch[]
+  credentials      PharmacyCredential[]
+  applicationSubmittedAt DateTime? @map("application_submitted_at")
+  registrationDetails Json? @map("registration_details")
+  superintendentLicenceExpiresAt DateTime? @map("superintendent_licence_expires_at")
   complianceStatus PharmacyComplianceStatus @default(PENDING) @map("compliance_status")
   decisionNote     String?                  @map("decision_note")
   decidedByUserId  String?                  @map("decided_by_user_id")
@@ -450,10 +458,16 @@ model PharmacyInventoryItem {
   pharmacyId     String   @map("pharmacy_id")
   medicationName String   @map("medication_name")
   genericName    String?  @map("generic_name")
+  batchNumber    String?  @map("batch_number") @db.VarChar(100)
+  expiryDate     DateTime? @map("expiry_date") @db.Date
   availableQuantity Int   @default(0) @map("available_quantity")
   unitPriceMinor Int      @map("unit_price_minor")
   currency       String   @default("NGN")
   isActive       Boolean  @default(true) @map("is_active")
+  branchId       String? @map("branch_id")
+  branch         PharmacyBranch? @relation(fields: [branchId, pharmacyId], references: [id, pharmacyId], onDelete: Restrict)
+  listing        PharmacyListing?
+  adjustments PharmacyStockAdjustment[]
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
   pharmacy       Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
@@ -462,6 +476,112 @@ model PharmacyInventoryItem {
 
   @@index([pharmacyId, isActive])
   @@map("pharmacy_inventory_items")
+}
+
+model PharmacyStockAdjustment {
+  id String @id @default(uuid())
+  inventoryItemId String @map("inventory_item_id")
+  idempotencyKey String @map("idempotency_key") @db.VarChar(128)
+  requestHash String @map("request_hash") @db.Char(64)
+  quantityDelta Int @map("quantity_delta")
+  balanceBefore Int @map("balance_before")
+  balanceAfter Int @map("balance_after")
+  actorId String @map("actor_id")
+  reason String @db.VarChar(1000)
+  createdAt DateTime @default(now()) @map("created_at")
+  inventoryItem PharmacyInventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  @@unique([inventoryItemId, idempotencyKey])
+  @@map("pharmacy_stock_adjustments")
+}
+
+model PharmacyTier {
+  level Int @id
+  name String @db.VarChar(80)
+  commissionBps Int @map("commission_bps")
+  deliveryRadiusKm Int @map("delivery_radius_km")
+  maxBranches Int? @map("max_branches")
+  minimumOrderMinor Int @default(0) @map("minimum_order_minor")
+  deliveryEnabled Boolean @default(true) @map("delivery_enabled")
+  pickupEnabled Boolean @default(true) @map("pickup_enabled")
+  enabled Boolean @default(true)
+  version Int @default(1)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  pharmacies Pharmacy[]
+  @@map("pharmacy_tiers")
+}
+
+model PharmacyBranch {
+  id String @id @default(uuid())
+  pharmacyId String @map("pharmacy_id")
+  name String @db.VarChar(120)
+  address String @db.VarChar(300)
+  latitude Float
+  longitude Float
+  premisesLicenceNumber String @map("premises_licence_number") @db.VarChar(100)
+  licenceExpiresAt DateTime @map("licence_expires_at")
+  status String @default("PENDING") @db.VarChar(16)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  pharmacy Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
+  inventory PharmacyInventoryItem[]
+  credentials PharmacyCredential[]
+  @@unique([id, pharmacyId])
+  @@index([pharmacyId, status])
+  @@map("pharmacy_branches")
+}
+
+model PharmacyCredential {
+  id String @id @default(uuid())
+  pharmacyId String @map("pharmacy_id")
+  branchId String? @map("branch_id")
+  kind String @db.VarChar(40)
+  contentType String @map("content_type")
+  byteSize Int @map("byte_size")
+  sha256 String @db.Char(64)
+  storageBucket String @map("storage_bucket")
+  storageKey String @map("storage_key")
+  scanStatus String @default("PENDING") @map("scan_status")
+  scanAttempts Int @default(0) @map("scan_attempts")
+  scanLeaseToken String? @map("scan_lease_token")
+  scanLeaseExpiresAt DateTime? @map("scan_lease_expires_at")
+  scanErrorCode String? @map("scan_error_code")
+  scannerVersion String? @map("scanner_version")
+  scannedAt DateTime? @map("scanned_at")
+  reviewStatus String @default("PENDING") @map("review_status")
+  reviewedBy String? @map("reviewed_by")
+  reviewedAt DateTime? @map("reviewed_at")
+  sourceName String? @map("source_name") @db.VarChar(200)
+  reference String? @db.VarChar(200)
+  note String? @db.VarChar(2000)
+  createdAt DateTime @default(now()) @map("created_at")
+  pharmacy Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
+  branch PharmacyBranch? @relation(fields: [branchId, pharmacyId], references: [id, pharmacyId], onDelete: Restrict)
+  @@index([pharmacyId, branchId, kind, createdAt])
+  @@index([scanStatus, scanLeaseExpiresAt])
+  @@map("pharmacy_credentials")
+}
+
+// A private inventory item is never a public listing implicitly. Only reviewed,
+// image-backed listings are exposed. No patient/credential documents belong here.
+model PharmacyListing {
+  id String @id @default(uuid())
+  inventoryItemId String @unique @map("inventory_item_id")
+  category String @db.VarChar(40)
+  description String @db.VarChar(1500)
+  productClass String @map("product_class") @db.VarChar(32)
+  nafdacNumber String? @map("nafdac_number") @db.VarChar(100)
+  status String @default("DRAFT") @db.VarChar(16)
+  imageBytes Bytes? @map("image_bytes")
+  imageHash String? @map("image_hash") @db.Char(64)
+  version Int @default(1)
+  reviewedBy String? @map("reviewed_by")
+  reviewedAt DateTime? @map("reviewed_at")
+  reviewNote String? @map("review_note") @db.VarChar(2000)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  inventoryItem PharmacyInventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  @@index([status, createdAt])
+  @@map("pharmacy_listings")
 }
 
 enum ReservationStatus {
@@ -474,14 +594,16 @@ enum ReservationStatus {
 model Reservation {
   id             String            @id @default(uuid())
   patientId      String            @map("patient_id")
-  prescriptionId String            @map("prescription_id")
+  prescriptionId String?           @map("prescription_id")
+  kind           String            @default("PRESCRIPTION") @db.VarChar(20)
+  requestHash    String?           @map("request_hash") @db.Char(64)
   idempotencyKey String            @map("idempotency_key")
   status         ReservationStatus @default(ACTIVE)
   expiresAt      DateTime          @map("expires_at")
   releasedAt     DateTime?         @map("released_at")
   createdAt      DateTime          @default(now()) @map("created_at")
   patient        User              @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  prescription   Prescription      @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  prescription   Prescription?     @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
   allocations    ReservationAllocation[]
   order          Order?
 
@@ -494,10 +616,10 @@ model Reservation {
 model ReservationAllocation {
   id                 String                 @id @default(uuid())
   reservationId      String                 @map("reservation_id")
-  prescriptionItemId String                 @map("prescription_item_id")
+  prescriptionItemId String?                @map("prescription_item_id")
   pharmacyId         String                 @map("pharmacy_id")
-  quoteItemId        String                 @map("quote_item_id")
-  quoteRevision      Int                    @map("quote_revision")
+  quoteItemId        String?                @map("quote_item_id")
+  quoteRevision      Int?                   @map("quote_revision")
   inventoryItemId    String                 @map("inventory_item_id")
   selectedQuantity   Int                    @map("selected_quantity")
   unitPriceMinor     Int                    @map("unit_price_minor")
@@ -505,7 +627,7 @@ model ReservationAllocation {
   expiresAt          DateTime               @map("expires_at")
   reservation        Reservation            @relation(fields: [reservationId], references: [id], onDelete: Cascade)
   pharmacy           Pharmacy               @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
-  quoteItem          PharmacyQuoteItem      @relation(fields: [quoteItemId], references: [id], onDelete: Restrict)
+  quoteItem          PharmacyQuoteItem?     @relation(fields: [quoteItemId], references: [id], onDelete: Restrict)
   inventoryItem      PharmacyInventoryItem  @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
 
   @@index([reservationId])
@@ -615,6 +737,9 @@ model OrderFulfilment {
   subtotalMinor     Int                    @map("subtotal_minor")
   deliveryFeeMinor  Int                    @map("delivery_fee_minor")
   totalMinor        Int                    @map("total_minor")
+  commissionBps     Int?                   @map("commission_bps")
+  commissionMinor   Int?                   @map("commission_minor")
+  tierVersion       Int?                   @map("tier_version")
   createdAt         DateTime               @default(now()) @map("created_at")
   reviewedByUserId  String?                @map("reviewed_by_user_id")
   reviewedAt        DateTime?              @map("reviewed_at")
@@ -656,7 +781,7 @@ model OrderAllocation {
   fulfilmentId        String           @map("fulfilment_id")
   reservationAllocationId String       @map("reservation_allocation_id")
   inventoryItemId      String?          @map("inventory_item_id")
-  prescriptionItemId  String           @map("prescription_item_id")
+  prescriptionItemId  String?          @map("prescription_item_id")
   medicationName      String           @map("medication_name")
   selectedQuantity    Int              @map("selected_quantity")
   unitPriceMinor      Int              @map("unit_price_minor")

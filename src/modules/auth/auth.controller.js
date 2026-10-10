@@ -58,7 +58,7 @@ export const login = async (req, res, next) => {
       if (user) await recordAudit(prisma, { actorUserId: user.id, action: 'SIGN_IN_FAILED' });
       return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
     }
-    if (user.accountStatus === 'PENDING' && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT' || role === 'PROFESSIONAL')) {
+    if (user.accountStatus === 'PENDING' && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT' || role === 'PROFESSIONAL' || role === 'PHARMACY_ADMIN')) {
       return res.status(403).json({ status: 'error', error: { code: 'EMAIL_VERIFICATION_REQUIRED', message: 'Verify your email before signing in.' } });
     }
     if (user.accountStatus && user.accountStatus !== 'ACTIVE') return res.status(401).json({ status: 'error', message: 'Invalid email or password' });

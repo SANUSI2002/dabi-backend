@@ -1,1 +1,22 @@
-import*as s from'./fulfilments.service.js';const h=f=>async(q,r,n)=>{try{const d=await f(q);if(!d)return r.status(404).json({status:'error',message:'Fulfilment not found'});r.json({status:'success',data:d})}catch(e){if(e.code==='NOT_FOUND')return r.status(404).json({status:'error',message:'Fulfilment not found'});n(e)}};export const queue=h(q=>s.queue(q.user.id));export const detail=h(q=>s.detail(q.user.id,q.params.id));export const decide=h(q=>s.decide(q.user.id,q.params.id,q.body));export const prepare=h(q=>s.prepare(q.user.id,q.params.id,q.body));
+import * as s from "./fulfilments.service.js";
+const h = (f) => async (q, r, n) => {
+  try {
+    const d = await f(q);
+    if (!d)
+      return r
+        .status(404)
+        .json({ status: "error", message: "Fulfilment not found" });
+    r.json({ status: "success", data: d });
+  } catch (e) {
+    if (e.code === 'UNSAFE_STOCK') return r.status(409).json({ status: 'error', message: 'This stock or pharmacy licence is no longer eligible for dispensing. Review the batch expiry and premises status before proceeding.' });
+    if (e.code === "NOT_FOUND")
+      return r
+        .status(404)
+        .json({ status: "error", message: "Fulfilment not found" });
+    n(e);
+  }
+};
+export const queue = h((q) => s.queue(q.user.id));
+export const detail = h((q) => s.detail(q.user.id, q.params.id));
+export const decide = h((q) => s.decide(q.user.id, q.params.id, q.body));
+export const prepare = h((q) => s.prepare(q.user.id, q.params.id, q.body));
