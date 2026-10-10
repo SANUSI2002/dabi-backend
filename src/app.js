@@ -153,9 +153,10 @@ app.use('/api/v1/pharmacy-requests', pharmacyRequestRoutes);
 app.use('/api/v1/reservations', reservationRoutes);
 app.use('/api/v1/checkout-pricing', checkoutPricingRoutes);
 app.use('/api/v1/orders', orderRoutes);
+// Scope delivery authentication/cache policy before the broad payment router guard.
+app.use('/api/v1/delivery', deliveryRoutes);
 app.use('/api/v1', paymentRoutes);
 app.use('/api/v1/fulfilments', fulfilmentRoutes);
-app.use('/api/v1/delivery', deliveryRoutes);
 
 // --- GLOBAL ERROR HANDLING ---
 app.use(notFound);

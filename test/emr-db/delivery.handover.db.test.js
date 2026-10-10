@@ -112,6 +112,9 @@ const http = (method, path, who, body) => {
 };
 describe("handover with real PostgreSQL migrations", () => {
   it('limits courier configuration to an authorized platform operator', async () => {
+    const anonymous = await request(app).get('/api/v1/delivery/assignments');
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.headers['cache-control']).toBe('no-store');
     const operator = await user('PATIENT');
     await prisma.platformRoleAssignment.create({data:{userId:operator.id,roleCode:'SABI_PLATFORM_ADMIN'}});
     const data={displayName:'Synthetic courier',isActive:true};
