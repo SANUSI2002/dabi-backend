@@ -1,3 +1,4 @@
+import { documented } from '../docs/routeMeta.js';
 import jwt from 'jsonwebtoken';
 import { SIGNED_IN_ELSEWHERE, activeSession, sessionEndReason } from '../modules/auth/auth.session.js';
 
@@ -53,5 +54,5 @@ const authenticate = ({ touch }) => async (req, res, next) => {
   return next();
 };
 
-export const protect = authenticate({ touch: true });
-export const checkSession = authenticate({ touch: false });
+export const protect = documented(authenticate({ touch: true }), { auth: true });
+export const checkSession = documented(authenticate({ touch: false }), { auth: true });

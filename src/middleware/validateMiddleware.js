@@ -2,7 +2,9 @@
 // Uses safeParse so we never throw here, and reads `error.issues` — the Zod 4
 // field (Zod 3's `error.errors` alias was removed, which previously turned every
 // validation failure into a 500 with no field details).
-export const validate = (schema) => (req, res, next) => {
+import { documented } from '../docs/routeMeta.js';
+
+export const validate = (schema) => documented((req, res, next) => {
   const result = schema.safeParse({
     body: req.body,
     query: req.query,
@@ -24,4 +26,4 @@ export const validate = (schema) => (req, res, next) => {
       message: issue.message,
     })),
   });
-};
+}, { schema });

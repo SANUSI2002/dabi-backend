@@ -1,4 +1,5 @@
 import { activeMembershipFor, platformAccessFor } from '../modules/identity/identity.service.js';
+import { documented } from '../docs/routeMeta.js';
 
 const deny = (res, code = 'PERMISSION_DENIED', status = 403) => res.status(status).json({
   status: 'error',
@@ -18,14 +19,14 @@ const load = (getContext) => async (req, res, next) => {
 
 // A tenant context must come from the verified JWT claim, never an untrusted
 // organization header or a route parameter alone.
-export const requireOrganization = load((req) => {
+export const requireOrganization = documented(load((req) => {
   if (!req.user.organizationId) {
     throw Object.assign(new Error('ORGANIZATION_REQUIRED'), { code: 'ORGANIZATION_REQUIRED', status: 403 });
   }
   return activeMembershipFor(req.user.id, req.user.organizationId);
-});
+}), { context: 'organization' });
 
-export const requirePlatform = load(async (req) => {
+export const requirePlatform = documented(load(async (req) => {
   if (req.user.organizationId) {
     throw Object.assign(new Error('PLATFORM_CONTEXT_REQUIRED'), { code: 'PLATFORM_CONTEXT_REQUIRED', status: 403 });
   }
@@ -34,16 +35,16 @@ export const requirePlatform = load(async (req) => {
     throw Object.assign(new Error('PLATFORM_ACCESS_DENIED'), { code: 'PLATFORM_ACCESS_DENIED', status: 403 });
   }
   return context;
-});
+}), { context: 'platform' });
 
-export const requireRole = (roleCode) => (req, res, next) =>
-  req.accessContext?.roles?.includes(roleCode) ? next() : deny(res);
+export const requireRole = (roleCode) => documented((req, res, next) =>
+  req.accessContext?.roles?.includes(roleCode) ? next() : deny(res), { roles: [roleCode] });
 
-export const requirePermission = (permissionCode) => (req, res, next) =>
-  req.accessContext?.permissions?.includes(permissionCode) ? next() : deny(res);
+export const requirePermission = (permissionCode) => documented((req, res, next) =>
+  req.accessContext?.permissions?.includes(permissionCode) ? next() : deny(res), { permissions: [permissionCode] });
 
-export const requireAnyPermission = (...permissionCodes) => (req, res, next) =>
-  permissionCodes.some((code) => req.accessContext?.permissions?.includes(code)) ? next() : deny(res);
+export const requireAnyPermission = (...permissionCodes) => documented((req, res, next) =>
+  permissionCodes.some((code) => req.accessContext?.permissions?.includes(code)) ? next() : deny(res), { permissions: permissionCodes });
 
 export const requirePolicy = (policy) => async (req, res, next) => {
   if (!req.accessContext) return deny(res);

@@ -2,8 +2,9 @@
 // field paths). Unknown fields are rejected by the schemas (.strict()), so a client can never
 // smuggle organizationId, version, createdBy… into a write.
 import { EmrError } from './errors.js';
+import { documented } from '../../../docs/routeMeta.js';
 
-export const validateEmr = (schema) => (req, res, next) => {
+export const validateEmr = (schema) => documented((req, res, next) => {
   const result = schema.safeParse({ body: req.body ?? {}, query: req.query, params: req.params });
   if (!result.success) {
     return next(new EmrError('VALIDATION_FAILED', {
@@ -15,7 +16,7 @@ export const validateEmr = (schema) => (req, res, next) => {
   if (result.data.query !== undefined) Object.defineProperty(req, 'query', { value: result.data.query, writable: true, configurable: true });
   if (result.data.params !== undefined) req.params = { ...req.params, ...result.data.params };
   return next();
-};
+}, { schema, emr: true });
 
 // Wraps an async handler so rejections reach emrErrorHandler.
-export const handle = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+export const handle = (fn) => documented((req, res, next) => Promise.resolve(fn(req, res, next)).catch(next), { handler: fn });
