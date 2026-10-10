@@ -15,6 +15,7 @@ import { EmrError } from '../core/errors.js';
 import { bedDays, lineAmounts, returnCreditDue } from './billing.policy.js';
 
 const LAB_BILLABLE = ['COLLECTED', 'IN_PROGRESS', 'COMPLETED'];
+const MODALITY_LABEL = { XRAY: 'X-ray', ULTRASOUND: 'Ultrasound', CT: 'CT', MRI: 'MRI', MAMMOGRAPHY: 'Mammography', FLUOROSCOPY: 'Fluoroscopy' };
 
 function priceLookup(prices) {
   const byKey = new Map(prices.map((p) => [`${p.category}:${p.reference}`, p]));
@@ -105,6 +106,24 @@ export async function captureInTx(tx, context, encounterId) {
   });
   for (const item of labItems) {
     add('LAB', [item.testCode], { description: item.testName, quantity: 1, sourceType: 'LAB_ORDER_ITEM', sourceKey: item.id, serviceAt: item.order.collectedAt });
+  }
+
+  // Imaging performed here (not studies done elsewhere), priced by modality (e.g. IMAGING:XRAY).
+  const studies = await tx.emrImagingStudy.findMany({
+    where: { organizationId: org, encounterId, externalStudy: false, status: { in: ['PERFORMED', 'REPORTED', 'VERIFIED', 'AMENDED'] } },
+    select: { id: true, modality: true, bodySite: true, performedAt: true },
+  });
+  for (const study of studies) {
+    add('IMAGING', [study.modality], { description: `${MODALITY_LABEL[study.modality] ?? study.modality} — ${study.bodySite}`, quantity: 1, sourceType: 'IMAGING_STUDY', sourceKey: study.id, serviceAt: study.performedAt });
+  }
+
+  // Procedures performed on the visit, priced by their code (e.g. PROCEDURE:INCISION_AND_DRAINAGE).
+  const performed = await tx.emrProcedure.findMany({
+    where: { organizationId: org, encounterId, status: { in: ['PERFORMED', 'RECOVERY', 'FOLLOW_UP'] } },
+    select: { id: true, code: true, name: true, performedAt: true },
+  });
+  for (const procedure of performed) {
+    add('PROCEDURE', [procedure.code], { description: procedure.name, quantity: 1, sourceType: 'PROCEDURE', sourceKey: procedure.id, serviceAt: procedure.performedAt });
   }
 
   const dispensed = await tx.emrDispenseLine.findMany({

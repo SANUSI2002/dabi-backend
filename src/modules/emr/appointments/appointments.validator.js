@@ -41,3 +41,31 @@ export const cancel = z.object({
   query: noQuery,
   body: z.object({ reason: z.string().trim().min(3).max(300).regex(/^[^\p{Cc}]+$/u, 'Contains control characters') }).strict(),
 });
+
+// Patient-app requests (appointment-requests.service.js).
+const REQUEST_STATUSES = ['PENDING', 'SCHEDULED', 'REJECTED', 'CHECKED_IN', 'CANCELLED'];
+const oneRequest = { ...org, requestId: z.uuid() };
+export const listRequests = z.object({
+  params: z.object(org).strict(),
+  query: z.object({
+    status: z.string().transform((value) => value.split(',')).pipe(z.array(z.enum(REQUEST_STATUSES)).min(1)).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(100),
+    cursor: z.string().max(200).optional(),
+  }).strict(),
+});
+export const confirmRequest = z.object({
+  params: z.object(oneRequest).strict(),
+  query: noQuery,
+  body: z.object({
+    // The record the visit is for; needed when the requester has no linked record, or the visit is a dependent's.
+    patientId: z.uuid().optional(),
+    // Defaults to the type closest to what the patient picked in the app.
+    type: z.enum(APPOINTMENT_TYPES).optional(),
+    providerUserId: z.uuid().optional(),
+  }).strict(),
+});
+export const rejectRequest = z.object({
+  params: z.object(oneRequest).strict(),
+  query: noQuery,
+  body: cancel.shape.body, // the reason, as for a cancellation
+});

@@ -13,7 +13,9 @@
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
     "docs:build": "node scripts/build-openapi.mjs",
-    "docs:validate": "redocly lint docs/openapi.yaml"
+    "docs:validate": "redocly lint docs/openapi.yaml",
+    "docs:routes": "node scripts/build-openapi-routes.mjs",
+    "docs:coverage": "node scripts/docs-coverage.mjs --verbose"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1140.0",

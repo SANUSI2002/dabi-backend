@@ -4,6 +4,7 @@
 //   2. require an active EMR entitlement (cached briefly — docs B7),
 //   3. require the EMR API to be switched on,
 // then expose req.emr = { organizationId, userId, requestId, roles, permissions }.
+import { documented } from '../../../docs/routeMeta.js';
 import { approvedEmrFor, emrPatientRegistryEnabled } from '../emr.entitlement.js';
 import { EmrError } from './errors.js';
 
@@ -44,5 +45,7 @@ export const emrTenant = async (req, res, next) => {
   }
 };
 
-export const requireEmrPermission = (...codes) => (req, res, next) =>
-  (codes.some((code) => req.emr?.permissions.includes(code)) ? next() : next(new EmrError('PERMISSION_DENIED')));
+export const requireEmrPermission = (...codes) => documented((req, res, next) =>
+  (codes.some((code) => req.emr?.permissions.includes(code)) ? next() : next(new EmrError('PERMISSION_DENIED'))), { permissions: codes, emr: true });
+
+documented(emrTenant, { emrTenant: true });

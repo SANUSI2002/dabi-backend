@@ -3,6 +3,8 @@
 // Check-in reuses an open visit when the patient already has one (they may have walked in first)
 // instead of opening a second; otherwise it opens an outpatient visit and places the patient in
 // the station queue the appointment type belongs to. Every change is audited and emits an event.
+// A booking made from a patient-app request (appointment-requests.service.js) passes its check-in
+// or cancellation back to that request.
 import { withTenant } from '../core/db.js';
 import { afterCursor, page } from '../core/cursor.js';
 import { recordAudit } from '../core/audit.js';
@@ -15,6 +17,7 @@ import { userNameMap } from '../core/people.js';
 import { findPatient } from '../patients/patients.repository.js';
 import { OPEN_STATUSES } from '../encounters/encounters.policy.js';
 import { createForEncounter } from '../queue/queue.service.js';
+import * as requests from './appointment-requests.repository.js';
 
 const HOUR = 3_600_000;
 /** The queue a checked-in patient joins, by appointment type. */
@@ -40,7 +43,7 @@ async function loadScheduled(tx, context, id) {
   return row;
 }
 
-const named = async (tx, context, id) => (await withNames(tx, [await tx.emrAppointment.findFirst({ where: { organizationId: context.organizationId, id }, include: { patient: patientSummary } })]))[0];
+export const named = async (tx, context, id) => (await withNames(tx, [await tx.emrAppointment.findFirst({ where: { organizationId: context.organizationId, id }, include: { patient: patientSummary } })]))[0];
 
 /** Appointments in a time window (default: from now), soonest first, with patient and staff names. */
 export async function listAppointments(context, { from, to, status, patientId, providerUserId, cursor, limit }) {
@@ -65,30 +68,43 @@ export async function listAppointments(context, { from, to, status, patientId, p
   });
 }
 
+/** A booking's provider, when chosen, must be an active clinician here (checked before the tenant transaction). */
+export async function checkProvider(context, providerUserId) {
+  if (providerUserId && !(await activeMemberWithPermission(context.organizationId, providerUserId, 'vitals.record'))) {
+    throw new EmrError('VALIDATION_FAILED', { message: 'The provider must be an active clinician in this organization.' });
+  }
+}
+
+/** Books an ACTIVE patient in, with its audit row and event. `requestId`: the patient-app request it confirms. */
+export async function insertBooking(tx, context, { patientId, scheduledAt, type, providerUserId, reason, requestId }) {
+  const patient = await findPatient(tx, context.organizationId, patientId, { id: true, status: true });
+  if (!patient) throw new EmrError('PATIENT_NOT_FOUND');
+  if (patient.status !== 'ACTIVE') throw new EmrError('PATIENT_INACTIVE');
+  const row = await tx.emrAppointment.create({
+    data: {
+      organizationId: context.organizationId, patientId: patient.id, scheduledAt: new Date(scheduledAt), type,
+      providerUserId: providerUserId ?? null, reason: reason ?? null, bookedByUserId: context.userId, requestId: requestId ?? null,
+    },
+  });
+  await recordAudit(tx, context, { action: 'appointment.booked', resourceType: 'appointment', resourceId: row.id });
+  await enqueueEvent(tx, context, { type: 'appointment.booked', aggregateType: 'patient', aggregateId: patient.id, data: { appointmentId: row.id, ...(requestId ? { requestId } : {}) } });
+  return row;
+}
+
+export const BOOKING_CONFLICTS = { emr_appointments_patient_slot_key: 'APPOINTMENT_CONFLICT' };
+
 export async function bookAppointment(context, input, { idempotencyKey } = {}) {
   if (new Date(input.scheduledAt).getTime() < Date.now() - 5 * 60_000) {
     throw new EmrError('VALIDATION_FAILED', { message: 'An appointment cannot be booked in the past.' });
   }
-  if (input.providerUserId && !(await activeMemberWithPermission(context.organizationId, input.providerUserId, 'vitals.record'))) {
-    throw new EmrError('VALIDATION_FAILED', { message: 'The provider must be an active clinician in this organization.' });
-  }
+  await checkProvider(context, input.providerUserId);
   try {
     return await withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: 'appointment.book', body: input }, async () => {
-      const patient = await findPatient(tx, context.organizationId, input.patientId, { id: true, status: true });
-      if (!patient) throw new EmrError('PATIENT_NOT_FOUND');
-      if (patient.status !== 'ACTIVE') throw new EmrError('PATIENT_INACTIVE');
-      const row = await tx.emrAppointment.create({
-        data: {
-          organizationId: context.organizationId, patientId: patient.id, scheduledAt: new Date(input.scheduledAt), type: input.type,
-          providerUserId: input.providerUserId ?? null, reason: input.reason ?? null, bookedByUserId: context.userId,
-        },
-      });
-      await recordAudit(tx, context, { action: 'appointment.booked', resourceType: 'appointment', resourceId: row.id });
-      await enqueueEvent(tx, context, { type: 'appointment.booked', aggregateType: 'patient', aggregateId: patient.id, data: { appointmentId: row.id } });
+      const row = await insertBooking(tx, context, input);
       return { statusCode: 201, body: await named(tx, context, row.id) };
     }));
   } catch (error) {
-    throw uniqueViolation(error, { emr_appointments_patient_slot_key: 'APPOINTMENT_CONFLICT' }) ?? error;
+    throw uniqueViolation(error, BOOKING_CONFLICTS) ?? error;
   }
 }
 
@@ -129,6 +145,8 @@ export async function checkIn(context, id, expectedVersion) {
       organizationId: context.organizationId, id, expectedVersion, notFoundCode: 'APPOINTMENT_NOT_FOUND',
       data: { status: 'ATTENDED', encounterId: encounter.id, checkedInAt: new Date(), checkedInByUserId: context.userId },
     });
+    // Booked from a patient-app request: the patient sees they are checked in.
+    if (appointment.requestId) await requests.markCheckedIn(tx, appointment.requestId);
     await recordAudit(tx, context, { action: 'appointment.checked_in', resourceType: 'appointment', resourceId: id });
     await enqueueEvent(tx, context, { type: 'appointment.checked_in', aggregateType: 'patient', aggregateId: appointment.patientId, data: { appointmentId: id, encounterId: encounter.id } });
     return named(tx, context, id);
@@ -157,6 +175,7 @@ export async function cancelAppointment(context, id, expectedVersion, { reason }
       organizationId: context.organizationId, id, expectedVersion, notFoundCode: 'APPOINTMENT_NOT_FOUND',
       data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledByUserId: context.userId, cancellationReason: reason },
     });
+    if (appointment.requestId) await requests.markCancelled(tx, appointment.requestId, reason);
     await recordAudit(tx, context, { action: 'appointment.cancelled', resourceType: 'appointment', resourceId: id });
     await enqueueEvent(tx, context, { type: 'appointment.cancelled', aggregateType: 'patient', aggregateId: appointment.patientId, data: { appointmentId: id } });
     return named(tx, context, id);

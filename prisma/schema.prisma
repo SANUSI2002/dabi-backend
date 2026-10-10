@@ -1627,6 +1627,8 @@ model EmrPatient {
   invoices EmrInvoice[]
   queueEntries EmrQueueEntry[]
   appointments EmrAppointment[]
+  imagingStudies EmrImagingStudy[]
+  procedures EmrProcedure[]
 
   @@unique([organizationId, medicalRecordNumber])
   @@unique([organizationId, id])
@@ -2102,6 +2104,7 @@ model HospitalAppointment {
   hospital Organisation @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
   enrollment HospitalEnrollment? @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
   decidedBy User? @relation("HospitalAppointmentReviewer", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  emrAppointment EmrAppointment?
   @@index([patientId, createdAt])
   @@index([patientId, dependentId, createdAt])
   @@index([dependentId, requestedAt])
@@ -2739,6 +2742,170 @@ model EmrPatientAllergy {
   @@map("emr_patient_allergies")
 }
 
+// Minor / outpatient procedures (see procedures.service.js). Codes are checked in the database.
+model EmrProcedure {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  encounterId String? @map("encounter_id")
+  name String @db.VarChar(120)
+  code String @db.VarChar(32)
+  indication String @db.VarChar(1000)
+  bodySite String? @map("body_site") @db.VarChar(120)
+  laterality String? @db.VarChar(10)
+  priority String @default("ROUTINE") @db.VarChar(10)
+  status String @default("REQUESTED") @db.VarChar(14)
+  requestedByUserId String @map("requested_by_user_id")
+  scheduledFor DateTime? @map("scheduled_for") @db.Date
+  scheduledByUserId String? @map("scheduled_by_user_id")
+  performerUserId String? @map("performer_user_id")
+  assistantUserIds String[] @default([]) @map("assistant_user_ids")
+  consentObtainedByUserId String? @map("consent_obtained_by_user_id")
+  consentAt DateTime? @map("consent_at")
+  preProcedureAt DateTime? @map("pre_procedure_at")
+  performedAt DateTime? @map("performed_at")
+  performedByUserId String? @map("performed_by_user_id")
+  anaesthesia String? @db.VarChar(120)
+  device String? @db.VarChar(120)
+  complications String? @db.VarChar(1000)
+  outcome String? @db.VarChar(2000)
+  findings String? @db.VarChar(2000)
+  specimenSentToLab Boolean @default(false) @map("specimen_sent_to_lab")
+  recoveryNotes String? @map("recovery_notes") @db.VarChar(2000)
+  recoveryAt DateTime? @map("recovery_at")
+  followUpPlan String? @map("follow_up_plan") @db.VarChar(2000)
+  followUpAt DateTime? @map("follow_up_at")
+  noteSignedByUserId String? @map("note_signed_by_user_id")
+  noteSignedAt DateTime? @map("note_signed_at")
+  cancelledAt DateTime? @map("cancelled_at")
+  cancelledByUserId String? @map("cancelled_by_user_id")
+  cancellationReason String? @map("cancellation_reason") @db.VarChar(300)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  checklist EmrProcedureChecklistItem[]
+  amendments EmrProcedureAmendment[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, createdAt, id])
+  @@index([organizationId, patientId, createdAt])
+  @@map("emr_procedures")
+}
+
+model EmrProcedureChecklistItem {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  procedureId String @map("procedure_id")
+  phase String @db.VarChar(10)
+  position Int
+  label String @db.VarChar(200)
+  completed Boolean @default(false)
+  exceptionReason String? @map("exception_reason") @db.VarChar(200)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime? @map("updated_at")
+  procedure EmrProcedure @relation(fields: [organizationId, procedureId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, procedureId, position])
+  @@map("emr_procedure_checklist_items")
+}
+
+model EmrProcedureAmendment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  procedureId String @map("procedure_id")
+  note String @db.VarChar(2000)
+  authorUserId String @map("author_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  procedure EmrProcedure @relation(fields: [organizationId, procedureId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, procedureId, createdAt])
+  @@map("emr_procedure_amendments")
+}
+
+// Radiology (see radiology.service.js): study → series → report → addenda. Codes are checked in the database.
+model EmrImagingStudy {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  encounterId String? @map("encounter_id")
+  accessionNumber String @map("accession_number") @db.VarChar(20)
+  modality String @db.VarChar(20)
+  bodySite String @map("body_site") @db.VarChar(120)
+  laterality String? @db.VarChar(10)
+  indication String @db.VarChar(500)
+  priority String @default("ROUTINE") @db.VarChar(10)
+  preparation String? @db.VarChar(200)
+  externalStudy Boolean @default(false) @map("external_study")
+  status String @default("REQUESTED") @db.VarChar(12)
+  requestedByUserId String @map("requested_by_user_id")
+  scheduledFor DateTime? @map("scheduled_for") @db.Date
+  scheduledByUserId String? @map("scheduled_by_user_id")
+  performedAt DateTime? @map("performed_at")
+  performedByUserId String? @map("performed_by_user_id")
+  cancelledAt DateTime? @map("cancelled_at")
+  cancelledByUserId String? @map("cancelled_by_user_id")
+  cancellationReason String? @map("cancellation_reason") @db.VarChar(300)
+  compareToStudyId String? @map("compare_to_study_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  series EmrImagingSeries[]
+  report EmrImagingReport?
+  addenda EmrImagingAddendum[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, accessionNumber])
+  @@index([organizationId, createdAt, id])
+  @@index([organizationId, patientId, createdAt])
+  @@map("emr_imaging_studies")
+}
+
+model EmrImagingSeries {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  studyId String @map("study_id")
+  seriesNumber Int @map("series_number")
+  description String @db.VarChar(120)
+  bodyPart String @map("body_part") @db.VarChar(120)
+  imageCount Int? @map("image_count")
+  createdAt DateTime @default(now()) @map("created_at")
+  study EmrImagingStudy @relation(fields: [organizationId, studyId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, studyId, seriesNumber])
+  @@map("emr_imaging_series")
+}
+
+model EmrImagingReport {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  studyId String @map("study_id")
+  findings String @db.VarChar(5000)
+  impression String @db.VarChar(1000)
+  authorUserId String @map("author_user_id")
+  authoredAt DateTime @default(now()) @map("authored_at")
+  verifiedByUserId String? @map("verified_by_user_id")
+  verifiedAt DateTime? @map("verified_at")
+  study EmrImagingStudy @relation(fields: [organizationId, studyId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, studyId])
+  @@map("emr_imaging_reports")
+}
+
+model EmrImagingAddendum {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  studyId String @map("study_id")
+  note String @db.VarChar(2000)
+  authorUserId String @map("author_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  study EmrImagingStudy @relation(fields: [organizationId, studyId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, studyId, createdAt])
+  @@map("emr_imaging_addenda")
+}
+
 // Hospital appointments (see appointments.service.js). Status and type are checked in the database.
 model EmrAppointment {
   id String @id @default(uuid())
@@ -2758,10 +2925,12 @@ model EmrAppointment {
   cancelledAt DateTime? @map("cancelled_at")
   cancelledByUserId String? @map("cancelled_by_user_id")
   cancellationReason String? @map("cancellation_reason") @db.VarChar(300)
+  requestId String? @unique @map("request_id")
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  request HospitalAppointment? @relation(fields: [requestId], references: [id], onDelete: Restrict, map: "emr_appointments_request_fkey")
 
   @@unique([organizationId, id])
   @@index([organizationId, scheduledAt, id])
@@ -3094,6 +3263,7 @@ enum EmrChargeCategory {
   BED_DAY
   PROCEDURE
   OTHER
+  IMAGING
 }
 
 enum EmrChargeStatus {

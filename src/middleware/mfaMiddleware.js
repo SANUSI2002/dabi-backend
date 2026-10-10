@@ -1,3 +1,4 @@
+import { documented } from '../docs/routeMeta.js';
 import { activeSession } from '../modules/auth/auth.session.js';
 import { hasActiveMfa } from '../modules/auth/auth.mfa.js';
 
@@ -25,3 +26,6 @@ export const requireRecentMfaIfEnrolled = async (req, res, next) => {
     return requireRecentMfa(req, res, next);
   } catch (cause) { return next(cause); }
 };
+
+documented(requireRecentMfa, { mfa: 'required' });
+documented(requireRecentMfaIfEnrolled, { mfa: 'if-enrolled' });
