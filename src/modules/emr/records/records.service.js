@@ -19,10 +19,11 @@ import { LINE_ORDER, pharmacyPatient } from '../pharmacy/pharmacy.shared.js';
 import { withPlaces } from '../admissions/admissions.service.js';
 import { toCharge, toInvoice } from '../billing/billing.service.js';
 import { withStudyNames } from '../radiology/radiology.service.js';
+import { withProcedureNames } from '../procedures/procedures.service.js';
 
 const dateOnly = (value) => (value instanceof Date ? value.toISOString().slice(0, 10) : value);
 const asDate = (value) => (value ? new Date(`${value}T00:00:00.000Z`) : value);
-const LIMIT = { imaging: 100, appointments: 100, encounters: 100, labs: 100, prescriptions: 100, admissions: 50, invoices: 100, vitals: 2000 };
+const LIMIT = { procedures: 100, imaging: 100, appointments: 100, encounters: 100, labs: 100, prescriptions: 100, admissions: 50, invoices: 100, vitals: 2000 };
 /** Statuses that mean the problem is ongoing; anything else ends it (abatement date). */
 const ONGOING = ['ACTIVE', 'RECURRENCE', 'RELAPSE'];
 const admissionPatient = { select: { id: true, medicalRecordNumber: true, givenName: true, familyName: true, dateOfBirth: true, sex: true } };
@@ -74,6 +75,7 @@ export async function patientRecord(context, patientId) {
     invoices: may('billing.read'),
     appointments: may('appointment.read'),
     imaging: may('imaging.read'),
+    procedures: may('procedure.read'),
   };
   return withTenant(context, async (tx) => {
     const patient = await requirePatient(tx, context, patientId);
@@ -108,6 +110,11 @@ export async function patientRecord(context, patientId) {
     const imaging = sections.imaging
       ? await withStudyNames(tx, await tx.emrImagingStudy.findMany({
         where, include: { series: { orderBy: { seriesNumber: 'asc' } }, report: true, addenda: { orderBy: { createdAt: 'asc' } } }, orderBy: { createdAt: 'desc' }, take: LIMIT.imaging,
+      }))
+      : null;
+    const procedures = sections.procedures
+      ? await withProcedureNames(tx, await tx.emrProcedure.findMany({
+        where, include: { checklist: { orderBy: { position: 'asc' } }, amendments: { orderBy: { createdAt: 'asc' } } }, orderBy: { createdAt: 'desc' }, take: LIMIT.procedures,
       }))
       : null;
     let invoices = null;
@@ -151,6 +158,7 @@ export async function patientRecord(context, patientId) {
       admissions,
       invoices,
       imaging,
+      procedures,
       appointments: appointments && appointments.map((a) => ({ ...a, providerName: name(a.providerUserId) })),
       sections,
     };

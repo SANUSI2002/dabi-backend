@@ -117,6 +117,15 @@ export async function captureInTx(tx, context, encounterId) {
     add('IMAGING', [study.modality], { description: `${MODALITY_LABEL[study.modality] ?? study.modality} — ${study.bodySite}`, quantity: 1, sourceType: 'IMAGING_STUDY', sourceKey: study.id, serviceAt: study.performedAt });
   }
 
+  // Procedures performed on the visit, priced by their code (e.g. PROCEDURE:INCISION_AND_DRAINAGE).
+  const performed = await tx.emrProcedure.findMany({
+    where: { organizationId: org, encounterId, status: { in: ['PERFORMED', 'RECOVERY', 'FOLLOW_UP'] } },
+    select: { id: true, code: true, name: true, performedAt: true },
+  });
+  for (const procedure of performed) {
+    add('PROCEDURE', [procedure.code], { description: procedure.name, quantity: 1, sourceType: 'PROCEDURE', sourceKey: procedure.id, serviceAt: procedure.performedAt });
+  }
+
   const dispensed = await tx.emrDispenseLine.findMany({
     where: { organizationId: org, dispense: { prescription: { encounterId } } },
     select: { id: true, quantity: true, quantityReturned: true, prescriptionItemId: true, dispense: { select: { dispensedAt: true } } },
