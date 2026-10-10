@@ -112,6 +112,16 @@ export async function dashboard(context, { since, monthStart }) {
       }));
     }
 
+    if (may('appointment.read')) {
+      // Follow-up appointments due by the end of the caller's day and not yet attended.
+      const due = await tx.emrAppointment.findMany({
+        where: { organizationId: org, type: 'FOLLOW_UP', status: 'SCHEDULED', scheduledAt: { lt: new Date(today.getTime() + 86_400_000) } },
+        orderBy: { scheduledAt: 'asc' }, take: LIST,
+        select: { id: true, scheduledAt: true, reason: true, patient: named },
+      });
+      out.work.followUpsDue = due.map((a) => ({ id: a.id, scheduledAt: a.scheduledAt, reason: a.reason, patient: patientOf(a.patient) }));
+    }
+
     if (may('billing.read')) {
       const [collected, unpaid] = await Promise.all([
         tx.emrPayment.aggregate({ where: { organizationId: org, status: 'POSTED', receivedAt: { gte: month } }, _sum: { amountMinor: true } }),

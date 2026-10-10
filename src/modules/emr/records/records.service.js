@@ -21,7 +21,7 @@ import { toCharge, toInvoice } from '../billing/billing.service.js';
 
 const dateOnly = (value) => (value instanceof Date ? value.toISOString().slice(0, 10) : value);
 const asDate = (value) => (value ? new Date(`${value}T00:00:00.000Z`) : value);
-const LIMIT = { encounters: 100, labs: 100, prescriptions: 100, admissions: 50, invoices: 100, vitals: 2000 };
+const LIMIT = { appointments: 100, encounters: 100, labs: 100, prescriptions: 100, admissions: 50, invoices: 100, vitals: 2000 };
 /** Statuses that mean the problem is ongoing; anything else ends it (abatement date). */
 const ONGOING = ['ACTIVE', 'RECURRENCE', 'RELAPSE'];
 const admissionPatient = { select: { id: true, medicalRecordNumber: true, givenName: true, familyName: true, dateOfBirth: true, sex: true } };
@@ -71,6 +71,7 @@ export async function patientRecord(context, patientId) {
     prescriptions: may('prescription.read'),
     admissions: may('admission.read'),
     invoices: may('billing.read'),
+    appointments: may('appointment.read'),
   };
   return withTenant(context, async (tx) => {
     const patient = await requirePatient(tx, context, patientId);
@@ -99,6 +100,9 @@ export async function patientRecord(context, patientId) {
     const admissions = sections.admissions
       ? await withPlaces(tx, context, await tx.emrAdmission.findMany({ where, include: { patient: admissionPatient }, orderBy: { admittedAt: 'desc' }, take: LIMIT.admissions }))
       : null;
+    const appointments = sections.appointments
+      ? await tx.emrAppointment.findMany({ where, orderBy: { scheduledAt: 'desc' }, take: LIMIT.appointments })
+      : null;
     let invoices = null;
     if (sections.invoices) {
       const rows = await tx.emrInvoice.findMany({ where, orderBy: { issuedAt: 'desc' }, take: LIMIT.invoices });
@@ -114,6 +118,7 @@ export async function patientRecord(context, patientId) {
       ...vitals.map((o) => o.recordedByUserId),
       ...problems.flatMap((p) => [p.recordedByUserId, p.updatedByUserId]),
       ...allergies.flatMap((a) => [a.recordedByUserId, a.verifiedByUserId]),
+      ...(appointments ?? []).map((a) => a.providerUserId),
     ]);
     const name = (id) => (id ? names.get(id) ?? null : null);
 
@@ -138,6 +143,7 @@ export async function patientRecord(context, patientId) {
       prescriptions,
       admissions,
       invoices,
+      appointments: appointments && appointments.map((a) => ({ ...a, providerName: name(a.providerUserId) })),
       sections,
     };
   });

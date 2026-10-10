@@ -1459,6 +1459,7 @@ model EmrPatient {
   admissions EmrAdmission[]
   invoices EmrInvoice[]
   queueEntries EmrQueueEntry[]
+  appointments EmrAppointment[]
 
   @@unique([organizationId, medicalRecordNumber])
   @@unique([organizationId, id])
@@ -2170,6 +2171,7 @@ enum EmrEncounterStatus {
 enum EmrEncounterSource {
   DIRECT
   TELEMEDICINE
+  APPOINTMENT
 }
 
 enum EmrNoteKind {
@@ -2568,6 +2570,36 @@ model EmrPatientAllergy {
 
   @@unique([organizationId, id])
   @@map("emr_patient_allergies")
+}
+
+// Hospital appointments (see appointments.service.js). Status and type are checked in the database.
+model EmrAppointment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  scheduledAt DateTime @map("scheduled_at")
+  type String @default("GENERAL") @db.VarChar(20)
+  providerUserId String? @map("provider_user_id")
+  reason String? @db.VarChar(300)
+  status String @default("SCHEDULED") @db.VarChar(20)
+  encounterId String? @map("encounter_id")
+  bookedByUserId String @map("booked_by_user_id")
+  checkedInAt DateTime? @map("checked_in_at")
+  checkedInByUserId String? @map("checked_in_by_user_id")
+  noShowAt DateTime? @map("no_show_at")
+  noShowByUserId String? @map("no_show_by_user_id")
+  cancelledAt DateTime? @map("cancelled_at")
+  cancelledByUserId String? @map("cancelled_by_user_id")
+  cancellationReason String? @map("cancellation_reason") @db.VarChar(300)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, scheduledAt, id])
+  @@index([organizationId, patientId, scheduledAt])
+  @@map("emr_appointments")
 }
 
 // The patient's problem list (FHIR Condition, category problem-list-item). See records.service.js.

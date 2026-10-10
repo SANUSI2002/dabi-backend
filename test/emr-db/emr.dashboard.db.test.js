@@ -59,6 +59,7 @@ describe('the workspace dashboard', () => {
     expect(data.work.criticalResults).toEqual([expect.objectContaining({ testName: 'Full blood count', result: expect.stringContaining('6.2') })]);
     expect(data.work.resultsToAcknowledge).toEqual([expect.objectContaining({ testName: 'Malaria parasite (RDT)', abnormal: true, result: expect.stringContaining('POSITIVE') })]);
     expect(data.work.pendingLabTests).toEqual([expect.objectContaining({ collectedAt: expect.any(String), patient: expect.objectContaining({ name: 'Ngozi Obi' }) })]);
+    expect(data.work.followUpsDue).toEqual([]);
     expect(data.month).toMatchObject({ outpatientVisits: 1, labTestsResulted: 1, admissions: 0, prescriptionsDispensed: 0 });
     // Not a doctor's business: stock is shown (they may view it), billing and the audit trail are not.
     expect(Array.isArray(data.lowStock)).toBe(true);
