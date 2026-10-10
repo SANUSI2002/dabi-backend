@@ -25,6 +25,7 @@ import { pharmacyRoutes, encounterPrescriptionRoutes, patientPharmacyRoutes } fr
 import { wardRoutes, bedRoutes, encounterAdmissionRoutes, admissionRoutes } from './admissions/admissions.routes.js';
 import { billingRoutes } from './billing/billing.routes.js';
 import { queueRoutes } from './queue/queue.routes.js';
+import { patientRecordRoutes } from './records/records.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -37,6 +38,7 @@ router.get('/internal/metrics', protect, requirePlatform, (req, res) => {
 const tenant = express.Router({ mergeParams: true });
 tenant.use('/patients', patientRoutes);
 tenant.use('/patients/:patientId', patientPharmacyRoutes);
+tenant.use('/patients/:patientId', patientRecordRoutes);
 tenant.use('/encounters', encounterRoutes);
 tenant.use('/encounters/:encounterId/lab-orders', encounterLabRoutes);
 tenant.use('/lab', labRoutes);

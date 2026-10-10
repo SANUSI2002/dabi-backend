@@ -194,7 +194,7 @@ const ADMISSION_PEOPLE = ['admittedByUserId', 'attendingUserId', 'dischargedByUs
  * Adds the ward/bed, the staff names behind the stay, its bed history (oldest first), and when the
  * patient was last observed (vital signs on the visit or nursing findings on the stay).
  */
-async function withPlaces(tx, context, admissions) {
+export async function withPlaces(tx, context, admissions) {
   const assignments = await tx.emrBedAssignment.findMany({
     where: { organizationId: context.organizationId, admissionId: { in: admissions.map((a) => a.id) } },
     orderBy: { startedAt: 'asc' },

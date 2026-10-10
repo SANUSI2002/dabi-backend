@@ -69,8 +69,15 @@ export const recordAllergy = z.object({
     substanceCode: formularyCode,
     reaction: text(200).optional(),
     severity: z.enum(['MILD', 'MODERATE', 'SEVERE']).default('MODERATE'),
+    category: z.enum(['MEDICATION', 'FOOD', 'ENVIRONMENT', 'BIOLOGIC']).optional(),
+    criticality: z.enum(['LOW', 'HIGH', 'UNABLE_TO_ASSESS']).optional(),
+    verificationStatus: z.enum(['UNCONFIRMED', 'PRESUMED', 'CONFIRMED']).default('CONFIRMED'),
+    manifestations: z.array(text(80)).max(12).refine((list) => new Set(list).size === list.length, 'Each manifestation once').default([]),
+    note: text(500).optional(),
+    source: text(120).optional(),
   }).strict(),
 });
+export const confirmAllergy = z.object({ params: z.object({ ...patientParams, allergyId: z.uuid() }).strict(), query: noQuery, body: z.object({}).strict() });
 export const markAllergy = z.object({ params: z.object({ ...patientParams, allergyId: z.uuid() }).strict(), query: noQuery, body: z.object({ reason }).strict() });
 export const medications = z.object({ params: z.object(patientParams).strict(), query: z.object({ scope: z.enum(['current', 'all']).default('current') }).strict() });
 

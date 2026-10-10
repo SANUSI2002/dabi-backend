@@ -74,6 +74,8 @@ patientPharmacyRoutes.get('/allergies', check(v.listAllergies), allow('clinical.
   handle(async (req, res) => sendItems(res, await allergies.listAllergies(req.emr, req.params.patientId, req.query))));
 patientPharmacyRoutes.post('/allergies', check(v.recordAllergy), allow('allergy.record'),
   handle(async (req, res) => send(res, await allergies.recordAllergy(req.emr, req.params.patientId, req.body), 201)));
+patientPharmacyRoutes.post('/allergies/:allergyId/confirm', check(v.confirmAllergy), allow('allergy.record'),
+  handle(async (req, res) => send(res, await allergies.confirmAllergy(req.emr, req.params.patientId, req.params.allergyId))));
 patientPharmacyRoutes.post('/allergies/:allergyId/entered-in-error', check(v.markAllergy), allow('allergy.record'),
   handle(async (req, res) => send(res, await allergies.markAllergyError(req.emr, req.params.patientId, req.params.allergyId, req.body))));
 patientPharmacyRoutes.get('/medications', check(v.medications), allow('prescription.read'),

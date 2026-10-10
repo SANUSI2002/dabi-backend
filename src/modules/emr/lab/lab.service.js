@@ -161,6 +161,17 @@ export async function worklist(context, { status, priority, patientId, limit, cu
   });
 }
 
+/** A patient's orders in every status, newest first, with results and staff names (the patient record). */
+export async function labOrdersForPatient(tx, context, patientId, take) {
+  const rows = await tx.emrLabOrder.findMany({
+    where: { organizationId: context.organizationId, patientId },
+    include: { patient: labPatient, items: { include: { results: currentResults }, orderBy: { testCode: 'asc' } } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take,
+  });
+  return (await withStaffNames(tx, rows)).map(toOrder);
+}
+
 export async function getOrder(context, orderId) {
   return withTenant(context, async (tx) => {
     const order = await tx.emrLabOrder.findFirst({

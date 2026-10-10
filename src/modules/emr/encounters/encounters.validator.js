@@ -12,10 +12,10 @@ const noBody = z.object({}).strict();
 const encounterClass = z.enum(['OUTPATIENT', 'INPATIENT', 'EMERGENCY', 'TELEHEALTH']);
 const noteKind = z.enum(['CONSULTATION', 'PROGRESS', 'NURSING', 'PROCEDURE', 'DISCHARGE']);
 // ICD-10: letter, two digits, optional dot and up to four more characters (e.g. J45, J45.901).
-const ICD10 = /^[A-Z][0-9]{2}(\.[0-9A-Z]{1,4})?$/;
+export const ICD10 = /^[A-Z][0-9]{2}(\.[0-9A-Z]{1,4})?$/;
 // ICD-11 stem codes: four characters (a letter always second, a digit third; I and O are never
 // used), optional dot and one or two more (e.g. 1F40, BA00, CA40.0).
-const ICD11 = /^[0-9A-HJ-NP-Z][A-HJ-NP-Z][0-9][0-9A-HJ-NP-Z](\.[0-9A-HJ-NP-Z]{1,2})?$/;
+export const ICD11 = /^[0-9A-HJ-NP-Z][A-HJ-NP-Z][0-9][0-9A-HJ-NP-Z](\.[0-9A-HJ-NP-Z]{1,2})?$/;
 const indicator = z.string().trim().min(1).max(120).regex(/^[^\p{Cc}]+$/u, 'Contains control characters');
 const EXAM_SYSTEMS = ['general', 'cardiovascular', 'respiratory', 'abdominal', 'neurological', 'musculoskeletal', 'headAndNeck', 'skin', 'peripheralVascular', 'genitourinary', 'other'];
 // Structured physical examination: one entry per examined system, findings exactly as entered.

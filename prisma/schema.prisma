@@ -2550,6 +2550,14 @@ model EmrPatientAllergy {
   substanceCode String @map("substance_code")
   reaction String?
   severity EmrAllergySeverity @default(MODERATE)
+  category String? @db.VarChar(20)
+  criticality String? @db.VarChar(20)
+  verificationStatus String @default("CONFIRMED") @map("verification_status") @db.VarChar(20)
+  manifestations String[] @default([])
+  note String? @db.VarChar(500)
+  source String? @db.VarChar(120)
+  verifiedByUserId String? @map("verified_by_user_id")
+  verifiedAt DateTime? @map("verified_at")
   status EmrEntryStatus @default(ACTIVE)
   recordedByUserId String @map("recorded_by_user_id")
   errorReason String? @map("error_reason")
@@ -2560,6 +2568,33 @@ model EmrPatientAllergy {
 
   @@unique([organizationId, id])
   @@map("emr_patient_allergies")
+}
+
+// The patient's problem list (FHIR Condition, category problem-list-item). See records.service.js.
+model EmrProblem {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  encounterId String? @map("encounter_id")
+  sourceDiagnosisId String? @map("source_diagnosis_id")
+  code String @db.VarChar(20)
+  codeSystem String @map("code_system") @db.VarChar(10)
+  description String @db.VarChar(300)
+  clinicalStatus String @default("ACTIVE") @map("clinical_status") @db.VarChar(20)
+  verificationStatus String @default("PROVISIONAL") @map("verification_status") @db.VarChar(20)
+  onsetDate DateTime? @map("onset_date") @db.Date
+  abatementDate DateTime? @map("abatement_date") @db.Date
+  note String? @db.VarChar(1000)
+  recordedByUserId String @map("recorded_by_user_id")
+  updatedByUserId String? @map("updated_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, patientId, codeSystem, code], map: "emr_problems_code_key")
+  @@index([organizationId, patientId, createdAt])
+  @@map("emr_problems")
 }
 
 model EmrPrescription {

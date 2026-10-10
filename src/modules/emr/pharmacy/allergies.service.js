@@ -37,6 +37,24 @@ export async function recordAllergy(context, patientId, input) {
   }
 }
 
+/** Confirms an unconfirmed or presumed allergy (who and when are kept); confirming twice changes nothing. */
+export async function confirmAllergy(context, patientId, allergyId) {
+  return withTenant(context, async (tx) => {
+    await requirePatient(tx, context, patientId);
+    const where = { organizationId: context.organizationId, patientId, id: allergyId, status: 'ACTIVE' };
+    const row = await tx.emrPatientAllergy.findFirst({ where });
+    if (!row) throw new EmrError('ALLERGY_NOT_FOUND');
+    if (row.verificationStatus === 'CONFIRMED') return row;
+    await tx.emrPatientAllergy.updateMany({
+      where: { ...where, verificationStatus: { not: 'CONFIRMED' } },
+      data: { verificationStatus: 'CONFIRMED', verifiedByUserId: context.userId, verifiedAt: new Date() },
+    });
+    await recordAudit(tx, context, { action: 'allergy.confirmed', resourceType: 'allergy', resourceId: allergyId });
+    await enqueueEvent(tx, context, { type: 'allergy.confirmed', aggregateType: 'patient', aggregateId: patientId, data: { allergyId } });
+    return tx.emrPatientAllergy.findFirst({ where });
+  });
+}
+
 /** Marks an active allergy as entered in error (the record itself is never edited or deleted). */
 export async function markAllergyError(context, patientId, allergyId, { reason }) {
   return withTenant(context, async (tx) => {

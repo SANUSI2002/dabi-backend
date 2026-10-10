@@ -125,7 +125,7 @@ const nameField = (field) => field.replace(/UserId$/, 'Name');
  * The pharmacy's view of each prescription: staff names beside every id, dispensing records, and
  * the patient's active allergies (the pharmacist checks them before handing anything over).
  */
-async function forPharmacy(tx, context, rows) {
+export async function forPharmacy(tx, context, rows) {
   const dispenses = await tx.emrDispense.findMany({
     where: { organizationId: context.organizationId, prescriptionId: { in: rows.map((r) => r.id) } },
     include: { lines: true },
