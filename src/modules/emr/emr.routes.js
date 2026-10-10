@@ -28,6 +28,7 @@ import { queueRoutes } from './queue/queue.routes.js';
 import { patientRecordRoutes } from './records/records.routes.js';
 import { dashboardRoutes } from './dashboard/dashboard.routes.js';
 import { appointmentRoutes } from './appointments/appointments.routes.js';
+import { imagingRoutes } from './radiology/radiology.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -54,6 +55,7 @@ tenant.use('/billing', billingRoutes);
 tenant.use('/queue', queueRoutes);
 tenant.use('/dashboard', dashboardRoutes);
 tenant.use('/appointments', appointmentRoutes);
+tenant.use('/imaging', imagingRoutes);
 tenant.use('/staff', staffRoutes);
 tenant.use('/webhooks', webhookRoutes);
 tenant.use('/audit-events', auditRoutes);

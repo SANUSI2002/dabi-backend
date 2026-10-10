@@ -6,7 +6,7 @@ const text = (max) => z.string().trim().min(1).max(max).regex(/^[^\p{Cc}]+$/u, '
 const reason = z.string().trim().min(3).max(500).regex(/^[^\p{Cc}]+$/u, 'Contains control characters');
 // Minor units (kobo), whole numbers only — never floats. Up to ₦10 billion per line.
 const minor = z.number().int().min(0).max(1_000_000_000_000);
-const categories = ['CONSULTATION', 'LAB', 'MEDICATION', 'BED_DAY', 'PROCEDURE', 'OTHER'];
+const categories = ['CONSULTATION', 'LAB', 'MEDICATION', 'BED_DAY', 'PROCEDURE', 'IMAGING', 'OTHER'];
 const reference = z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_-]{0,31}$/, 'References are letters, digits, _ or -');
 const currency = z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Use a 3-letter currency code');
 const taxRateBp = z.number().int().min(0).max(10_000);
