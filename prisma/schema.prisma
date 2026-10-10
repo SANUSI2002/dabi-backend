@@ -1935,6 +1935,7 @@ model HospitalAppointment {
   hospital Organisation @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
   enrollment HospitalEnrollment? @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
   decidedBy User? @relation("HospitalAppointmentReviewer", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  emrAppointment EmrAppointment?
   @@index([patientId, createdAt])
   @@index([patientId, dependentId, createdAt])
   @@index([dependentId, requestedAt])
@@ -2591,10 +2592,12 @@ model EmrAppointment {
   cancelledAt DateTime? @map("cancelled_at")
   cancelledByUserId String? @map("cancelled_by_user_id")
   cancellationReason String? @map("cancellation_reason") @db.VarChar(300)
+  requestId String? @unique @map("request_id")
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  request HospitalAppointment? @relation(fields: [requestId], references: [id], onDelete: Restrict, map: "emr_appointments_request_fkey")
 
   @@unique([organizationId, id])
   @@index([organizationId, scheduledAt, id])
