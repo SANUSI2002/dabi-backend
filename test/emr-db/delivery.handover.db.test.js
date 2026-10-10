@@ -58,6 +58,25 @@ beforeAll(async () => {
     },
   });
 });
+describe("rider overview and history in PostgreSQL", () => {
+  it("counts real partner assignments and paginates completed history without exposing recipient details", async () => {
+    const { f, a } = await fixture();
+    const before = await delivery.me(courier.id);
+    expect(before.profile.id).toBe(partner.id);
+    expect(before.stats.active).toBeGreaterThanOrEqual(1);
+    const code = await delivery.pickupCode(owner.id, f.id);
+    await delivery.transition(courier.id, a.id, {status:'PICKED_UP',code:code.code});
+    await delivery.transition(courier.id, a.id, {status:'OUT_FOR_DELIVERY'});
+    const proof = await delivery.deliveryCodes(patient.id, f.orderId);
+    await delivery.transition(courier.id, a.id, {status:'DELIVERED',code:proof.find(item=>item.fulfilmentId===f.id).code});
+    expect((await delivery.me(courier.id)).stats.completed).toBe(before.stats.completed+1);
+    const response = await http('get','/history?limit=100&offset=0',courier);
+    expect(response.status).toBe(200);
+    expect(response.body.data.items.some(item=>item.id===a.id)).toBe(true);
+    expect(JSON.stringify(response.body)).not.toMatch(/Synthetic recipient|recipientPhone|Encrypted|Code/);
+    expect((await http('get','/me',stranger)).status).toBe(403);
+  });
+});
 async function fixture() {
   const reservation = await prisma.reservation.create({
     data: {

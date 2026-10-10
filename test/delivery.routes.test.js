@@ -278,6 +278,12 @@ beforeEach(() => {
     "activityLog",
   ]) {
     tx[model] = {
+      count: vi.fn(
+        async ({ where }) =>
+          state[model]
+            .map((row) => hydrate(model, row))
+            .filter((row) => matches(row, where)).length,
+      ),
       findFirst: vi.fn(async ({ where, select }) =>
         project(
           state[model]
@@ -349,6 +355,74 @@ beforeEach(() => {
   });
 });
 
+describe("connected rider overview and history", () => {
+  it("returns only the authenticated active rider's profile and database counts", async () => {
+    await assigned();
+    const response = await http("get", "/me");
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body.data).toEqual({
+      profile: {
+        id: partnerId,
+        userId: partner,
+        displayName: "Courier One",
+        isActive: true,
+      },
+      stats: { pending: 1, active: 0, completed: 0 },
+    });
+    expect(
+      (await http("get", "/me", otherPartner)).body.data.stats.pending,
+    ).toBe(0);
+    expect((await http("get", "/me", patient)).status).toBe(403);
+    expect((await http("get", "/me?userId=" + otherPartner)).status).toBe(400);
+  });
+  it("lists own completed/declined history without recipient, codes, medical or payment fields", async () => {
+    const id = await accepted();
+    await post(id, "status", { status: "PICKED_UP" });
+    await post(id, "status", { status: "OUT_FOR_DELIVERY" });
+    await post(id, "status", { status: "DELIVERED" });
+    const response = await http("get", "/history");
+    expect(response.status).toBe(200);
+    expect(response.body.data.items).toHaveLength(1);
+    expect(response.body.data.items[0]).toMatchObject({
+      id,
+      assignmentStatus: "COMPLETED",
+      fulfilmentStatus: "DELIVERED",
+    });
+    expect(response.body.data.nextOffset).toBeNull();
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /Private Recipient|PRIVATE|Encrypted|Code|recipient|totalPayable/,
+    );
+    expect(
+      (await http("get", "/history", otherPartner)).body.data.items,
+    ).toEqual([]);
+    expect((await http("get", "/history", patient)).status).toBe(403);
+    expect((await http("get", "/history?limit=101")).status).toBe(400);
+  });
+  it("paginates history and excludes new and accepted assignments", async () => {
+    const id = await assigned();
+    expect((await http("get", "/history")).body.data.items).toEqual([]);
+    await post(id, "reject", { reason: "Unavailable" });
+    const second = await assigned();
+    await post(second, "reject", { reason: "Unavailable" });
+    const page = await http("get", "/history?limit=1&offset=0");
+    expect(page.body.data.items).toHaveLength(1);
+    expect(page.body.data.nextOffset).toBe(1);
+    const next = await http("get", "/history?limit=1&offset=1");
+    expect(next.body.data.nextOffset).toBeNull();
+    expect(next.body.data.items[0].id).not.toBe(page.body.data.items[0].id);
+  });
+  it("blocks inactive or suspended accounts on both new read endpoints", async () => {
+    state.deliveryPartner.find((p) => p.userId === partner).isActive = false;
+    for (const path of ["/me", "/history"])
+      expect((await http("get", path)).status).toBe(403);
+    state.deliveryPartner.find((p) => p.userId === partner).isActive = true;
+    state.user.find((u) => u.id === partner).accountStatus = "SUSPENDED";
+    for (const path of ["/me", "/history"])
+      expect((await http("get", path)).status).toBe(403);
+  });
+});
+
 describe("controlled provisioning and pharmacy assignment", () => {
   it("allows only Super Admin configuration of an existing account, with atomic role and audit", async () => {
     const path = `/operations/partners/${patient}`;
@@ -371,16 +445,14 @@ describe("controlled provisioning and pharmacy assignment", () => {
     ).toBe(404);
   });
   it("does not allow role injection through public patient registration", async () => {
-    const response = await request(app)
-      .post("/auth/register/patient")
-      .send({
-        email: "courier@example.com",
-        password: "Password123!",
-        firstName: "Courier",
-        lastName: "One",
-        consentGiven: true,
-        role: "DELIVERY_PARTNER",
-      });
+    const response = await request(app).post("/auth/register/patient").send({
+      email: "courier@example.com",
+      password: "Password123!",
+      firstName: "Courier",
+      lastName: "One",
+      consentGiven: true,
+      role: "DELIVERY_PARTNER",
+    });
     expect(response.status).toBe(400);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

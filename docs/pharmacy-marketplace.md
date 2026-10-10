@@ -55,4 +55,10 @@ AES-GCM additional authenticated data binds each ciphertext to assignment/stage/
 
 38 HTTP cases plus four real embedded-Postgres cases verify holder isolation, wrong/expired/malformed/missing/replaced codes, persistent lockout, replay races, role revocation, atomic consumption/auditing and unchanged payment. Synthetic UI review verifies code-entry states on a 375px phone and landscape. Codes acknowledge handover, not package quality or independent identity checks; richer delivery evidence/returns/disputes and production backups still require implementation/operational acceptance.
 
+## Connected rider workspace
+
+The pharmacy frontend now hosts `/rider/*` and preserves legacy courier entry links. Additive authenticated `GET /api/v1/delivery/me` returns the active rider profile and own assignment counts; `GET /api/v1/delivery/history?limit=20&offset=0` returns own completed/declined summaries plus a continuation offset. Both require an active user, current DELIVERY_PARTNER database role and active delivery partner profile, and inherit no-store and strict query validation. History excludes recipient contacts, medicines, codes and financial details. There is no new migration, public rider signup, payout execution or anonymous role grant.
+
+The full backend regression suite passed 857 tests; five embedded-PostgreSQL handover/profile/history cases passed with actual migrations. Frontend regression and synthetic browser tests cover real-response confirmation, MFA, access denial, pagination and the two separate codes. Tests did not affect live accounts or packages. Self-service rider onboarding, earnings, GPS, returns/disputes and provider integration remain separate work.
+
 The detailed frontend/API workflow, acceptance evidence, sources and commercial-readiness checklist are maintained in the frontend repository at `docs/PHARMACY_IMPLEMENTATION.md`. The hosted database remains the existing disposable test database, not a backed-up production database.

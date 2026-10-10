@@ -136,6 +136,32 @@ export const assignments = (tx, partnerId, { limit, offset }) =>
     take: limit,
     skip: offset,
   });
+// Private, partner-scoped counts and history. No payment, medication or patient data.
+export const partnerStats = async (tx, partnerId) => {
+  const [pending, active, completed] = await Promise.all(
+    ["PENDING", "ACCEPTED", "COMPLETED"].map((status) =>
+      tx.deliveryAssignment.count({ where: { partnerId, status } }),
+    ),
+  );
+  return { pending, active, completed };
+};
+export const history = (tx, partnerId, { limit, offset }) =>
+  tx.deliveryAssignment.findMany({
+    where: { partnerId, status: { in: ["COMPLETED", "REJECTED"] } },
+    select: {
+      ...assignmentSelect,
+      fulfilment: {
+        select: {
+          status: true,
+          pharmacy: { select: pickupSelect },
+          order: { select: { reference: true } },
+        },
+      },
+    },
+    orderBy: [{ respondedAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    skip: offset,
+  });
 export const assigned = (tx, partnerId, id) =>
   tx.deliveryAssignment.findFirst({
     where: {

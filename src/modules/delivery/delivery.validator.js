@@ -6,6 +6,7 @@ const params = z.object({ id: uuid }).strict();
 const body = (shape) =>
   z.object({ params, query: empty, body: z.object(shape).strict() });
 export const id = z.object({ params, query: empty });
+export const self = z.object({ query: empty });
 export const list = z.object({
   query: z
     .object({

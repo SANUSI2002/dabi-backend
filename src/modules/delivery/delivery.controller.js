@@ -16,6 +16,8 @@ export const configurePlatform = handle((q) =>
 export const partners = handle((q) => s.partners(q.user.id, q.query));
 export const assign = handle((q) => s.assign(q.user.id, q.params.id, q.body));
 export const queue = handle((q) => s.queue(q.user.id, q.query));
+export const me = handle((q) => s.me(q.user.id));
+export const history = handle((q) => s.history(q.user.id, q.query));
 export const detail = handle((q) => s.detail(q.user.id, q.params.id));
 export const accept = handle((q) => s.respond(q.user.id, q.params.id));
 export const reject = handle((q) =>
@@ -67,11 +69,9 @@ export const errorHandler = (error, req, res, next) => {
     409: "Delivery state changed or action unavailable",
     500: "Delivery temporarily unavailable",
   }[status];
-  res
-    .status(status)
-    .json({
-      status: "error",
-      message: codeMessages[error.code] || message,
-      ...(codeMessages[error.code] ? { code: error.code } : {}),
-    });
+  res.status(status).json({
+    status: "error",
+    message: codeMessages[error.code] || message,
+    ...(codeMessages[error.code] ? { code: error.code } : {}),
+  });
 };

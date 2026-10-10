@@ -81,6 +81,20 @@ export const queue = (userId, page) =>
     const profile = await partner(tx, userId);
     return (await r.assignments(tx, profile.id, page)).map(summary);
   });
+export const me = (userId) =>
+  r.transaction(async (tx) => {
+    const profile = await partner(tx, userId);
+    return { profile, stats: await r.partnerStats(tx, profile.id) };
+  });
+export const history = (userId, page) =>
+  r.transaction(async (tx) => {
+    const profile = await partner(tx, userId);
+    const rows = await r.history(tx, profile.id, page);
+    return {
+      items: rows.slice(0, page.limit).map(summary),
+      nextOffset: rows.length > page.limit ? page.offset + page.limit : null,
+    };
+  });
 export const detail = (userId, id) =>
   r.transaction(async (tx) => {
     const a = await owned(tx, userId, id);
@@ -106,8 +120,10 @@ export const respond = (userId, id, reason) =>
       await r.changeAssignment(tx, id, "PENDING", {
         status,
         respondedAt: new Date(),
-      ...(reason === undefined ? {} : { rejectionReason: reason }),
-      ...(reason === undefined ? {} : { pickupCodeEncrypted: null, deliveryCodeEncrypted: null }),
+        ...(reason === undefined ? {} : { rejectionReason: reason }),
+        ...(reason === undefined
+          ? {}
+          : { pickupCodeEncrypted: null, deliveryCodeEncrypted: null }),
       }),
     );
     // Rejection releases assignment only. Fulfilment remains ready; stock stays committed.

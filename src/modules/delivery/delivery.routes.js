@@ -15,6 +15,8 @@ router.use((req, res, next) => {
   next();
 });
 router.use(protect);
+router.get("/me", validate(v.self), c.me);
+router.get("/history", validate(v.list), c.history);
 // Controlled operations endpoint: configures an existing account, never public signup.
 router.put(
   "/operations/partners/:id",
