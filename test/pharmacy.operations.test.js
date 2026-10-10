@@ -185,22 +185,91 @@ describe("pharmacy operations safeguards", () => {
       );
     }
   });
-  it('backs off transient failures, stops after six attempts and ignores stale lease acknowledgements', async () => {
-    for (const attempts of [0, 5]) {
-      const {db, now} = fakeDb({attempts});
-      await deliverPharmacyEmail({db, now, send: async () => ({sent:false,retryable:true,code:'PROVIDER_HTTP_429'}), configured:()=>true, allowed:()=>true});
-      expect(db.pharmacyEmailJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({status: attempts===5?'FAILED':'QUEUED', nextAttemptAt:new Date(now.getTime() + (attempts===5?1800000:60000))})}));
-    }
-    const {db, now} = fakeDb(); db.pharmacyEmailJob.updateMany.mockResolvedValue({count:0});
-    expect(await deliverPharmacyEmail({db, now, send:async()=>({sent:true,providerId:'test'}), configured:()=>true, allowed:()=>true})).toEqual({claimed:true,sent:false});
+  it("cancels outdated expiry windows after a worker outage instead of emailing a past-due reminder", async () => {
+    const { db } = fakeDb({
+      kind: "LICENCE_EXPIRY",
+      eventKey: "licence/pharmacy/superintendent/2027-01-01/30",
+      licenceExpiry: new Date("2027-01-01Z"),
+    });
+    const send = vi.fn();
+    await deliverPharmacyEmail({
+      db,
+      now: new Date("2027-01-02Z"),
+      send,
+      configured: () => true,
+      allowed: () => true,
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(db.pharmacyEmailJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "CANCELLED",
+          lastErrorCode: "EVENT_SUPERSEDED",
+        }),
+      }),
+    );
   });
-  it('does not send when unconfigured, no lease is claimable, or recipient is disallowed', async () => {
-    const {db, now} = fakeDb(),send=vi.fn();
-    await deliverPharmacyEmail({db, now, send, configured:()=>false}); expect(db.$transaction).not.toHaveBeenCalled();
+  it("backs off transient failures, stops after six attempts and ignores stale lease acknowledgements", async () => {
+    for (const attempts of [0, 5]) {
+      const { db, now } = fakeDb({ attempts });
+      await deliverPharmacyEmail({
+        db,
+        now,
+        send: async () => ({
+          sent: false,
+          retryable: true,
+          code: "PROVIDER_HTTP_429",
+        }),
+        configured: () => true,
+        allowed: () => true,
+      });
+      expect(db.pharmacyEmailJob.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: attempts === 5 ? "FAILED" : "QUEUED",
+            nextAttemptAt: new Date(
+              now.getTime() + (attempts === 5 ? 1800000 : 60000),
+            ),
+          }),
+        }),
+      );
+    }
+    const { db, now } = fakeDb();
+    db.pharmacyEmailJob.updateMany.mockResolvedValue({ count: 0 });
+    expect(
+      await deliverPharmacyEmail({
+        db,
+        now,
+        send: async () => ({ sent: true, providerId: "test" }),
+        configured: () => true,
+        allowed: () => true,
+      }),
+    ).toEqual({ claimed: true, sent: false });
+  });
+  it("does not send when unconfigured, no lease is claimable, or recipient is disallowed", async () => {
+    const { db, now } = fakeDb(),
+      send = vi.fn();
+    await deliverPharmacyEmail({ db, now, send, configured: () => false });
+    expect(db.$transaction).not.toHaveBeenCalled();
     db.$queryRaw.mockResolvedValueOnce([]);
-    await deliverPharmacyEmail({db, now, send, configured:()=>true}); expect(send).not.toHaveBeenCalled();
-    await deliverPharmacyEmail({db, now, send, configured:()=>true,allowed:()=>false});
-    expect(send).not.toHaveBeenCalled();expect(db.pharmacyEmailJob.update).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({status:'FAILED',lastErrorCode:'RECIPIENT_NOT_ALLOWED'})}));
+    await deliverPharmacyEmail({ db, now, send, configured: () => true });
+    expect(send).not.toHaveBeenCalled();
+    await deliverPharmacyEmail({
+      db,
+      now,
+      send,
+      configured: () => true,
+      allowed: () => false,
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(db.pharmacyEmailJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "FAILED",
+          lastErrorCode: "RECIPIENT_NOT_ALLOWED",
+        }),
+      }),
+    );
   });
   it("stops automatic retries before Resend idempotency expires", async () => {
     const { db, now } = fakeDb({

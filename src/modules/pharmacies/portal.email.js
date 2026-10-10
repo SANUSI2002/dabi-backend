@@ -218,7 +218,9 @@ export async function deliverPharmacyEmail({
     });
     const p = candidate.pharmacy;
     const expiry = candidate.branchId
-      ? p.branches.find((b) => b.id === candidate.branchId)?.licenceExpiresAt
+      ? p.branches.find(
+          (b) => b.id === candidate.branchId && b.status === "VERIFIED",
+        )?.licenceExpiresAt
       : p.superintendentLicenceExpiresAt;
     const stale =
       p.admin.accountStatus !== "ACTIVE" ||
@@ -227,7 +229,9 @@ export async function deliverPharmacyEmail({
       (candidate.expectedStatus &&
         p.complianceStatus !== candidate.expectedStatus) ||
       (candidate.licenceExpiry &&
-        (!expiry || expiry.getTime() !== candidate.licenceExpiry.getTime()));
+        (!expiry || expiry.getTime() !== candidate.licenceExpiry.getTime())) ||
+      (candidate.kind === "LICENCE_EXPIRY" &&
+        reminderStage(expiry, now) !== candidate.eventKey.split("/").at(-1));
     const windowExpired =
       candidate.firstAttemptAt &&
       now - candidate.firstAttemptAt >= RETRY_WINDOW;
