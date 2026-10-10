@@ -360,6 +360,7 @@ model Pharmacy {
   prescriptionRequests PrescriptionRequest[]
   reservationAllocations ReservationAllocation[]
   orderFulfilments OrderFulfilment[]
+  emailJobs PharmacyEmailJob[]
   identityOrganization IdentityOrganization?
 
   @@index([complianceStatus])
@@ -461,6 +462,9 @@ model PharmacyInventoryItem {
   batchNumber    String?  @map("batch_number") @db.VarChar(100)
   expiryDate     DateTime? @map("expiry_date") @db.Date
   availableQuantity Int   @default(0) @map("available_quantity")
+  reorderPoint Int @default(0) @map("reorder_point")
+  reorderTarget Int? @map("reorder_target")
+  stockPolicyVersion Int @default(1) @map("stock_policy_version")
   unitPriceMinor Int      @map("unit_price_minor")
   currency       String   @default("NGN")
   isActive       Boolean  @default(true) @map("is_active")
@@ -492,6 +496,34 @@ model PharmacyStockAdjustment {
   inventoryItem PharmacyInventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
   @@unique([inventoryItemId, idempotencyKey])
   @@map("pharmacy_stock_adjustments")
+}
+
+model PharmacyEmailJob {
+  id String @id @default(uuid())
+  pharmacyId String @map("pharmacy_id")
+  eventKey String @unique @map("event_key") @db.VarChar(200)
+  kind String @db.VarChar(40)
+  recipient String @db.VarChar(320)
+  sender String? @db.VarChar(320)
+  subject String @db.VarChar(200)
+  text String
+  expectedStatus String? @map("expected_status") @db.VarChar(16)
+  branchId String? @map("branch_id")
+  licenceExpiry DateTime? @map("licence_expiry")
+  status String @default("QUEUED") @db.VarChar(16)
+  attempts Int @default(0)
+  firstAttemptAt DateTime? @map("first_attempt_at")
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  leaseToken String? @map("lease_token")
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  providerId String? @map("provider_id")
+  lastErrorCode String? @map("last_error_code") @db.VarChar(80)
+  sentAt DateTime? @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  pharmacy Pharmacy @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
+  @@index([status, nextAttemptAt])
+  @@index([pharmacyId, createdAt])
+  @@map("pharmacy_email_jobs")
 }
 
 model PharmacyTier {

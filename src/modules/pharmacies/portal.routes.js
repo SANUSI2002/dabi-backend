@@ -1,5 +1,6 @@
 import express from "express";
 import { Buffer } from "node:buffer";
+import { randomUUID } from 'node:crypto';
 import { z } from "zod";
 import prisma from "../../config/db.js";
 import { protect } from "../../middleware/authMiddleware.js";
@@ -28,6 +29,8 @@ import { reserveMarketplace } from "./marketplace.reservations.js";
 import * as clinical from "./portal.clinical.js";
 import * as prescriptionRequests from "../pharmacy-requests/pharmacy-requests.service.js";
 import { quote as quoteSchema } from "../pharmacy-requests/pharmacy-requests.validator.js";
+import { queueDecisionEmail } from './portal.email.js';
+import * as reports from './portal.reports.js';
 
 export const pharmacyPortalRoutes = express.Router();
 export const marketplaceRoutes = express.Router();
@@ -195,6 +198,35 @@ pharmacyPortalRoutes.post(
   }),
 );
 pharmacyPortalRoutes.use(protect);
+const stockQuery = z.object({ query: z.object({
+  page: z.coerce.number().int().min(1).max(10000).default(1), branchId: z.uuid().optional(),
+  search: z.string().trim().max(100).optional(), state: z.enum(['ALL','LOW','OUT','EXPIRING','EXPIRED','INACTIVE']).default('ALL'),
+  expiryDays: z.coerce.number().int().min(1).max(365).default(90),
+}).strict() });
+const salesQuery = z.object({ query: z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  branchId: z.uuid().optional(), page: z.coerce.number().int().min(1).max(10000).default(1),
+}).strict() });
+const exportLimiter = createLimiter({ kind: 'pharmacy-report-export', max: 10 });
+pharmacyPortalRoutes.get('/stock', validate(stockQuery), wrap(async (req,res) => res.json({ data: await reports.stockReport(req.user.id,req.user.organizationId,req.query) })));
+pharmacyPortalRoutes.get('/stock/export', exportLimiter, validate(stockQuery), wrap(async (req,res) => {
+  const csv = await reports.stockReport(req.user.id,req.user.organizationId,req.query,{ csv: true });
+  res.type('text/csv').set('Content-Disposition','attachment; filename="sabi-pharmacy-stock.csv"').set('X-Content-Type-Options','nosniff').send(csv);
+}));
+pharmacyPortalRoutes.patch('/inventory/:id/reorder-policy', sensitiveLimiter, validate(idParams), validate(body(z.object({
+  reorderPoint: z.number().int().min(0).max(1000000), reorderTarget: z.number().int().min(0).max(1000000).nullable(), version: z.number().int().positive(), reason: text(10,1000),
+}).strict())), wrap(async (req,res) => res.json({data:await reports.stockPolicy(req.user.id,req.user.organizationId,req.params.id,req.body)})));
+pharmacyPortalRoutes.get('/inventory/:id/adjustments', validate(idParams), validate(pageSchema), wrap(async (req,res) => res.json({data:await reports.adjustmentHistory(req.user.id,req.user.organizationId,req.params.id,req.query.page)})));
+pharmacyPortalRoutes.get('/reports/sales', validate(salesQuery), wrap(async (req,res) => res.json({data:await reports.salesReport(req.user.id,req.user.organizationId,req.query)})));
+pharmacyPortalRoutes.get('/reports/sales/export', exportLimiter, validate(salesQuery), wrap(async (req,res) => {
+  const csv = await reports.salesReport(req.user.id,req.user.organizationId,req.query,{csv:true});
+  res.type('text/csv').set('Content-Disposition','attachment; filename="sabi-pharmacy-sales.csv"').set('X-Content-Type-Options','nosniff').send(csv);
+}));
+pharmacyPortalRoutes.get('/communications', validate(pageSchema), wrap(async (req,res) => {
+  const p = await prisma.$transaction(tx=>S.owner(tx,req.user.id,req.user.organizationId));
+  const items=await prisma.pharmacyEmailJob.findMany({where:{pharmacyId:p.id},select:{id:true,kind:true,status:true,attempts:true,lastErrorCode:true,createdAt:true,sentAt:true},orderBy:[{createdAt:'desc'},{id:'desc'}],take:51,skip:(req.query.page-1)*50});
+  res.json({data:{items:items.slice(0,50),nextPage:items.length>50?req.query.page+1:null}});
+}));
 const renewedDate = date.refine(
   (value) => new Date(value) > new Date(),
   "Use a future licence expiry date.",
@@ -1257,6 +1289,7 @@ platformPharmacyRoutes.post(
         pharmacyId: p.id,
         ...req.body,
       });
+      await queueDecisionEmail(tx, p, req.body.status, randomUUID());
       return { id: p.id, status: req.body.status };
     });
     res.json({ data: result });
