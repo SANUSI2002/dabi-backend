@@ -14,6 +14,7 @@ import { etagFor, updateVersioned } from '../core/concurrency.js';
 import { nextSequence } from '../core/sequence.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
 import { captureInTx } from './capture.service.js';
+import { userNameMap } from '../core/people.js';
 import { invoiceStatusFor, invoiceTotals, lineAmounts, money } from './billing.policy.js';
 
 const numbered = (prefix, year, value) => `${prefix}-${year}-${String(value).padStart(6, '0')}`;
@@ -35,6 +36,7 @@ export function toInvoice(row) {
   };
 }
 const patientSummary = { select: { id: true, medicalRecordNumber: true, givenName: true, familyName: true, dateOfBirth: true } };
+const worklistPatient = { select: { ...patientSummary.select, sex: true, phone: true, payer: true } };
 
 // ---------------------------------------------------------------------------------------------
 // Price list
@@ -213,8 +215,23 @@ export async function getInvoice(context, invoiceId) {
     });
     if (!row) throw new EmrError('INVOICE_NOT_FOUND');
     const entries = await tx.emrBillingLedger.findMany({ where: { organizationId: context.organizationId, invoiceId }, orderBy: { createdAt: 'asc' } });
+    const encounter = await tx.emrEncounter.findFirst({
+      where: { organizationId: context.organizationId, id: row.encounterId },
+      select: { id: true, class: true, status: true, visitType: true, arrivedAt: true, endedAt: true, attendingUserId: true },
+    });
+    const names = await userNameMap(tx, [row.issuedByUserId, row.voidedByUserId, encounter?.attendingUserId,
+      ...row.payments.flatMap((p) => [p.receivedByUserId, p.reversedByUserId]), ...entries.map((e) => e.createdByUserId)]);
+    const name = (id) => (id ? names.get(id) ?? null : null);
     await recordAudit(tx, context, { action: 'invoice.viewed', resourceType: 'invoice', resourceId: invoiceId });
-    return { ...toInvoice(row), ledger: entries.map(toLedger) };
+    const invoice = toInvoice(row);
+    return {
+      ...invoice,
+      issuedByName: name(row.issuedByUserId),
+      voidedByName: name(row.voidedByUserId),
+      payments: invoice.payments.map((p) => ({ ...p, transactionDate: dateOnly(p.transactionDate), receivedByName: name(p.receivedByUserId), reversedByName: name(p.reversedByUserId) })),
+      ledger: entries.map((e) => ({ ...toLedger(e), createdByName: name(e.createdByUserId) })),
+      encounter: encounter ? { ...encounter, attendingName: name(encounter.attendingUserId) } : null,
+    };
   });
 }
 
@@ -263,6 +280,8 @@ export async function recordPayment(context, invoiceId, input, { idempotencyKey 
       data: {
         organizationId: context.organizationId, invoiceId, patientId: invoice.patientId, receiptNumber, method: input.method,
         amountMinor: amount, reference: input.reference ?? null, receivedByUserId: context.userId, receivedAt: now,
+        transactionDate: input.transactionDate ? new Date(`${input.transactionDate}T00:00:00.000Z`) : null,
+        receivingAccount: input.receivingAccount ?? null, notes: input.notes ?? null,
       },
     });
     const paid = invoice.amountPaidMinor + amount;
@@ -270,7 +289,7 @@ export async function recordPayment(context, invoiceId, input, { idempotencyKey 
     await ledger(tx, context, invoice, { kind: 'PAYMENT', amountMinor: -amount, balanceAfterMinor: invoice.totalMinor - paid, paymentId: payment.id });
     await recordAudit(tx, context, { action: 'payment.recorded', resourceType: 'payment', resourceId: payment.id });
     await enqueueEvent(tx, context, { type: 'payment.recorded', aggregateType: 'invoice', aggregateId: invoiceId, data: { patientId: invoice.patientId, paymentId: payment.id } });
-    return { statusCode: 201, body: { ...toPayment(payment), invoice: toInvoice(await tx.emrInvoice.findFirst({ where: { organizationId: context.organizationId, id: invoiceId } })) } };
+    return { statusCode: 201, body: { ...toPayment(payment), transactionDate: dateOnly(payment.transactionDate), invoice: toInvoice(await tx.emrInvoice.findFirst({ where: { organizationId: context.organizationId, id: invoiceId } })) } };
   }));
 }
 
@@ -293,6 +312,84 @@ export async function reversePayment(context, paymentId, { reason }) {
     await recordAudit(tx, context, { action: 'payment.reversed', resourceType: 'payment', resourceId: paymentId });
     await enqueueEvent(tx, context, { type: 'payment.reversed', aggregateType: 'invoice', aggregateId: invoice.id, data: { patientId: invoice.patientId, paymentId } });
     return toPayment(await tx.emrPayment.findFirst({ where: { organizationId: context.organizationId, id: paymentId } }));
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Worklist
+// ---------------------------------------------------------------------------------------------
+const CAPTURE_PERMISSIONS = ['billing.charge.manage', 'billing.invoice.create'];
+
+/**
+ * Visits newest first, each with its charges, invoices and payments, plus hospital-wide totals:
+ * what the billing desk works from. `q` matches the patient (name, MRN, phone) or an invoice number.
+ * With `capture=true`, and when the caller may capture charges, each listed visit's charges are
+ * first brought up to date from its clinical records — idempotent, so it is safe on every load —
+ * and items with no price are reported per visit (`unpriced`; null when capture did not run).
+ */
+export async function worklist(context, { q, capture, cursor, limit }) {
+  const org = context.organizationId;
+  const canCapture = capture === 'true' && CAPTURE_PERMISSIONS.some((p) => context.permissions.includes(p));
+  const after = afterCursor('arrivedAt', cursor, 'desc');
+  return withTenant(context, async (tx) => {
+    const term = q?.trim();
+    const filters = [];
+    if (term) {
+      const byInvoice = await tx.emrInvoice.findMany({ where: { organizationId: org, number: { contains: term.toUpperCase() } }, select: { encounterId: true }, take: 50 });
+      const text = { contains: term, mode: 'insensitive' };
+      filters.push({ OR: [
+        { patient: { OR: [{ givenName: text }, { familyName: text }, { medicalRecordNumber: text }, { phone: { contains: term } }] } },
+        ...(byInvoice.length ? [{ id: { in: byInvoice.map((i) => i.encounterId) } }] : []),
+      ] });
+    }
+    const rows = await tx.emrEncounter.findMany({
+      where: { organizationId: org, ...after, ...(filters.length ? { AND: filters } : {}) },
+      select: { id: true, class: true, status: true, source: true, visitType: true, arrivedAt: true, endedAt: true, attendingUserId: true, patient: worklistPatient },
+      orderBy: [{ arrivedAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+    });
+    const result = page(rows, limit, 'arrivedAt');
+    const ids = result.items.map((e) => e.id);
+    const unpriced = new Map();
+    if (canCapture) for (const id of ids) unpriced.set(id, (await captureInTx(tx, context, id)).unpriced);
+
+    const [charges, invoices] = ids.length ? await Promise.all([
+      tx.emrCharge.findMany({ where: { organizationId: org, encounterId: { in: ids } }, orderBy: [{ serviceAt: 'asc' }, { createdAt: 'asc' }] }),
+      tx.emrInvoice.findMany({ where: { organizationId: org, encounterId: { in: ids } }, orderBy: { issuedAt: 'desc' } }),
+    ]) : [[], []];
+    const payments = invoices.length ? await tx.emrPayment.findMany({ where: { organizationId: org, invoiceId: { in: invoices.map((i) => i.id) } }, orderBy: { receivedAt: 'asc' } }) : [];
+    const names = await userNameMap(tx, [...result.items.map((e) => e.attendingUserId), ...charges.map((c) => c.createdByUserId), ...payments.map((p) => p.receivedByUserId)]);
+    const name = (id) => (id ? names.get(id) ?? null : null);
+
+    // Hospital-wide figures for the summary cards (not just this page).
+    const [collected, unbilled, open] = await Promise.all([
+      tx.emrPayment.aggregate({ where: { organizationId: org, status: 'POSTED' }, _sum: { amountMinor: true } }),
+      tx.emrCharge.aggregate({ where: { organizationId: org, status: 'UNBILLED' }, _sum: { amountMinor: true, taxMinor: true } }),
+      tx.emrInvoice.aggregate({ where: { organizationId: org, status: { in: ['ISSUED', 'PARTIALLY_PAID'] } }, _sum: { totalMinor: true, amountPaidMinor: true } }),
+    ]);
+    const unbilledMinor = (unbilled._sum.amountMinor ?? 0n) + (unbilled._sum.taxMinor ?? 0n);
+    await recordAudit(tx, context, { action: 'billing.worklist_viewed', resourceType: 'encounter' });
+    return {
+      items: result.items.map(({ attendingUserId, patient, ...encounter }) => {
+        const visitInvoices = invoices.filter((i) => i.encounterId === encounter.id);
+        return {
+          encounter: { ...encounter, attendingName: name(attendingUserId) },
+          patient: { ...patient, dateOfBirth: dateOnly(patient.dateOfBirth) },
+          charges: charges.filter((c) => c.encounterId === encounter.id).map((c) => ({ ...toCharge(c), createdByName: name(c.createdByUserId) })),
+          invoices: visitInvoices.map(toInvoice),
+          payments: payments.filter((p) => visitInvoices.some((i) => i.id === p.invoiceId))
+            .map((p) => ({ ...toPayment(p), transactionDate: dateOnly(p.transactionDate), receivedByName: name(p.receivedByUserId) })),
+          unpriced: canCapture ? unpriced.get(encounter.id) : null,
+        };
+      }),
+      nextCursor: result.nextCursor,
+      totals: {
+        collectedMinor: money(collected._sum.amountMinor ?? 0n),
+        unbilledMinor: money(unbilledMinor),
+        outstandingMinor: money((open._sum.totalMinor ?? 0n) - (open._sum.amountPaidMinor ?? 0n) + unbilledMinor),
+      },
+      captured: canCapture,
+    };
   });
 }
 

@@ -4,6 +4,8 @@
 //   finance officer: prices, charges, invoices, discounts, voids, payments
 //   reception (cashier): read, invoice, take payments
 //   hospital admin: prices, discounts, voids, and payment reversals (never by the recorder)
+// GET /worklist?capture=true also brings each listed visit's charges up to date (as POST capture
+// does) when the caller may capture charges; capture is idempotent, so repeating it changes nothing.
 import express from 'express';
 import { requireEmrPermission as allow } from '../core/context.js';
 import { handle, validateEmr as check } from '../core/validate.js';
@@ -45,6 +47,9 @@ billingRoutes.post('/invoices/:invoiceId/payments', check(v.recordPayment), allo
 billingRoutes.post('/payments/:paymentId/reverse', check(v.reversePayment), allow('billing.payment.reverse'),
   handle(async (req, res) => send(res, await billing.reversePayment(req.emr, req.params.paymentId, req.body))));
 
+// The billing worklist: visits with their charges, invoices and payments, newest first.
+billingRoutes.get('/worklist', check(v.worklist), allow('billing.read'),
+  handle(async (req, res) => res.json({ status: 'success', data: await billing.worklist(req.emr, req.query) })));
 billingRoutes.get('/patients/:patientId/statement', check(v.statement), allow('billing.read'),
   handle(async (req, res) => res.json({ status: 'success', data: await billing.patientStatement(req.emr, req.params.patientId) })));
 billingRoutes.get('/reconciliation', check(v.reconciliation), allow('billing.read'),

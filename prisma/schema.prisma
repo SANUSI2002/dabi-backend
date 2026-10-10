@@ -2988,6 +2988,10 @@ model EmrPayment {
   method EmrPaymentMethod
   amountMinor BigInt @map("amount_minor")
   reference String?
+  /** Date on the transfer, POS slip or cheque (may differ from when it was entered). */
+  transactionDate DateTime? @map("transaction_date") @db.Date
+  receivingAccount String? @map("receiving_account") @db.VarChar(60)
+  notes String? @db.VarChar(500)
   status EmrPaymentStatus @default(POSTED)
   receivedByUserId String @map("received_by_user_id")
   receivedAt DateTime @default(now()) @map("received_at")

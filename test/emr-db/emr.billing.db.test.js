@@ -338,3 +338,79 @@ describe('billing follows cancellations (review fixes)', () => {
     expect(await walk(pharmacist, '/pharmacy/stock/reconciliation', 'batchesChecked')).toBe(await prisma.emrStockBatch.count({ where: { organizationId: A.organizationId } }));
   });
 });
+
+describe('the billing desk (live Billing screen)', () => {
+  const worklist = (who, query = '') => as(who).get(`/billing/worklist${query}`);
+
+  it('lists visits newest first with charges brought up to date, unpriced items and hospital totals', async () => {
+    const { patient, encounter } = await visit();
+    await labWork(encounter);
+    await dispensed(encounter, 10);
+    const response = await worklist(cashier, `?capture=true&q=${patient.medicalRecordNumber}`);
+    expect(response.status).toBe(200);
+    const { items, totals, captured } = response.body.data;
+    expect(captured).toBe(true);
+    expect(items).toHaveLength(1);
+    const [row] = items;
+    expect(row.encounter).toMatchObject({ id: encounter.id, class: 'OUTPATIENT' });
+    expect(row.patient).toMatchObject({ id: patient.id, medicalRecordNumber: patient.medicalRecordNumber, payer: null });
+    // One charge per dispense line (a dispense can draw on more than one batch).
+    expect([...new Set(row.charges.map((c) => c.description))].sort()).toEqual(['Amlodipine 5 mg (tablet)', 'Consultation (outpatient)', 'Full blood count'].sort());
+    expect(row.charges.filter((c) => c.category === 'MEDICATION').reduce((sum, c) => sum + c.quantity, 0)).toBe(10);
+    expect(row.charges.every((c) => c.status === 'UNBILLED')).toBe(true);
+    expect(row.unpriced.map((u) => u.reference)).toEqual(['LIPID']);
+    expect(row.invoices).toEqual([]);
+    expect(totals.unbilledMinor).toBeGreaterThanOrEqual(500_000 + 350_000 + 10 * 5_000);
+
+    // Without capture (or for a role that may only read) nothing is created and unpriced is unknown.
+    const { encounter: fresh } = await visit();
+    const readOnly = (await worklist(cashier, `?q=${patient.medicalRecordNumber}`)).body.data;
+    expect(readOnly.captured).toBe(false);
+    expect(readOnly.items[0].unpriced).toBeNull();
+    expect((await charges(fresh))).toEqual([]);
+  });
+
+  it('finds a visit by invoice number and pages with a cursor', async () => {
+    const { encounter } = await visit();
+    await capture(encounter);
+    const issued = (await invoice(encounter, {}, cashier, key())).body.data;
+    const byNumber = (await worklist(finance, `?q=${issued.number}`)).body.data.items;
+    expect(byNumber.map((r) => r.encounter.id)).toEqual([encounter.id]);
+    expect(byNumber[0].invoices[0]).toMatchObject({ number: issued.number, status: 'ISSUED', balanceMinor: 500_000 });
+
+    const first = (await worklist(finance, '?limit=1')).body.data;
+    expect(first.items).toHaveLength(1);
+    const second = (await worklist(finance, `?limit=1&cursor=${first.nextCursor}`)).body.data;
+    expect(second.items[0].encounter.id).not.toBe(first.items[0].encounter.id);
+    expect(new Date(second.items[0].encounter.arrivedAt) <= new Date(first.items[0].encounter.arrivedAt)).toBe(true);
+  });
+
+  it('keeps what the cashier records with a payment, and the invoice shows who did what', async () => {
+    const { encounter } = await visit();
+    await capture(encounter);
+    const issued = (await invoice(encounter, {}, cashier, key())).body.data;
+    const future = new Date(Date.now() + 3 * DAY).toISOString().slice(0, 10);
+    expect((await pay(issued, 100_000, cashier, key(), { method: 'POS', reference: 'POS-778', transactionDate: future })).status).toBe(400);
+    const paid = await pay(issued, 200_000, cashier, key(), { method: 'BANK_TRANSFER', reference: 'TRF-1', transactionDate: '2026-10-01', receivingAccount: 'Primary bank account', notes: 'Paid by sister' });
+    expect(paid.status).toBe(201);
+    expect(paid.body.data).toMatchObject({ transactionDate: '2026-10-01', receivingAccount: 'Primary bank account', notes: 'Paid by sister' });
+
+    const detail = (await as(finance).get(`/billing/invoices/${issued.id}`)).body.data;
+    expect(detail.encounter).toMatchObject({ id: encounter.id, class: 'OUTPATIENT' });
+    expect(detail.issuedByName).toBeTruthy();
+    expect(detail.payments[0]).toMatchObject({ receiptNumber: expect.stringMatching(/^RCPT-/), transactionDate: '2026-10-01', receivingAccount: 'Primary bank account', receivedByName: expect.any(String) });
+    expect(detail.ledger.map((e) => [e.kind, Boolean(e.createdByName)])).toEqual([['INVOICE_ISSUED', true], ['PAYMENT', true]]);
+
+    const row = (await worklist(finance, `?q=${issued.number}`)).body.data.items[0];
+    expect(row.payments).toEqual([expect.objectContaining({ amountMinor: 200_000, status: 'POSTED', receivedByName: expect.any(String) })]);
+
+    // Written once: the EMR role cannot change these afterwards.
+    await expect(withTenant({ organizationId: A.organizationId, userId: finance.userId }, (tx) => tx.emrPayment.updateMany({ where: { id: paid.body.data.id }, data: { notes: 'edited' } }))).rejects.toThrow();
+  });
+
+  it('shows another organization nothing from here', async () => {
+    const { patient } = await visit();
+    const theirs = (await worklist(bFinance, `?capture=true&q=${patient.medicalRecordNumber}`)).body.data;
+    expect(theirs.items).toEqual([]);
+  });
+});

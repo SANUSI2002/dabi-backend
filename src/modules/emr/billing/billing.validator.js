@@ -76,7 +76,15 @@ export const recordPayment = z.object({
     amountMinor: minor.refine((v) => v > 0, 'Must be more than zero'),
     method: z.enum(['CASH', 'CARD', 'POS', 'BANK_TRANSFER', 'MOBILE_MONEY', 'CHEQUE']),
     reference: text(80).optional(),
+    // The date on the transaction itself; never in the future (a day's grace for time zones).
+    transactionDate: z.iso.date().refine((d) => new Date(`${d}T00:00:00.000Z`).getTime() <= Date.now() + 86_400_000, 'The transaction date cannot be in the future').optional(),
+    receivingAccount: text(60).optional(),
+    notes: text(500).optional(),
   }).strict().refine((b) => ['CASH'].includes(b.method) || b.reference, { message: 'Non-cash payments need a reference (e.g. the transfer or POS reference)', path: ['reference'] }),
+});
+export const worklist = z.object({
+  params: z.object(org).strict(),
+  query: z.object({ q: z.string().trim().max(80).optional(), capture: z.enum(['true', 'false']).optional(), ...cursorQuery }).strict(),
 });
 export const reversePayment = z.object({ params: z.object({ ...org, paymentId: z.uuid() }).strict(), query: noQuery, body: z.object({ reason }).strict() });
 export const statement = z.object({ params: z.object({ ...org, patientId: z.uuid() }).strict(), query: noQuery });
