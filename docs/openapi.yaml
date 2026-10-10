@@ -80,8 +80,6 @@ tags:
     description: Delivery endpoints currently registered by the backend.
   - name: Wellness
     description: Wellness endpoints currently registered by the backend.
-  - name: Internal
-    description: Internal endpoints.
   - name: EMR
     description: EMR endpoints.
   - name: EMR · Patients
@@ -128,6 +126,10 @@ tags:
     description: Professional Schedule endpoints.
   - name: Professional Care
     description: Professional Care endpoints.
+  - name: Pharmacy Portal
+    description: Pharmacy Portal endpoints.
+  - name: Marketplace
+    description: Marketplace endpoints.
 paths:
   /api/health:
     get:
@@ -3192,6 +3194,174 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/delivery/fulfilments/{id}/delivery-code:
+    post:
+      tags:
+        - Delivery
+      summary: Record delivery code for fulfilment
+      operationId: post_api_v1_delivery_fulfilments_id_delivery_code
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/delivery/fulfilments/{id}/pickup-code:
+    get:
+      tags:
+        - Delivery
+      summary: Get pickup code of fulfilment
+      operationId: get_api_v1_delivery_fulfilments_id_pickup_code
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    post:
+      tags:
+        - Delivery
+      summary: Record pickup code for fulfilment
+      operationId: post_api_v1_delivery_fulfilments_id_pickup_code
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/delivery/history:
+    get:
+      tags:
+        - Delivery
+      summary: Get history
+      operationId: get_api_v1_delivery_history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          required: false
+          schema:
+            default: 0
+            type: integer
+            minimum: 0
+            maximum: 100000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/delivery/me:
+    get:
+      tags:
+        - Delivery
+      summary: Get me
+      operationId: get_api_v1_delivery_me
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/delivery/operations/partners/{id}:
     put:
       tags:
@@ -3232,6 +3402,40 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/delivery/orders/{id}/delivery-codes:
+    get:
+      tags:
+        - Delivery
+      summary: List delivery codes of order
+      operationId: get_api_v1_delivery_orders_id_delivery_codes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/delivery/orders/{id}/tracking:
     get:
       tags:
@@ -3301,6 +3505,71 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/delivery/platform/partners/{id}:
+    put:
+      tags:
+        - Delivery
+      summary: Replace partner
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.users.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: put_api_v1_delivery_platform_partners_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+                isActive:
+                  type: boolean
+              required:
+                - displayName
+                - isActive
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/doctor-appointments:
     post:
       tags:
@@ -18195,76 +18464,6 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
-  /api/v1/internal/document-scans/{id}/result:
-    post:
-      tags:
-        - Internal
-      summary: Receive a document scan result (scanner callback)
-      operationId: post_api_v1_internal_document_scans_id_result
-      security: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                verdict:
-                  type: string
-                  enum:
-                    - CLEAN
-                    - INFECTED
-                    - REJECTED
-                validatedContentType:
-                  type: string
-                  enum:
-                    - application/pdf
-                    - image/jpeg
-                    - image/png
-                byteSize:
-                  type: integer
-                  exclusiveMinimum: 0
-                  maximum: 52428800
-                sha256:
-                  type: string
-                  pattern: ^[a-f0-9]{64}$
-                scannerTimestamp:
-                  type: string
-                  format: date-time
-                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
-              required:
-                - verdict
-                - validatedContentType
-                - byteSize
-                - sha256
-                - scannerTimestamp
-              additionalProperties: false
-      responses:
-        "200":
-          description: Success.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Success"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "429":
-          $ref: "#/components/responses/RateLimited"
-        "500":
-          $ref: "#/components/responses/ServerError"
-      x-generated: true
   /api/v1/inventory:
     post:
       tags:
@@ -18405,6 +18604,148 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/marketplace/products:
+    get:
+      tags:
+        - Marketplace
+      summary: List products
+      operationId: get_api_v1_marketplace_products
+      security: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: pharmacyId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: latitude
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: longitude
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/marketplace/products/{id}/image:
+    get:
+      tags:
+        - Marketplace
+      summary: Get image of product
+      operationId: get_api_v1_marketplace_products_id_image
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/marketplace/reservations:
+    post:
+      tags:
+        - Marketplace
+      summary: Create reservation
+      operationId: post_api_v1_marketplace_reservations
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                idempotencyKey:
+                  type: string
+                  minLength: 16
+                  maxLength: 128
+                items:
+                  minItems: 1
+                  maxItems: 50
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      listingId:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        maximum: 10000
+                    required:
+                      - listingId
+                      - quantity
+                    additionalProperties: false
+              required:
+                - idempotencyKey
+                - items
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/medical-documents:
     get:
       tags:
@@ -21048,6 +21389,1713 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/pharmacy-portal/branches:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Create branche
+      operationId: post_api_v1_pharmacy_portal_branches
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+                address:
+                  type: string
+                  minLength: 5
+                  maxLength: 300
+                latitude:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+                longitude:
+                  type: number
+                  minimum: -180
+                  maximum: 180
+                premisesLicenceNumber:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                licenceExpiresAt:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+              required:
+                - name
+                - address
+                - latitude
+                - longitude
+                - premisesLicenceNumber
+                - licenceExpiresAt
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/branches/{id}:
+    patch:
+      tags:
+        - Pharmacy Portal
+      summary: Update branche
+      operationId: patch_api_v1_pharmacy_portal_branches_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+                address:
+                  type: string
+                  minLength: 5
+                  maxLength: 300
+                latitude:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+                longitude:
+                  type: number
+                  minimum: -180
+                  maximum: 180
+                premisesLicenceNumber:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                licenceExpiresAt:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                version:
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+                reason:
+                  type: string
+                  minLength: 10
+                  maxLength: 1000
+              required:
+                - name
+                - address
+                - latitude
+                - longitude
+                - premisesLicenceNumber
+                - licenceExpiresAt
+                - version
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/catalogue:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: Get catalogue
+      operationId: get_api_v1_pharmacy_portal_catalogue
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/clinical/orders:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: List orders
+      operationId: get_api_v1_pharmacy_portal_clinical_orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pharmacyId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/clinical/requests:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: List requests
+      operationId: get_api_v1_pharmacy_portal_clinical_requests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pharmacyId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/clinical/requests/{id}/quotes:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Create quote for request
+      operationId: post_api_v1_pharmacy_portal_clinical_requests_id_quotes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: pharmacyId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  minItems: 1
+                  maxItems: 50
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      prescriptionItemId:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      inventoryItemId:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      requiredQuantity:
+                        type: integer
+                        minimum: 1
+                        maximum: 10000
+                      availableQuantity:
+                        type: integer
+                        minimum: 0
+                        maximum: 1000000
+                      unitPriceMinor:
+                        type: integer
+                        minimum: 0
+                        maximum: 1000000000
+                      availabilityStatus:
+                        type: string
+                        enum:
+                          - AVAILABLE
+                          - PARTIAL
+                          - UNAVAILABLE
+                      estimatedFulfilment:
+                        type: string
+                        minLength: 2
+                        maxLength: 120
+                      pickupAvailable:
+                        type: boolean
+                      deliveryAvailable:
+                        type: boolean
+                    required:
+                      - prescriptionItemId
+                      - inventoryItemId
+                      - requiredQuantity
+                      - availableQuantity
+                      - unitPriceMinor
+                      - availabilityStatus
+                      - estimatedFulfilment
+                      - pickupAvailable
+                      - deliveryAvailable
+                    additionalProperties: false
+              required:
+                - items
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/communications:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: List communications
+      operationId: get_api_v1_pharmacy_portal_communications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/credentials/{kind}:
+    put:
+      tags:
+        - Pharmacy Portal
+      summary: Replace credential
+      operationId: put_api_v1_pharmacy_portal_credentials_kind
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/inventory/{id}/adjust:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Adjust inventory
+      operationId: post_api_v1_pharmacy_portal_inventory_id_adjust
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                idempotencyKey:
+                  type: string
+                  minLength: 16
+                  maxLength: 128
+                expectedQuantity:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000
+                quantityDelta:
+                  type: integer
+                  minimum: -1000000
+                  maximum: 1000000
+                reason:
+                  type: string
+                  minLength: 10
+                  maxLength: 1000
+              required:
+                - idempotencyKey
+                - expectedQuantity
+                - quantityDelta
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/inventory/{id}/adjustments:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: List adjustments of inventory
+      operationId: get_api_v1_pharmacy_portal_inventory_id_adjustments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/inventory/{id}/reorder-policy:
+    patch:
+      tags:
+        - Pharmacy Portal
+      summary: Update reorder policy
+      operationId: patch_api_v1_pharmacy_portal_inventory_id_reorder_policy
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reorderPoint:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000
+                reorderTarget:
+                  anyOf:
+                    - type: integer
+                      minimum: 0
+                      maximum: 1000000
+                    - type: "null"
+                version:
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+                reason:
+                  type: string
+                  minLength: 10
+                  maxLength: 1000
+              required:
+                - reorderPoint
+                - reorderTarget
+                - version
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/listings:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Create listing
+      operationId: post_api_v1_pharmacy_portal_listings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                branchId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                medicationName:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+                genericName:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+                batchNumber:
+                  anyOf:
+                    - type: string
+                      minLength: 2
+                      maxLength: 100
+                    - type: "null"
+                expiryDate:
+                  anyOf:
+                    - type: string
+                      pattern: ^\d{4}-\d{2}-\d{2}$
+                    - type: "null"
+                availableQuantity:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000
+                unitPriceMinor:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000000
+                category:
+                  type: string
+                  enum:
+                    - OTC
+                    - DEVICES
+                    - BABY
+                    - HYGIENE
+                    - SUPPLEMENTS
+                    - WELLNESS
+                description:
+                  type: string
+                  minLength: 5
+                  maxLength: 1500
+                productClass:
+                  type: string
+                  enum:
+                    - OTC
+                    - PRESCRIPTION_ONLY
+                    - NON_MEDICINAL
+                nafdacNumber:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+              required:
+                - branchId
+                - medicationName
+                - availableQuantity
+                - unitPriceMinor
+                - category
+                - description
+                - productClass
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/listings/{id}:
+    patch:
+      tags:
+        - Pharmacy Portal
+      summary: Update listing
+      operationId: patch_api_v1_pharmacy_portal_listings_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                medicationName:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+                genericName:
+                  anyOf:
+                    - type: string
+                      minLength: 2
+                      maxLength: 120
+                    - type: "null"
+                batchNumber:
+                  anyOf:
+                    - type: string
+                      minLength: 2
+                      maxLength: 100
+                    - type: "null"
+                expiryDate:
+                  anyOf:
+                    - type: string
+                      pattern: ^\d{4}-\d{2}-\d{2}$
+                    - type: "null"
+                unitPriceMinor:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000000
+                category:
+                  type: string
+                  enum:
+                    - OTC
+                    - DEVICES
+                    - BABY
+                    - HYGIENE
+                    - SUPPLEMENTS
+                    - WELLNESS
+                description:
+                  type: string
+                  minLength: 5
+                  maxLength: 1500
+                productClass:
+                  type: string
+                  enum:
+                    - OTC
+                    - PRESCRIPTION_ONLY
+                    - NON_MEDICINAL
+                nafdacNumber:
+                  anyOf:
+                    - type: string
+                      minLength: 3
+                      maxLength: 100
+                    - type: "null"
+                isActive:
+                  type: boolean
+                version:
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+                reason:
+                  type: string
+                  minLength: 10
+                  maxLength: 1000
+              required:
+                - medicationName
+                - unitPriceMinor
+                - category
+                - description
+                - productClass
+                - isActive
+                - version
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/listings/{id}/image:
+    put:
+      tags:
+        - Pharmacy Portal
+      summary: Set image of listing
+      operationId: put_api_v1_pharmacy_portal_listings_id_image
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/listings/{id}/submit:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Submit listing
+      operationId: post_api_v1_pharmacy_portal_listings_id_submit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+              required:
+                - version
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/listings/{id}/withdraw:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Record withdraw for listing
+      operationId: post_api_v1_pharmacy_portal_listings_id_withdraw
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+              required:
+                - version
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/me:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: Get me
+      operationId: get_api_v1_pharmacy_portal_me
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/orders:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: List orders
+      operationId: get_api_v1_pharmacy_portal_orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/pharmacists/{id}/accept:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Accept pharmacist
+      operationId: post_api_v1_pharmacy_portal_pharmacists_id_accept
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/pharmacists/invite:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Invite pharmacist
+      operationId: post_api_v1_pharmacy_portal_pharmacists_invite
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+              required:
+                - email
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/register:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Register pharmacy portal
+      operationId: post_api_v1_pharmacy_portal_register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                password:
+                  type: string
+                  minLength: 12
+                  maxLength: 128
+                  allOf:
+                    - pattern: "[a-z]"
+                    - pattern: "[A-Z]"
+                    - pattern: "[0-9]"
+                fullName:
+                  type: string
+                  minLength: 3
+                  maxLength: 160
+                phoneNumber:
+                  type: string
+                  minLength: 7
+                  maxLength: 30
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 160
+                address:
+                  type: string
+                  minLength: 5
+                  maxLength: 300
+                country:
+                  type: string
+                  const: Nigeria
+                state:
+                  type: string
+                  minLength: 2
+                  maxLength: 80
+                city:
+                  type: string
+                  minLength: 2
+                  maxLength: 80
+                contactEmail:
+                  type: string
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                contactPhone:
+                  type: string
+                  minLength: 7
+                  maxLength: 30
+                tierLevel:
+                  type: integer
+                  minimum: 1
+                  maximum: 3
+                regulatory:
+                  type: object
+                  properties:
+                    cacNumber:
+                      type: string
+                      minLength: 3
+                      maxLength: 100
+                    superintendentName:
+                      type: string
+                      minLength: 3
+                      maxLength: 160
+                    superintendentRegistrationNumber:
+                      type: string
+                      minLength: 3
+                      maxLength: 100
+                    superintendentLicenceExpiresAt:
+                      type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                  required:
+                    - cacNumber
+                    - superintendentName
+                    - superintendentRegistrationNumber
+                    - superintendentLicenceExpiresAt
+                  additionalProperties: false
+                termsAccepted:
+                  type: boolean
+                  const: true
+                privacyAccepted:
+                  type: boolean
+                  const: true
+              required:
+                - email
+                - password
+                - fullName
+                - phoneNumber
+                - name
+                - address
+                - country
+                - state
+                - city
+                - contactEmail
+                - contactPhone
+                - tierLevel
+                - regulatory
+                - termsAccepted
+                - privacyAccepted
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/registration-config:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: Get registration config
+      operationId: get_api_v1_pharmacy_portal_registration_config
+      security: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/reports/sales:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: List sales
+      operationId: get_api_v1_pharmacy_portal_reports_sales
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/reports/sales/export:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: Get export
+      operationId: get_api_v1_pharmacy_portal_reports_sales_export
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/requests:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: List requests
+      operationId: get_api_v1_pharmacy_portal_requests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/resend-verification:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Resend verification pharmacy portal
+      operationId: post_api_v1_pharmacy_portal_resend_verification
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+              required:
+                - email
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/staff/inventory:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: Get inventory
+      operationId: get_api_v1_pharmacy_portal_staff_inventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pharmacyId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/stock:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: Get stock
+      operationId: get_api_v1_pharmacy_portal_stock
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: state
+          in: query
+          required: false
+          schema:
+            default: ALL
+            type: string
+            enum:
+              - ALL
+              - LOW
+              - OUT
+              - EXPIRING
+              - EXPIRED
+              - INACTIVE
+        - name: expiryDays
+          in: query
+          required: false
+          schema:
+            default: 90
+            type: integer
+            minimum: 1
+            maximum: 365
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/stock/export:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: Get export
+      operationId: get_api_v1_pharmacy_portal_stock_export
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: state
+          in: query
+          required: false
+          schema:
+            default: ALL
+            type: string
+            enum:
+              - ALL
+              - LOW
+              - OUT
+              - EXPIRING
+              - EXPIRED
+              - INACTIVE
+        - name: expiryDays
+          in: query
+          required: false
+          schema:
+            default: 90
+            type: integer
+            minimum: 1
+            maximum: 365
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/submit:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Submit pharmacy portal
+      operationId: post_api_v1_pharmacy_portal_submit
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/superintendent:
+    patch:
+      tags:
+        - Pharmacy Portal
+      summary: Update superintendent
+      operationId: patch_api_v1_pharmacy_portal_superintendent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                superintendentName:
+                  type: string
+                  minLength: 3
+                  maxLength: 160
+                superintendentRegistrationNumber:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                superintendentLicenceExpiresAt:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+                reason:
+                  type: string
+                  minLength: 10
+                  maxLength: 1000
+              required:
+                - superintendentName
+                - superintendentRegistrationNumber
+                - superintendentLicenceExpiresAt
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/verify-email:
+    post:
+      tags:
+        - Pharmacy Portal
+      summary: Verify email pharmacy portal
+      operationId: post_api_v1_pharmacy_portal_verify_email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                uid:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                token:
+                  type: string
+                  pattern: ^[a-f0-9]{64}$
+              required:
+                - uid
+                - token
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/pharmacy-portal/workspaces:
+    get:
+      tags:
+        - Pharmacy Portal
+      summary: List workspaces
+      operationId: get_api_v1_pharmacy_portal_workspaces
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/pharmacy-requests:
     post:
       tags:
@@ -22863,6 +24911,930 @@ paths:
             type: string
             format: uuid
             pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies:
+    get:
+      tags:
+        - Platform
+      summary: List pharmacies
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_platform_pharmacies
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/{id}:
+    get:
+      tags:
+        - Platform
+      summary: Get pharmacy
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_platform_pharmacies_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/{id}/credentials/{docId}/preview:
+    get:
+      tags:
+        - Platform
+      summary: Preview credential
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_platform_pharmacies_id_credentials_docId_preview
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/{id}/credentials/{docId}/retry-scan:
+    post:
+      tags:
+        - Platform
+      summary: Record retry scan for credential
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_platform_pharmacies_id_credentials_docId_retry_scan
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/{id}/credentials/{docId}/review:
+    post:
+      tags:
+        - Platform
+      summary: Record review for credential
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_platform_pharmacies_id_credentials_docId_review
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision:
+                  type: string
+                  enum:
+                    - VERIFIED
+                    - REJECTED
+                sourceName:
+                  type: string
+                  minLength: 3
+                  maxLength: 200
+                reference:
+                  type: string
+                  minLength: 3
+                  maxLength: 200
+                note:
+                  type: string
+                  minLength: 10
+                  maxLength: 2000
+              required:
+                - decision
+                - sourceName
+                - reference
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/{id}/decision:
+    post:
+      tags:
+        - Platform
+      summary: Record decision for pharmacy
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_platform_pharmacies_id_decision
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - VERIFIED
+                    - REJECTED
+                    - SUSPENDED
+                tierLevel:
+                  type: integer
+                  minimum: 1
+                  maximum: 3
+                expectedStatus:
+                  type: string
+                  enum:
+                    - PENDING
+                    - VERIFIED
+                    - REJECTED
+                    - SUSPENDED
+                note:
+                  type: string
+                  minLength: 10
+                  maxLength: 2000
+              required:
+                - status
+                - tierLevel
+                - expectedStatus
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/{id}/readiness:
+    get:
+      tags:
+        - Platform
+      summary: Get readiness of pharmacy
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_platform_pharmacies_id_readiness
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: tierLevel
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/listings:
+    get:
+      tags:
+        - Platform
+      summary: List listings
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_platform_pharmacies_listings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/listings/{id}/decision:
+    post:
+      tags:
+        - Platform
+      summary: Record decision for listing
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_platform_pharmacies_listings_id_decision
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - PUBLISHED
+                    - REJECTED
+                version:
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+                note:
+                  type: string
+                  minLength: 10
+                  maxLength: 2000
+              required:
+                - status
+                - version
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/listings/{id}/image:
+    get:
+      tags:
+        - Platform
+      summary: Get image of listing
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_platform_pharmacies_listings_id_image
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/listings/{id}/image-data:
+    get:
+      tags:
+        - Platform
+      summary: Get image data of listing
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_platform_pharmacies_listings_id_image_data
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/tiers:
+    get:
+      tags:
+        - Platform
+      summary: List tiers
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_platform_pharmacies_tiers
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/pharmacies/tiers/{level}:
+    patch:
+      tags:
+        - Platform
+      summary: Update tier
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pharmacy.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: patch_api_v1_platform_pharmacies_tiers_level
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: level
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 80
+                commissionBps:
+                  type: integer
+                  minimum: 0
+                  maximum: 10000
+                deliveryRadiusKm:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                maxBranches:
+                  anyOf:
+                    - type: integer
+                      minimum: 1
+                      maximum: 10000
+                    - type: "null"
+                minimumOrderMinor:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000000
+                deliveryEnabled:
+                  type: boolean
+                pickupEnabled:
+                  type: boolean
+                enabled:
+                  type: boolean
+                version:
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+                reason:
+                  type: string
+                  minLength: 10
+                  maxLength: 1000
+              required:
+                - name
+                - commissionBps
+                - deliveryRadiusKm
+                - maxBranches
+                - minimumOrderMinor
+                - deliveryEnabled
+                - pickupEnabled
+                - enabled
+                - version
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/users:
+    get:
+      tags:
+        - Platform
+      summary: List users
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.users.read`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_platform_users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - PENDING
+              - ACTIVE
+              - SUSPENDED
+              - LOCKED
+              - DISABLED
+              - DEACTIVATED
+              - BANNED
+        - name: platform
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - PATIENT
+              - DOCTOR
+              - PHARMACY
+              - HOSPITAL
+              - PLATFORM
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/platform/users/{id}/status:
+    patch:
+      tags:
+        - Platform
+      summary: Update status
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.users.read`.
+
+        Requires the permission `platform.users.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: patch_api_v1_platform_users_id_status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - ACTIVE
+                    - SUSPENDED
+                    - DISABLED
+                    - BANNED
+                expectedStatus:
+                  type: string
+                  enum:
+                    - PENDING
+                    - ACTIVE
+                    - SUSPENDED
+                    - LOCKED
+                    - DISABLED
+                    - DEACTIVATED
+                    - BANNED
+                reason:
+                  type: string
+                  minLength: 10
+                  maxLength: 1000
+              required:
+                - status
+                - expectedStatus
+                - reason
+              additionalProperties: false
       responses:
         "200":
           description: Success.

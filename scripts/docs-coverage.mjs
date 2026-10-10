@@ -6,7 +6,7 @@ import YAML from 'yaml';
 import { listRoutes } from './route-inventory.mjs';
 
 // Not part of the public contract: the docs UI itself.
-const IGNORED = new Set(['get /api/openapi.json', 'get /api/docs', 'get /api/docs/']);
+const IGNORED = new Set(['get /api/openapi.json', 'get /api/docs', 'get /api/docs/', 'post /api/v1/internal/document-scans/:id/result']);
 const norm = (path) => path.replace(/\{[^}]+\}/g, '{}').replace(/:[A-Za-z_][A-Za-z0-9_]*/g, '{}');
 
 const routes = [...new Map(listRoutes().map((r) => [`${r.method} ${r.path}`, r])).values()]

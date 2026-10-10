@@ -7,7 +7,8 @@ vi.mock('../src/config/db.js', () => ({ default: new Proxy({}, { get: () => unde
 process.env.JWT_SECRET ??= 'openapi-coverage-test';
 const { listRoutes } = await import('../scripts/route-inventory.mjs');
 
-const IGNORED = new Set(['get /api/openapi.json', 'get /api/docs', 'get /api/docs/']);
+// The docs UI and the private scanner callback (kept out of the public reference on purpose).
+const IGNORED = new Set(['get /api/openapi.json', 'get /api/docs', 'get /api/docs/', 'post /api/v1/internal/document-scans/:id/result']);
 const norm = (path) => path.replace(/\{[^}]+\}/g, '{}').replace(/:[A-Za-z_][A-Za-z0-9_]*/g, '{}');
 
 describe('API documentation (docs/openapi.yaml, served at /api/docs)', () => {

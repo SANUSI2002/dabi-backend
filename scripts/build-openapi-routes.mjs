@@ -13,7 +13,8 @@ import { z } from 'zod';
 import { listRoutes } from './route-inventory.mjs';
 
 const SPEC = 'docs/openapi.yaml';
-const IGNORED = new Set(['get /api/openapi.json', 'get /api/docs', 'get /api/docs/']);
+// The docs UI itself, and private machine callbacks that must never appear in the public reference.
+const IGNORED = new Set(['get /api/openapi.json', 'get /api/docs', 'get /api/docs/', 'post /api/v1/internal/document-scans/:id/result']);
 const norm = (path) => path.replace(/\{[^}]+\}/g, '{}').replace(/:[A-Za-z_][A-Za-z0-9_]*/g, '{}');
 const toOpenApiPath = (path) => path.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, '{$1}');
 
@@ -200,7 +201,6 @@ const OVERRIDES = {
   'post /api/v1/emr/organizations/{}/appointments/{}/no-show': { summary: 'Mark appointment as no-show' },
   'post /api/v1/emr/organizations/{}/appointments/{}/check-in': { summary: 'Check the patient in for an appointment' },
   'get /api/v1/emr/internal/metrics': { summary: 'EMR service metrics (platform operations)' },
-  'post /api/v1/internal/document-scans/{}/result': { summary: 'Receive a document scan result (scanner callback)' },
 };
 
 // ---- responses ----------------------------------------------------------------------------
@@ -312,7 +312,9 @@ spec.components.schemas = { ...spec.components.schemas, EmrError: EMR_ERROR };
 spec.components.responses = { ...spec.components.responses, ...EMR_RESPONSES };
 const tags = new Map((spec.tags ?? []).map((t) => [t.name, t]));
 for (const name of usedTags) if (!tags.has(name)) tags.set(name, { name, description: TAG_DESCRIPTIONS[name] ?? `${name} endpoints.` });
-spec.tags = [...tags.values()];
+// Only tags that still have operations (a removed route must not leave an empty section).
+const tagsInUse = new Set(Object.values(spec.paths).flatMap((ops) => Object.values(ops).flatMap((op) => op.tags ?? [])));
+spec.tags = [...tags.values()].filter((t) => tagsInUse.has(t.name));
 // Keep paths in a stable, readable order.
 spec.paths = Object.fromEntries(Object.entries(spec.paths).sort(([a], [b]) => a.localeCompare(b)));
 
