@@ -21,6 +21,8 @@ export const create = z.object({
       fulfilmentMethod: z.enum(['PICKUP', 'DELIVERY']),
     }).strict()).min(1).max(50),
     delivery: delivery.optional(),
+    // The total the patient was shown; if pricing has changed since, creation is refused (PRICE_CHANGED).
+    expectedTotalPayableMinor: z.number().int().min(0).max(100000000000).optional(),
   }).strict().superRefine((value, context) => {
     const requiresDelivery = value.fulfilments.some((item) => item.fulfilmentMethod === 'DELIVERY');
     if (requiresDelivery && !value.delivery) {

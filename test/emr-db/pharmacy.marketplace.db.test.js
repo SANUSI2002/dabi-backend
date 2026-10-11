@@ -631,7 +631,8 @@ describe("approved marketplace and stock holds", () => {
         fulfilments: [{ pharmacyId: A.id, fulfilmentMethod: "DELIVERY" }],
         deliveryCoordinates: { latitude: 7.5, longitude: 3.3 },
       });
-    expect(preview.status, JSON.stringify(preview.body)).toBe(400);
+    expect(preview.status, JSON.stringify(preview.body)).toBe(422);
+    expect(preview.body).toMatchObject({ code: "NOT_SERVICEABLE", details: { reason: "TIER_RADIUS" } });
     await prisma.pharmacy.update({
       where: { id: A.id },
       data: { superintendentLicenceExpiresAt: new Date(0) },

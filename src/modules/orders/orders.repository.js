@@ -87,17 +87,6 @@ export const reservation = (tx, patientId, reservationId) =>
       },
     },
   });
-export const pricing = (tx) =>
-  tx.checkoutPricingConfiguration.findFirst({
-    orderBy: { version: "desc" },
-    select: {
-      version: true,
-      platformFeeMinor: true,
-      deliveryRatePerKmMinor: true,
-      currency: true,
-      effectiveAt: true,
-    },
-  });
 export const convertReservation = (tx, reservationId, patientId) =>
   tx.reservation.updateMany({
     where: {

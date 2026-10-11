@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const fn = () => vi.fn();
 const tx = {
   checkoutPricingConfiguration: { findFirst: fn(), create: fn() },
+  $queryRaw: fn(),
 };
 const prisma = {
   checkoutPricingConfiguration: { findFirst: fn() },
@@ -204,7 +205,8 @@ describe('checkout pricing routes', () => {
         ],
         deliveryCoordinates: { latitude: 6.51, longitude: 3.39 },
       });
-    expect(missingCoordinates.status).toBe(400);
+    expect(missingCoordinates.status).toBe(422);
+    expect(missingCoordinates.body).toMatchObject({ code: 'INVALID_ORIGIN' });
     reservation.allocations[1].pharmacy.latitude = 6.5;
   });
 

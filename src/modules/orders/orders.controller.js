@@ -7,6 +7,10 @@ const failure = (error, response, next) => {
     return response.status(400).json({ status: 'error', message: 'Order cannot be created' });
   }
   if (error.code === 'P2002') return response.status(409).json({ status: 'error', message: 'Order cannot be created' });
+  if (error.code === 'PRICE_CHANGED') return response.status(409).json({ status: 'error', code: error.code, message: error.message, details: error.details });
+  if (['NOT_SERVICEABLE', 'INVALID_ORIGIN'].includes(error.code)) return response.status(422).json({ status: 'error', code: error.code, message: error.message, details: error.details });
+  if (error.code === 'INVALID_DESTINATION' || error.code === 'INVALID_DISTANCE') return response.status(400).json({ status: 'error', code: error.code, message: error.message });
+  if (error.code === 'ROUTE_DISTANCE_UNAVAILABLE') return response.status(503).json({ status: 'error', code: error.code, message: error.message });
   return next(error);
 };
 

@@ -46,6 +46,7 @@ import hospitalAppointmentRoutes from './modules/hospital-appointments/hospital-
 import wellnessRoutes from './modules/wellness/wellness.routes.js';
 import medicalDocumentRoutes, { internalDocumentScanRoutes } from './modules/medical-documents/medical-documents.routes.js';
 import openApiRoutes from './docs/openapi.routes.js';
+import commandCentreRoutes from './modules/command-centre/cc.routes.js';
 import professionalCareRoutes from './modules/professional-care/care.routes.js';
 import consultationNoteRoutes from './modules/consultation-notes/consultation-notes.routes.js';
 import auditRoutes from './modules/audit/audit.routes.js';
@@ -112,6 +113,7 @@ app.use('/api/v1', caregiverRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/emr', emrRoutes);
 app.use('/api/v1/platform', platformRoutes);
+app.use('/api/v1/command-centre', commandCentreRoutes);
 app.use('/api/v1/platform/users', platformUserRoutes);
 app.use('/api/v1/platform/packages', platformPackageRoutes);
 app.use('/api/v1/catalog/packages', publicPackageRoutes);

@@ -2,26 +2,10 @@ import { randomBytes } from "node:crypto";
 import { encryptDeliveryDetails } from "./orders.delivery.js";
 import * as repository from "./orders.repository.js";
 import { commissionSnapshot } from "../pharmacies/portal.policy.js";
+import { activeConfiguration, quoteDelivery } from "../checkout-pricing/pricing-configurations.js";
 
-const fail = (code) => Object.assign(new Error(code), { code });
-const defaultPricing = {
-  version: 0,
-  platformFeeMinor: 0,
-  deliveryRatePerKmMinor: 60000,
-  currency: "NGN",
-};
+const fail = (code, message, details) => Object.assign(new Error(code), { code, message: message ?? code, details });
 const reference = () => `SH-${randomBytes(8).toString("hex").toUpperCase()}`;
-const distanceKm = (from, to) => {
-  const radians = (degrees) => (degrees * Math.PI) / 180;
-  const latitude = radians(to.latitude - from.latitude);
-  const longitude = radians(to.longitude - from.longitude);
-  const formula =
-    Math.sin(latitude / 2) ** 2 +
-    Math.cos(radians(from.latitude)) *
-      Math.cos(radians(to.latitude)) *
-      Math.sin(longitude / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(formula), Math.sqrt(1 - formula));
-};
 
 const safe = (order) =>
   order && {
@@ -45,6 +29,9 @@ const safe = (order) =>
       pharmacy: fulfilment.pharmacy,
       subtotalMinor: fulfilment.subtotalMinor,
       deliveryFeeMinor: fulfilment.deliveryFeeMinor,
+      deliveryBreakdown: fulfilment.deliveryQuote?.lines ?? [],
+      distanceKm: fulfilment.deliveryQuote?.distanceKm ?? null,
+      distanceMethod: fulfilment.deliveryQuote?.method ?? null,
       totalMinor: fulfilment.totalMinor,
       allocations: fulfilment.allocations?.map((allocation) => ({
         prescriptionItemId: allocation.prescriptionItemId,
@@ -72,12 +59,11 @@ export const create = async (patientId, data) => {
       data.idempotencyKey,
     );
     if (existing) return { order: existing, idempotent: true };
-    const [reservation, pricing] = await Promise.all([
+    const [reservation, configuration] = await Promise.all([
       repository.reservation(tx, patientId, data.reservationId),
-      repository.pricing(tx),
+      activeConfiguration(tx),
     ]);
     if (!reservation) throw fail("NOT_FOUND");
-    const configuration = pricing ?? defaultPricing;
     const byPharmacy = new Map();
     for (const allocation of reservation.allocations) {
       const items = byPharmacy.get(allocation.pharmacyId) ?? [];
@@ -100,7 +86,8 @@ export const create = async (patientId, data) => {
         item.medicationName,
       ]),
     );
-    const fulfilments = data.fulfilments.map((selection) => {
+    const fulfilments = [];
+    for (const selection of data.fulfilments) {
       const allocations = byPharmacy.get(selection.pharmacyId);
       const pharmacy = allocations[0].pharmacy;
       const canFulfil =
@@ -169,31 +156,31 @@ export const create = async (patientId, data) => {
           : !tier.pickupEnabled)
       )
         throw fail("INVALID");
-      let deliveryFeeMinor = 0;
-      if (selection.fulfilmentMethod === "DELIVERY") {
-        const origin = tier ? branch : pharmacy;
-        if (
-          !Number.isFinite(origin.latitude) ||
-          !Number.isFinite(origin.longitude)
-        )
-          throw fail("INVALID");
-        const distance = distanceKm(origin, data.delivery.coordinates);
-        if (tier && distance > tier.deliveryRadiusKm) throw fail("INVALID");
-        deliveryFeeMinor = Math.round(
-          distance * configuration.deliveryRatePerKmMinor,
-        );
-      }
       const subtotalMinor = allocations.reduce(
         (total, item) => total + item.lineTotalMinor,
         0,
       );
       if (tier && subtotalMinor < tier.minimumOrderMinor) throw fail("INVALID");
-      return {
+      // The authoritative delivery price: same engine and version as the checkout preview.
+      let deliveryQuote = null;
+      if (selection.fulfilmentMethod === "DELIVERY") {
+        const origin = tier ? branch : pharmacy;
+        deliveryQuote = await quoteDelivery({
+          config: configuration,
+          origin: { latitude: origin.latitude, longitude: origin.longitude },
+          destination: data.delivery.coordinates,
+          subtotalMinor,
+          tierRadiusKm: tier ? tier.deliveryRadiusKm : null,
+        });
+      }
+      const deliveryFeeMinor = deliveryQuote?.feeMinor ?? 0;
+      fulfilments.push({
         pharmacyId: pharmacy.id,
         status: "AWAITING_PAYMENT",
         fulfilmentMethod: selection.fulfilmentMethod,
         subtotalMinor,
         deliveryFeeMinor,
+        ...(deliveryQuote ? { deliveryQuote } : {}),
         totalMinor: subtotalMinor + deliveryFeeMinor,
         ...(tier ? commissionSnapshot(tier, subtotalMinor) : {}),
         allocations: {
@@ -213,8 +200,8 @@ export const create = async (patientId, data) => {
             lineTotalMinor: item.lineTotalMinor,
           })),
         },
-      };
-    });
+      });
+    }
     const subtotalMinor = fulfilments.reduce(
       (total, item) => total + item.subtotalMinor,
       0,
@@ -223,6 +210,12 @@ export const create = async (patientId, data) => {
       (total, item) => total + item.deliveryFeeMinor,
       0,
     );
+    const totalPayableMinor = subtotalMinor + deliveryFeeMinor + configuration.platformFeeMinor;
+    // The patient confirmed a total; if pricing changed since that quote, they must see the new one first.
+    if (data.expectedTotalPayableMinor !== undefined && data.expectedTotalPayableMinor !== totalPayableMinor)
+      throw fail("PRICE_CHANGED", "The price changed since your quote. Review the new total before paying.", {
+        totalPayableMinor, deliveryFeeMinor, pricingVersion: configuration.version,
+      });
     if (
       !(await repository.convertReservation(tx, reservation.id, patientId))
         .count
@@ -240,8 +233,7 @@ export const create = async (patientId, data) => {
       deliveryRatePerKmMinor: configuration.deliveryRatePerKmMinor,
       subtotalMinor,
       deliveryFeeMinor,
-      totalPayableMinor:
-        subtotalMinor + deliveryFeeMinor + configuration.platformFeeMinor,
+      totalPayableMinor,
       encryptedDeliveryDetails,
       fulfilments: { create: fulfilments },
     });

@@ -778,6 +778,8 @@ model OrderFulfilment {
   decisionNote      String?                @map("decision_note")
   patientMessage    String?                @map("patient_message")
   inventoryFinalizedAt DateTime?           @map("inventory_finalized_at")
+  /// The itemised delivery quote charged (lines, distance, method, pricing version). Written once.
+  deliveryQuote     Json?                  @map("delivery_quote")
   order             Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   pharmacy          Pharmacy               @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
   allocations       OrderAllocation[]
@@ -834,6 +836,27 @@ model CheckoutPricingConfiguration {
   effectiveAt              DateTime @default(now()) @map("effective_at")
   createdByUserId          String?  @map("created_by_user_id")
   createdAt                DateTime @default(now()) @map("created_at")
+  // Pricing v2 (see src/modules/checkout-pricing/delivery-pricing.js for the calculation order).
+  baseFeeMinor             Int      @default(0) @map("base_fee_minor")
+  includedDistanceKm       Decimal  @default(0) @map("included_distance_km") @db.Decimal(8, 3)
+  minimumFeeMinor          Int      @default(0) @map("minimum_fee_minor")
+  maximumFeeMinor          Int?     @map("maximum_fee_minor")
+  maxDistanceKm            Decimal? @map("max_distance_km") @db.Decimal(8, 3)
+  distanceMethod           String   @default("STRAIGHT_LINE") @map("distance_method") @db.VarChar(16)
+  roadFallbackToStraightLine Boolean @default(false) @map("road_fallback_to_straight_line")
+  distanceRounding         String   @default("EXACT") @map("distance_rounding") @db.VarChar(16)
+  feeRoundingMinor         Int      @default(1) @map("fee_rounding_minor")
+  bands                    Json     @default("[]")
+  zones                    Json     @default("[]")
+  restrictToZones          Boolean  @default(false) @map("restrict_to_zones")
+  freeDeliveryThresholdMinor Int?   @map("free_delivery_threshold_minor")
+  smallOrderThresholdMinor Int?     @map("small_order_threshold_minor")
+  smallOrderFeeMinor       Int      @default(0) @map("small_order_fee_minor")
+  surcharges               Json     @default("[]")
+  quoteTtlMinutes          Int      @default(15) @map("quote_ttl_minutes")
+  changeReason             String?  @map("change_reason") @db.VarChar(500)
+  cancelledAt              DateTime? @map("cancelled_at")
+  cancelledByUserId        String?  @map("cancelled_by_user_id")
 
   @@index([effectiveAt])
   @@map("checkout_pricing_configurations")
@@ -1169,6 +1192,8 @@ model AuditEvent {
   @@index([actorUserId, createdAt(sort: Desc)])
   @@index([subjectUserId, createdAt(sort: Desc)])
   @@index([relatedUserId, createdAt(sort: Desc)])
+  @@index([resourceType, resourceId, createdAt(sort: Desc)])
+  @@index([category, createdAt(sort: Desc)])
   @@map("audit_events")
 }
 

@@ -91,6 +91,7 @@ const MODULE_TAGS = {
   'medication-schedules': 'Medication Schedules', waitlist: 'Waitlist', audit: 'Audit',
 };
 const TAG_DESCRIPTIONS = {
+  'Command Centre': 'Sabi platform operations: pricing, oversight, finance, support and audit. Platform staff only; every action is permission-checked and audited.',
   'EMR · Patients': 'Hospital patient registry (tenant-scoped, row-level security).',
   'EMR · Patient record': 'A patient’s longitudinal chart, problem list, allergies and medicines.',
   'EMR · Encounters': 'Visits: check-in, lifecycle, clinical notes, vital signs and diagnoses.',
@@ -201,6 +202,10 @@ const OVERRIDES = {
   'post /api/v1/emr/organizations/{}/appointments/{}/no-show': { summary: 'Mark appointment as no-show' },
   'post /api/v1/emr/organizations/{}/appointments/{}/check-in': { summary: 'Check the patient in for an appointment' },
   'get /api/v1/emr/internal/metrics': { summary: 'EMR service metrics (platform operations)' },
+  'get /api/v1/command-centre/pricing/delivery': { summary: 'Get delivery pricing: the version in force, scheduled and past versions, and road-routing status' },
+  'post /api/v1/command-centre/pricing/delivery': { summary: 'Create a delivery pricing version (now or scheduled), with a reason' },
+  'post /api/v1/command-centre/pricing/delivery/{}/cancel': { summary: 'Cancel a scheduled delivery pricing version' },
+  'post /api/v1/command-centre/pricing/delivery/simulate': { summary: 'Simulate a delivery quote with the live or a draft rule set (saves nothing)' },
 };
 
 // ---- responses ----------------------------------------------------------------------------

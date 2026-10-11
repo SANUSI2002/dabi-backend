@@ -9,7 +9,7 @@
 import prisma from '../../config/db.js';
 import { currentRequest, maskIp, requestContext } from './audit.context.js';
 
-export const AUDIT_CATEGORIES = ['SIGN_IN', 'RECORD_ACCESS', 'RECORD_CHANGE', 'PERMISSION', 'ACCOUNT', 'ACTIVITY'];
+export const AUDIT_CATEGORIES = ['SIGN_IN', 'RECORD_ACCESS', 'RECORD_CHANGE', 'PERMISSION', 'ACCOUNT', 'ACTIVITY', 'ADMIN'];
 
 // category + wording per side. {actor} {subject} {related} are names; {other} is whoever is not the reader.
 const ACTIONS = {
@@ -70,6 +70,17 @@ const ACTIONS = {
   EMERGENCY_CODE_REPLACED: ['PERMISSION', { actor: 'You replaced your emergency code; previous cards no longer work' }],
   EMERGENCY_SUMMARY_ACCESSED: ['RECORD_ACCESS', { actor: "You accessed {subject}'s emergency summary", subject: '{actor} accessed your emergency summary' }],
   EMERGENCY_ACCESS_DENIED: ['RECORD_ACCESS', { actor: 'An emergency summary lookup was denied' }],
+
+  // Sabi staff in the Command Centre. The person a record is about sees that Sabi staff opened or
+  // changed it (never the staff member's name); the stated reason and before/after values stay in
+  // the entry's context for audit review.
+  ADMIN_PATIENT_VIEWED: ['ADMIN', { actor: "You opened {subject}'s account profile", subject: 'Sabi staff opened your account details' }],
+  ADMIN_CLINICAL_VIEWED: ['ADMIN', { actor: "You opened {subject}'s health information", subject: 'Sabi staff opened your health information' }],
+  ADMIN_EMERGENCY_ACCESS_STARTED: ['ADMIN', { actor: "You started emergency access to {subject}'s records", subject: 'Sabi staff used emergency access to your health records' }],
+  ADMIN_EMERGENCY_ACCESS_ENDED: ['ADMIN', { actor: "You ended emergency access to {subject}'s records" }],
+  ADMIN_ACCOUNT_CHANGED: ['ADMIN', { subject: 'Sabi staff changed your account' }],
+  ADMIN_EXPORT: ['ADMIN', {}],
+  ADMIN_ACTION: ['ADMIN', {}],
 };
 
 /**
