@@ -155,8 +155,10 @@ describe('secure medical document HTTP lifecycle', () => {
     expect((await request(internal).post(`/api/v1/internal/document-scans/${documentId}/result`).set('Content-Type', 'application/json').send(body)).status).toBe(401);
     expect((await signedScan(`${documentId}/result`, body, { invalid: true })).status).toBe(401);
     expect((await signedScan(`${documentId}/result`, body, { timestamp: String(Math.floor(Date.now() / 1000) - 1000) })).status).toBe(401);
-    expect((await signedScan(`${documentId}/result`, body)).status).toBe(200);
-    expect((await signedScan(`${documentId}/result`, body)).status).toBe(409);
+    // Replay the exact signed timestamp as well as the body, even across a second boundary.
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    expect((await signedScan(`${documentId}/result`, body, { timestamp })).status).toBe(200);
+    expect((await signedScan(`${documentId}/result`, body, { timestamp })).status).toBe(409);
   });
 
   it.each([['CLEAN', 'CLEAN'], ['INFECTED', 'INFECTED'], ['REJECTED', 'REJECTED']])('atomically records %s only from pending scan', async (verdict, expected) => {

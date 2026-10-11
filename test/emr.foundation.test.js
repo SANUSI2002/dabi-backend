@@ -145,7 +145,9 @@ describe('patients (route level)', () => {
     expect(tx.$executeRawUnsafe).toHaveBeenCalledWith('SET LOCAL ROLE sabi_emr_app');
     expect(tx.emrPatient.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: orgA }) }));
     expect(tx.emrAuditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ organizationId: orgA, action: 'patient.searched', changedFields: [] }) });
-    expect(JSON.stringify(tx.emrAuditEvent.create.mock.calls)).not.toContain('ada');
+    // Correlation UUIDs may incidentally contain "ada"; audit payloads must not contain the search.
+    const payloads = tx.emrAuditEvent.create.mock.calls.map(([{ data }]) => ({ ...data, requestId: null }));
+    expect(JSON.stringify(payloads)).not.toContain('ada');
   });
 
   it('keeps the legacy page/nextPage contract', async () => {

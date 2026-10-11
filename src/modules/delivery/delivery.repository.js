@@ -40,6 +40,22 @@ export const activePartner = (tx, where) =>
       user: {
         accountStatus: "ACTIVE",
         roles: { some: { role: "DELIVERY_PARTNER" } },
+        OR: [
+          { riderApplication: { is: null } },
+          {
+            riderApplication: {
+              is: {
+                status: "APPROVED",
+                licenceExpiresAt: {
+                  gt: new Date(new Date().toISOString().slice(0, 10)),
+                },
+                insuranceExpiresAt: {
+                  gt: new Date(new Date().toISOString().slice(0, 10)),
+                },
+              },
+            },
+          },
+        ],
       },
     },
     select: partnerSelect,
@@ -68,6 +84,22 @@ export const partners = (tx, { limit, offset }) =>
       user: {
         accountStatus: "ACTIVE",
         roles: { some: { role: "DELIVERY_PARTNER" } },
+        OR: [
+          { riderApplication: { is: null } },
+          {
+            riderApplication: {
+              is: {
+                status: "APPROVED",
+                licenceExpiresAt: {
+                  gt: new Date(new Date().toISOString().slice(0, 10)),
+                },
+                insuranceExpiresAt: {
+                  gt: new Date(new Date().toISOString().slice(0, 10)),
+                },
+              },
+            },
+          },
+        ],
       },
     },
     select: { id: true, displayName: true },

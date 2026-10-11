@@ -32,6 +32,7 @@ import checkoutPricingRoutes from './modules/checkout-pricing/checkout-pricing.r
 import orderRoutes from './modules/orders/orders.routes.js';
 import { c as paymentController, paystackWebhook, paymentRoutes } from './modules/payments/payments.routes.js';
 import deliveryRoutes from './modules/delivery/delivery.routes.js';
+import { riderRoutes, platformRiderRoutes } from './modules/riders/riders.routes.js';
 import fulfilmentRoutes from './modules/fulfilments/fulfilments.routes.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import { globalLimiter, warnRateLimitFallback } from './middleware/rateLimitMiddleware.js';
@@ -155,6 +156,8 @@ app.use('/api/v1/checkout-pricing', checkoutPricingRoutes);
 app.use('/api/v1/orders', orderRoutes);
 // Scope delivery authentication/cache policy before the broad payment router guard.
 app.use('/api/v1/delivery', deliveryRoutes);
+app.use('/api/v1/riders', riderRoutes);
+app.use('/api/v1/platform/riders', platformRiderRoutes);
 app.use('/api/v1', paymentRoutes);
 app.use('/api/v1/fulfilments', fulfilmentRoutes);
 
