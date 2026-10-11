@@ -2680,6 +2680,3002 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/command-centre/audit:
+    get:
+      tags:
+        - Command Centre
+      summary: Search the platform audit trail
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.audit.read`.
+      operationId: get_api_v1_command_centre_audit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - SIGN_IN
+              - RECORD_ACCESS
+              - RECORD_CHANGE
+              - PERMISSION
+              - ACCOUNT
+              - ACTIVITY
+              - ADMIN
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Z_]{3,64}$
+        - name: actorUserId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: subjectUserId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: resourceType
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[a-z_:-]{2,64}$
+        - name: resourceId
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 64
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/audit/export:
+    post:
+      tags:
+        - Command Centre
+      summary: Export audit entries as CSV (audited)
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.audit.read`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_audit_export
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+                filters:
+                  default: {}
+                  type: object
+                  properties:
+                    category:
+                      type: string
+                      enum:
+                        - SIGN_IN
+                        - RECORD_ACCESS
+                        - RECORD_CHANGE
+                        - PERMISSION
+                        - ACCOUNT
+                        - ACTIVITY
+                        - ADMIN
+                    action:
+                      type: string
+                      pattern: ^[A-Z_]{3,64}$
+                    actorUserId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    subjectUserId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    resourceType:
+                      type: string
+                      pattern: ^[a-z_:-]{2,64}$
+                    resourceId:
+                      type: string
+                      maxLength: 64
+                    from:
+                      type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                    to:
+                      type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                  additionalProperties: false
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/cases:
+    get:
+      tags:
+        - Command Centre
+      summary: List cases
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.support.manage`, `platform.ops.read`.
+      operationId: get_api_v1_command_centre_cases
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - SUPPORT
+              - INCIDENT
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - OPEN
+              - IN_PROGRESS
+              - WAITING
+              - RESOLVED
+              - CLOSED
+              - ACTIVE
+        - name: priority
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - P1
+              - P2
+              - P3
+              - P4
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - ORDER
+              - DELIVERY
+              - PAYMENT
+              - REFUND
+              - ACCOUNT
+              - CONSULTATION
+              - PRESCRIPTION
+              - PHARMACY
+              - DOCTOR
+              - PRIVACY
+              - TECHNICAL
+              - NOTIFICATION
+              - OTHER
+        - name: assignee
+          in: query
+          required: false
+          schema:
+            anyOf:
+              - type: string
+                format: uuid
+                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              - type: string
+                const: me
+              - type: string
+                const: none
+        - name: subjectUserId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: orderId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 80
+        - name: overdue
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    post:
+      tags:
+        - Command Centre
+      summary: Create case
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.support.manage`.
+      operationId: post_api_v1_command_centre_cases
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind:
+                  type: string
+                  enum:
+                    - SUPPORT
+                    - INCIDENT
+                category:
+                  type: string
+                  enum:
+                    - ORDER
+                    - DELIVERY
+                    - PAYMENT
+                    - REFUND
+                    - ACCOUNT
+                    - CONSULTATION
+                    - PRESCRIPTION
+                    - PHARMACY
+                    - DOCTOR
+                    - PRIVACY
+                    - TECHNICAL
+                    - NOTIFICATION
+                    - OTHER
+                priority:
+                  type: string
+                  enum:
+                    - P1
+                    - P2
+                    - P3
+                    - P4
+                title:
+                  type: string
+                  minLength: 5
+                  maxLength: 160
+                  pattern: ^[^\p{Cc}]*$
+                description:
+                  type: string
+                  minLength: 10
+                  maxLength: 2000
+                  pattern: ^[^\p{Cc}]*$
+                subjectUserId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                orderId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                pharmacyId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                professionalProfileId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                assigneeUserId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - kind
+                - category
+                - priority
+                - title
+                - description
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/cases/{id}:
+    get:
+      tags:
+        - Command Centre
+      summary: Get case
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.support.manage`, `platform.ops.read`.
+      operationId: get_api_v1_command_centre_cases_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/cases/{id}/update:
+    post:
+      tags:
+        - Command Centre
+      summary: Add a note or change status, priority or assignee of a case
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.support.manage`.
+      operationId: post_api_v1_command_centre_cases_id_update
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                note:
+                  type: string
+                  minLength: 2
+                  maxLength: 2000
+                  pattern: ^[^\p{Cc}]*$
+                status:
+                  type: string
+                  enum:
+                    - OPEN
+                    - IN_PROGRESS
+                    - WAITING
+                    - RESOLVED
+                    - CLOSED
+                resolution:
+                  type: string
+                  minLength: 10
+                  maxLength: 1000
+                  pattern: ^[^\p{Cc}]*$
+                priority:
+                  type: string
+                  enum:
+                    - P1
+                    - P2
+                    - P3
+                    - P4
+                assigneeUserId:
+                  anyOf:
+                    - type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    - type: "null"
+              required:
+                - version
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/cases/meta/assignees:
+    get:
+      tags:
+        - Command Centre
+      summary: List staff who can be assigned cases
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.support.manage`, `platform.ops.read`.
+      operationId: get_api_v1_command_centre_cases_meta_assignees
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/consultations:
+    get:
+      tags:
+        - Command Centre
+      summary: List consultations
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.ops.read`.
+      operationId: get_api_v1_command_centre_consultations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - REQUESTED
+              - CONFIRMED
+              - DECLINED
+              - CANCELLED
+              - COMPLETED
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - VIRTUAL
+              - IN_PERSON
+        - name: doctorProfileId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: patientId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: attention
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - overdue-confirmation
+              - not-completed
+              - unsigned-note
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/consultations/{id}:
+    get:
+      tags:
+        - Command Centre
+      summary: Get a consultation’s status and timeline (no clinical content)
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.ops.read`.
+      operationId: get_api_v1_command_centre_consultations_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/deliveries:
+    get:
+      tags:
+        - Command Centre
+      summary: List deliveries
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.delivery.manage`.
+      operationId: get_api_v1_command_centre_deliveries
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - UNASSIGNED
+              - ASSIGNED
+              - IN_TRANSIT
+              - DELIVERED
+              - PROBLEM
+        - name: partnerId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/deliveries/{fulfilmentId}/assign:
+    post:
+      tags:
+        - Command Centre
+      summary: Assign a rider to a ready delivery
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.delivery.manage`.
+      operationId: post_api_v1_command_centre_deliveries_fulfilmentId_assign
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: fulfilmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                partnerId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - partnerId
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/emergency-access:
+    get:
+      tags:
+        - Command Centre
+      summary: List emergency access grants
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.audit.read`, `platform.emergency.access`.
+      operationId: get_api_v1_command_centre_emergency_access
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: unreviewed
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/emergency-access/{id}/end:
+    post:
+      tags:
+        - Command Centre
+      summary: End my emergency access
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.emergency.access`.
+      operationId: post_api_v1_command_centre_emergency_access_id_end
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/emergency-access/{id}/review:
+    post:
+      tags:
+        - Command Centre
+      summary: Review an ended emergency access grant
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.audit.read`.
+      operationId: post_api_v1_command_centre_emergency_access_id_review
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                outcome:
+                  type: string
+                  enum:
+                    - APPROPRIATE
+                    - INAPPROPRIATE
+                note:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - outcome
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/payments:
+    get:
+      tags:
+        - Command Centre
+      summary: List payments
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.finance.manage`, `platform.finance.approve`.
+      operationId: get_api_v1_command_centre_finance_payments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - PENDING
+              - SUCCESS
+              - FAILED
+              - CANCELLED
+              - EXPIRED
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 80
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/reconciliation:
+    get:
+      tags:
+        - Command Centre
+      summary: Run payment and refund reconciliation checks
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.finance.manage`, `platform.finance.approve`.
+      operationId: get_api_v1_command_centre_finance_reconciliation
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/refunds:
+    get:
+      tags:
+        - Command Centre
+      summary: List refunds
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.finance.manage`, `platform.finance.approve`.
+      operationId: get_api_v1_command_centre_finance_refunds
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - PENDING_REVIEW
+              - RESOLVED
+              - PROPOSED
+              - APPROVED
+              - DECLINED
+              - SUBMITTED
+              - REFUNDED
+              - FAILED
+              - OPEN
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/refunds/{id}/approve:
+    post:
+      tags:
+        - Command Centre
+      summary: Approve a proposed refund (another person)
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.approve`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_finance_refunds_id_approve
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/refunds/{id}/decline:
+    post:
+      tags:
+        - Command Centre
+      summary: Decline refund
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.approve`.
+      operationId: post_api_v1_command_centre_finance_refunds_id_decline
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/refunds/{id}/evidence:
+    post:
+      tags:
+        - Command Centre
+      summary: Record provider evidence for a submitted refund
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.approve`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_finance_refunds_id_evidence
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                outcome:
+                  type: string
+                  enum:
+                    - REFUNDED
+                    - FAILED
+                providerRefundReference:
+                  type: string
+                  minLength: 3
+                  maxLength: 120
+                  pattern: ^[\w.:-]+$
+                note:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - outcome
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/refunds/{id}/propose:
+    post:
+      tags:
+        - Command Centre
+      summary: Propose a refund
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.manage`.
+      operationId: post_api_v1_command_centre_finance_refunds_id_propose
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/refunds/{id}/submit:
+    post:
+      tags:
+        - Command Centre
+      summary: Send an approved refund to the payment provider
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_finance_refunds_id_submit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/settlements:
+    get:
+      tags:
+        - Command Centre
+      summary: List settlements
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.finance.manage`, `platform.finance.approve`.
+      operationId: get_api_v1_command_centre_finance_settlements
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - DRAFT
+              - APPROVED
+              - PAID
+              - CANCELLED
+        - name: pharmacyId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    post:
+      tags:
+        - Command Centre
+      summary: Prepare a pharmacy settlement (idempotent)
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.manage`.
+      operationId: post_api_v1_command_centre_finance_settlements
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pharmacyId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                periodStart:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                periodEnd:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                idempotencyKey:
+                  type: string
+                  minLength: 16
+                  maxLength: 128
+              required:
+                - pharmacyId
+                - periodStart
+                - periodEnd
+                - idempotencyKey
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/settlements/{id}:
+    get:
+      tags:
+        - Command Centre
+      summary: Get settlement
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.finance.manage`, `platform.finance.approve`.
+      operationId: get_api_v1_command_centre_finance_settlements_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/settlements/{id}/approve:
+    post:
+      tags:
+        - Command Centre
+      summary: Approve a settlement (another person)
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.approve`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_finance_settlements_id_approve
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/settlements/{id}/cancel:
+    post:
+      tags:
+        - Command Centre
+      summary: Cancel settlement
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.manage`, `platform.finance.approve`.
+      operationId: post_api_v1_command_centre_finance_settlements_id_cancel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/settlements/{id}/paid:
+    post:
+      tags:
+        - Command Centre
+      summary: Record the bank transfer that paid a settlement
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.approve`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_finance_settlements_id_paid
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payoutReference:
+                  type: string
+                  minLength: 4
+                  maxLength: 120
+                  pattern: ^[\w ./:-]+$
+                note:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - payoutReference
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/settlements/preview:
+    post:
+      tags:
+        - Command Centre
+      summary: Preview what a pharmacy is owed for a period
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.finance.manage`, `platform.finance.approve`.
+      operationId: post_api_v1_command_centre_finance_settlements_preview
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pharmacyId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                periodStart:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                periodEnd:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+              required:
+                - pharmacyId
+                - periodStart
+                - periodEnd
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/summary:
+    get:
+      tags:
+        - Command Centre
+      summary: Get collected money, revenue split, refunds and settlements for a period
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.finance.manage`, `platform.finance.approve`.
+      operationId: get_api_v1_command_centre_finance_summary
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: tz
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/finance/webhooks:
+    get:
+      tags:
+        - Command Centre
+      summary: List payment webhook deliveries and outcomes
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.finance.manage`, `platform.finance.approve`, `platform.jobs.manage`.
+      operationId: get_api_v1_command_centre_finance_webhooks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: outcome
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - APPLIED
+              - DUPLICATE
+              - IGNORED
+              - REJECTED_SIGNATURE
+              - REJECTED_INVALID
+              - ERROR
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/me:
+    get:
+      tags:
+        - Command Centre
+      summary: Get my Command Centre roles and permissions
+      description: Platform staff only (no organization context).
+      operationId: get_api_v1_command_centre_me
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ops/alerts:
+    get:
+      tags:
+        - Command Centre
+      summary: List current operational and security alerts
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.audit.read`, `platform.jobs.manage`.
+      operationId: get_api_v1_command_centre_ops_alerts
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ops/integrations:
+    get:
+      tags:
+        - Command Centre
+      summary: Get integration status (never secrets)
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.jobs.manage`.
+      operationId: get_api_v1_command_centre_ops_integrations
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ops/jobs:
+    get:
+      tags:
+        - Command Centre
+      summary: List background jobs of one type
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.jobs.manage`.
+      operationId: get_api_v1_command_centre_ops_jobs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - notification
+              - reminder
+              - pharmacy-email
+              - emr-webhook
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Z_]{2,20}$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ops/jobs/{type}/{id}/retry:
+    post:
+      tags:
+        - Command Centre
+      summary: Retry a failed job
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.jobs.manage`.
+      operationId: post_api_v1_command_centre_ops_jobs_type_id_retry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - notification
+              - reminder
+              - pharmacy-email
+              - emr-webhook
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ops/jobs/summary:
+    get:
+      tags:
+        - Command Centre
+      summary: Count background jobs by type and status
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.jobs.manage`.
+      operationId: get_api_v1_command_centre_ops_jobs_summary
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/orders:
+    get:
+      tags:
+        - Command Centre
+      summary: List orders
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.finance.read`.
+      operationId: get_api_v1_command_centre_orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 60
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - PENDING_PAYMENT
+              - PAID
+              - PAYMENT_FAILED
+              - CANCELLED
+        - name: fulfilmentStatus
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - AWAITING_PAYMENT
+              - AWAITING_PHARMACIST_REVIEW
+              - APPROVED_FOR_DISPENSING
+              - PREPARING
+              - READY_FOR_PICKUP
+              - PICKED_UP
+              - OUT_FOR_DELIVERY
+              - DELIVERED
+              - CLARIFICATION_REQUIRED
+              - REJECTED
+              - UNABLE_TO_FULFILL
+              - CANCELLED
+        - name: pharmacyId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: patientId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: method
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - DELIVERY
+              - PICKUP
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/orders/{id}:
+    get:
+      tags:
+        - Command Centre
+      summary: Trace an order end to end (payments, fulfilments, delivery, refunds, timeline)
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.finance.read`.
+      operationId: get_api_v1_command_centre_orders_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 64
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/overview:
+    get:
+      tags:
+        - Command Centre
+      summary: Get platform metrics and work queues for a period
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.finance.read`.
+      operationId: get_api_v1_command_centre_overview
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        - name: tz
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/patients:
+    get:
+      tags:
+        - Command Centre
+      summary: List patients (masked contact details)
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.patients.read`.
+      operationId: get_api_v1_command_centre_patients
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 120
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - PENDING
+              - ACTIVE
+              - SUSPENDED
+              - LOCKED
+              - DISABLED
+              - DEACTIVATED
+              - BANNED
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/patients/{id}/access-history:
+    get:
+      tags:
+        - Command Centre
+      summary: Get who opened or changed a patient’s record
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.patients.read`, `platform.audit.read`.
+      operationId: get_api_v1_command_centre_patients_id_access_history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: staffOnly
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/patients/{id}/account:
+    post:
+      tags:
+        - Command Centre
+      summary: Open a patient’s account view (reason required, audited)
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.patients.read`.
+      operationId: post_api_v1_command_centre_patients_id_account
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/patients/{id}/clinical:
+    post:
+      tags:
+        - Command Centre
+      summary: Open a patient’s health information (clinical permission or emergency access; reason required, audited)
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.clinical.read`, `platform.emergency.access`.
+      operationId: post_api_v1_command_centre_patients_id_clinical
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/patients/{id}/emergency-access:
+    post:
+      tags:
+        - Command Centre
+      summary: Start time-limited emergency access to a patient
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.emergency.access`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_patients_id_emergency_access
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 20
+                  maxLength: 500
+                minutes:
+                  default: 30
+                  type: integer
+                  minimum: 5
+                  maximum: 60
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/patients/{id}/sessions/revoke:
+    post:
+      tags:
+        - Command Centre
+      summary: Sign a patient out of every session
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.users.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_patients_id_sessions_revoke
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/command-centre/pricing/delivery:
     get:
       tags:
@@ -3272,6 +6268,258 @@ paths:
                 $ref: "#/components/schemas/Error"
         "409":
           $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/providers/credentials:
+    get:
+      tags:
+        - Command Centre
+      summary: List provider licences expiring or expired
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.providers.manage`.
+      operationId: get_api_v1_command_centre_providers_credentials
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: within
+          in: query
+          required: false
+          schema:
+            default: 60
+            type: integer
+            minimum: 1
+            maximum: 365
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - doctor
+              - pharmacy
+              - branch
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/providers/doctors/{profileId}/reinstate:
+    post:
+      tags:
+        - Command Centre
+      summary: Reinstate a suspended doctor with a reason
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.providers.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_providers_doctors_profileId_reinstate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/providers/doctors/{profileId}/suspend:
+    post:
+      tags:
+        - Command Centre
+      summary: Suspend a doctor with a reason
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.providers.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_providers_doctors_profileId_suspend
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/providers/summary:
+    get:
+      tags:
+        - Command Centre
+      summary: Count providers by status
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.providers.manage`.
+      operationId: get_api_v1_command_centre_providers_summary
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/search:
+    get:
+      tags:
+        - Command Centre
+      summary: Search patients, orders, pharmacies, doctors, organisations and cases
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.patients.read`, `platform.finance.read`, `platform.support.manage`.
+      operationId: get_api_v1_command_centre_search
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 80
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":

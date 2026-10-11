@@ -36,6 +36,8 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await as(admin).post(PRICING, { ...plain(600), reason: 'Restore the platform default after tests' });
+  // Other suites count active platform administrators; leave none of ours active.
+  await prisma.user.updateMany({ where: { platformRoleAssignments: { some: {} }, email: { endsWith: '@command.test' } }, data: { accountStatus: 'DISABLED' } });
 });
 
 describe('delivery pricing set in the Command Centre', () => {

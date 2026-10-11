@@ -362,6 +362,7 @@ model Pharmacy {
   orderFulfilments OrderFulfilment[]
   emailJobs PharmacyEmailJob[]
   identityOrganization IdentityOrganization?
+  settlements PharmacySettlement[]
 
   @@index([complianceStatus])
   @@index([country, state, city, complianceStatus])
@@ -785,6 +786,7 @@ model OrderFulfilment {
   allocations       OrderAllocation[]
   refundCase        RefundReviewCase?
   deliveryAssignments DeliveryAssignment[]
+  settlementItems   PharmacySettlementItem[]
 
   @@index([orderId])
   @@index([pharmacyId, status])
@@ -794,6 +796,12 @@ model OrderFulfilment {
 enum RefundReviewStatus {
   PENDING_REVIEW
   RESOLVED
+  PROPOSED
+  APPROVED
+  DECLINED
+  SUBMITTED
+  REFUNDED
+  FAILED
 }
 model RefundReviewCase {
   id String @id @default(uuid())
@@ -804,8 +812,25 @@ model RefundReviewCase {
   status RefundReviewStatus @default(PENDING_REVIEW)
   reason String
   createdAt DateTime @default(now()) @map("created_at")
+  proposedByUserId String? @map("proposed_by_user_id")
+  proposedAt DateTime? @map("proposed_at")
+  proposalNote String? @map("proposal_note") @db.VarChar(500)
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  decisionNote String? @map("decision_note") @db.VarChar(500)
+  submittedAt DateTime? @map("submitted_at")
+  provider String? @db.VarChar(32)
+  providerRefundReference String? @unique @map("provider_refund_reference") @db.VarChar(120)
+  providerStatus String? @map("provider_status") @db.VarChar(32)
+  failureReason String? @map("failure_reason") @db.VarChar(300)
+  evidenceNote String? @map("evidence_note") @db.VarChar(500)
+  evidenceRecordedByUserId String? @map("evidence_recorded_by_user_id")
+  refundedAt DateTime? @map("refunded_at")
+  version Int @default(1)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   fulfilment OrderFulfilment @relation(fields:[fulfilmentId],references:[id],onDelete:Cascade)
   @@index([orderId,status])
+  @@index([status, createdAt(sort: Desc)])
   @@map("refund_review_cases")
 }
 
@@ -3607,4 +3632,135 @@ model WaitlistSignup {
 
   @@unique([product, email])
   @@map("waitlist_signups")
+}
+
+/// One delivery from a payment provider's webhook, whatever happened to it. No payload is kept.
+model PaymentWebhookReceipt {
+  id         String   @id @default(uuid())
+  provider   String   @db.VarChar(32)
+  eventType  String?  @map("event_type") @db.VarChar(64)
+  reference  String?  @db.VarChar(120)
+  eventKey   String?  @map("event_key") @db.Char(64)
+  outcome    String   @db.VarChar(24)
+  detail     String?  @db.VarChar(200)
+  receivedAt DateTime @default(now()) @map("received_at")
+
+  @@index([receivedAt(sort: Desc)])
+  @@index([outcome, receivedAt(sort: Desc)])
+  @@index([reference])
+  @@map("payment_webhook_receipts")
+}
+
+/// What Sabi owes a pharmacy for a period; prepared and approved by different people.
+model PharmacySettlement {
+  id                String    @id @default(uuid())
+  reference         String    @unique @db.VarChar(40)
+  pharmacyId        String    @map("pharmacy_id")
+  periodStart       DateTime  @map("period_start")
+  periodEnd         DateTime  @map("period_end")
+  currency          String    @default("NGN") @db.VarChar(3)
+  fulfilmentCount   Int       @map("fulfilment_count")
+  grossMinor        Int       @map("gross_minor")
+  commissionMinor   Int       @map("commission_minor")
+  netPayableMinor   Int       @map("net_payable_minor")
+  status            String    @default("DRAFT") @db.VarChar(16)
+  idempotencyKey    String    @unique @map("idempotency_key") @db.VarChar(128)
+  preparedByUserId  String    @map("prepared_by_user_id")
+  approvedByUserId  String?   @map("approved_by_user_id")
+  approvedAt        DateTime? @map("approved_at")
+  paidByUserId      String?   @map("paid_by_user_id")
+  paidAt            DateTime? @map("paid_at")
+  payoutReference   String?   @map("payout_reference") @db.VarChar(120)
+  payoutNote        String?   @map("payout_note") @db.VarChar(500)
+  cancelledByUserId String?   @map("cancelled_by_user_id")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelReason      String?   @map("cancel_reason") @db.VarChar(500)
+  version           Int       @default(1)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
+  pharmacy          Pharmacy  @relation(fields: [pharmacyId], references: [id], onDelete: Restrict)
+  items             PharmacySettlementItem[]
+
+  @@index([pharmacyId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("pharmacy_settlements")
+}
+
+model PharmacySettlementItem {
+  id              String             @id @default(uuid())
+  settlementId    String             @map("settlement_id")
+  fulfilmentId    String             @map("fulfilment_id")
+  grossMinor      Int                @map("gross_minor")
+  commissionMinor Int                @map("commission_minor")
+  active          Boolean            @default(true)
+  settlement      PharmacySettlement @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  fulfilment      OrderFulfilment    @relation(fields: [fulfilmentId], references: [id], onDelete: Restrict)
+
+  @@index([settlementId])
+  @@map("pharmacy_settlement_items")
+}
+
+/// Support cases and incidents.
+model OpsCase {
+  id                    String    @id @default(uuid())
+  reference             String    @unique @db.VarChar(24)
+  kind                  String    @db.VarChar(16)
+  category              String    @db.VarChar(32)
+  priority              String    @db.VarChar(8)
+  status                String    @default("OPEN") @db.VarChar(16)
+  title                 String    @db.VarChar(160)
+  subjectUserId         String?   @map("subject_user_id")
+  orderId               String?   @map("order_id")
+  pharmacyId            String?   @map("pharmacy_id")
+  professionalProfileId String?   @map("professional_profile_id")
+  assigneeUserId        String?   @map("assignee_user_id")
+  createdByUserId       String    @map("created_by_user_id")
+  dueAt                 DateTime? @map("due_at")
+  resolvedAt            DateTime? @map("resolved_at")
+  resolution            String?   @db.VarChar(1000)
+  version               Int       @default(1)
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at")
+  events                OpsCaseEvent[]
+
+  @@index([status, priority, createdAt(sort: Desc)])
+  @@index([kind, createdAt(sort: Desc)])
+  @@index([subjectUserId])
+  @@index([orderId])
+  @@index([assigneeUserId, status])
+  @@map("ops_cases")
+}
+
+model OpsCaseEvent {
+  id          String   @id @default(uuid())
+  caseId      String   @map("case_id")
+  actorUserId String   @map("actor_user_id")
+  kind        String   @db.VarChar(16)
+  body        String?  @db.VarChar(2000)
+  fromStatus  String?  @map("from_status") @db.VarChar(16)
+  toStatus    String?  @map("to_status") @db.VarChar(16)
+  createdAt   DateTime @default(now()) @map("created_at")
+  opsCase     OpsCase  @relation(fields: [caseId], references: [id], onDelete: Restrict)
+
+  @@index([caseId, createdAt])
+  @@map("ops_case_events")
+}
+
+/// Time-limited, reviewed emergency access to one patient's health information.
+model EmergencyAccessGrant {
+  id               String    @id @default(uuid())
+  actorUserId      String    @map("actor_user_id")
+  subjectUserId    String    @map("subject_user_id")
+  reason           String    @db.VarChar(500)
+  startedAt        DateTime  @default(now()) @map("started_at")
+  expiresAt        DateTime  @map("expires_at")
+  endedAt          DateTime? @map("ended_at")
+  reviewedByUserId String?   @map("reviewed_by_user_id")
+  reviewedAt       DateTime? @map("reviewed_at")
+  reviewOutcome    String?   @map("review_outcome") @db.VarChar(16)
+  reviewNote       String?   @map("review_note") @db.VarChar(500)
+
+  @@index([actorUserId, subjectUserId, expiresAt(sort: Desc)], map: "emergency_access_grants_actor_subject_expires_idx")
+  @@index([reviewedAt, startedAt(sort: Desc)], map: "emergency_access_grants_reviewed_at_started_at_idx")
+  @@map("emergency_access_grants")
 }

@@ -1,6 +1,7 @@
 import express from "express";
 import { z } from "zod";
 import prisma from "../../config/db.js";
+import { recordAudit } from "../audit/audit.service.js";
 import { protect } from "../../middleware/authMiddleware.js";
 import {
   requirePlatform,
@@ -232,6 +233,17 @@ export async function changeAccountStatus(
       data: { revokedAt: now },
     });
     await tx.refreshToken.deleteMany({ where: { userId: targetId } });
+    // On the person's own activity log ("Sabi staff changed your account") and the audit trail,
+    // with the reason and before/after.
+    await recordAudit(tx, {
+      actorUserId: actorId,
+      subjectUserId: targetId,
+      action: "ADMIN_ACCOUNT_CHANGED",
+      summary: `Changed account status from ${target.accountStatus} to ${input.status}`,
+      resourceType: "user",
+      resourceId: targetId,
+      context: { reason: input.reason, before: { accountStatus: target.accountStatus }, after: { accountStatus: input.status } },
+    });
     await tx.activityLog.create({
       data: {
         userId: actorId,

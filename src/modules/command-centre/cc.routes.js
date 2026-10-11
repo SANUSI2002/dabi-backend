@@ -4,6 +4,14 @@
 import express from 'express';
 import { protect } from '../../middleware/authMiddleware.js';
 import { requirePlatform } from '../../middleware/accessMiddleware.js';
+import { auditRoutes, meRoutes, searchRoutes } from './audit.routes.js';
+import { caseRoutes } from './cases.routes.js';
+import { financeRoutes } from './finance.routes.js';
+import { opsRoutes } from './ops.routes.js';
+import { deliveryRoutes, orderRoutes } from './orders.routes.js';
+import { overviewRoutes } from './overview.routes.js';
+import { consultationRoutes, providerRoutes } from './oversight.routes.js';
+import { emergencyRoutes, patientRoutes } from './patients.routes.js';
 import { pricingRoutes } from './pricing.routes.js';
 
 const router = express.Router();
@@ -11,6 +19,19 @@ router.use(protect, requirePlatform);
 // Platform data must never be cached by browsers or shared proxies.
 router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
+router.use('/me', meRoutes);
+router.use('/overview', overviewRoutes);
+router.use('/search', searchRoutes);
+router.use('/patients', patientRoutes);
+router.use('/emergency-access', emergencyRoutes);
+router.use('/orders', orderRoutes);
+router.use('/deliveries', deliveryRoutes);
+router.use('/consultations', consultationRoutes);
+router.use('/providers', providerRoutes);
+router.use('/finance', financeRoutes);
+router.use('/cases', caseRoutes);
+router.use('/ops', opsRoutes);
+router.use('/audit', auditRoutes);
 router.use('/pricing', pricingRoutes);
 
 export default router;
