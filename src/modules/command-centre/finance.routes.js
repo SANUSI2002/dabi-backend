@@ -215,3 +215,27 @@ financeRoutes.post('/settlements/:id/paid', allow('platform.finance.approve'), r
   validate(z.object({ body: z.object({ payoutReference: z.string().trim().min(4).max(120).regex(/^[\w ./:-]+$/), note: reason }).strict(), query: none, params: idParams })),
   handle((req) => finance.markSettlementPaid(req, req.params.id, req.body)));
 financeRoutes.post('/settlements/:id/cancel', allow('platform.finance.manage', 'platform.finance.approve'), validate(note), handle((req) => finance.cancelSettlement(req, req.params.id, req.body.note)));
+
+/** What each pharmacy is owed and not yet on a live settlement (the starting point for a settlement). */
+financeRoutes.get('/payables', allow(...READ),
+  validate(z.object({ query: none, params: none }).passthrough()),
+  handle(async () => {
+    const rows = await prisma.$queryRaw`
+      SELECT p."id" AS "pharmacyId", p."name", p."compliance_status" AS "complianceStatus",
+             COUNT(f."id")::int AS "fulfilments", COALESCE(SUM(f."subtotal_minor"), 0)::bigint AS "grossMinor",
+             COALESCE(SUM(f."commission_minor"), 0)::bigint AS "commissionMinor", MIN(f."created_at") AS "oldestAt"
+      FROM "pharmacies" p
+      JOIN "order_fulfilments" f ON f."pharmacy_id" = p."id"
+      JOIN "orders" o ON o."id" = f."order_id" AND o."status" = 'PAID'
+      LEFT JOIN "refund_review_cases" r ON r."fulfilment_id" = f."id"
+      WHERE f."status" IN ('DELIVERED', 'PICKED_UP') AND f."commission_minor" IS NOT NULL
+        AND (r."id" IS NULL OR r."status" IN ('DECLINED', 'RESOLVED'))
+        AND NOT EXISTS (SELECT 1 FROM "pharmacy_settlement_items" i WHERE i."fulfilment_id" = f."id" AND i."active")
+      GROUP BY p."id", p."name", p."compliance_status"
+      ORDER BY MIN(f."created_at")`;
+    return {
+      generatedAt: new Date().toISOString(),
+      definition: 'Per pharmacy: medicines subtotal of paid, handed-over fulfilments not yet on a live settlement, less commission. Refunded fulfilments are excluded.',
+      items: rows.map((r) => ({ ...r, grossMinor: Number(r.grossMinor), commissionMinor: Number(r.commissionMinor), netPayableMinor: Number(r.grossMinor) - Number(r.commissionMinor) })),
+    };
+  }));

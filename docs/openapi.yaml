@@ -3769,6 +3769,38 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
       x-generated: true
+  /api/v1/command-centre/finance/payables:
+    get:
+      tags:
+        - Command Centre
+      summary: List what each pharmacy is owed and not yet settled
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.finance.manage`, `platform.finance.approve`.
+      operationId: get_api_v1_command_centre_finance_payables
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/command-centre/finance/payments:
     get:
       tags:

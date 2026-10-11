@@ -224,6 +224,11 @@ describe('finance', () => {
     const periodEnd = new Date().toISOString();
     const body = { pharmacyId: shop.pharmacy.id, periodStart, periodEnd };
 
+    const payables = await as(financeA).get('/finance/payables');
+    expect(payables.status, JSON.stringify(payables.body)).toBe(200);
+    const owed = payables.body.data.items.find((p) => p.pharmacyId === shop.pharmacy.id);
+    expect(owed.netPayableMinor).toBe(owed.grossMinor - owed.commissionMinor);
+    expect(owed.fulfilments).toBeGreaterThanOrEqual(1);
     const preview = await as(financeA).post('/finance/settlements/preview', body);
     expect(preview.status, JSON.stringify(preview.body)).toBe(200);
     const line = preview.body.data.fulfilments.find((f) => f.id === fulfilment.id);

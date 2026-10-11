@@ -232,6 +232,7 @@ const OVERRIDES = {
   'post /api/v1/command-centre/finance/refunds/{}/approve': { summary: 'Approve a proposed refund (another person)' },
   'post /api/v1/command-centre/finance/refunds/{}/submit': { summary: 'Send an approved refund to the payment provider' },
   'post /api/v1/command-centre/finance/refunds/{}/evidence': { summary: 'Record provider evidence for a submitted refund' },
+  'get /api/v1/command-centre/finance/payables': { summary: 'List what each pharmacy is owed and not yet settled' },
   'post /api/v1/command-centre/finance/settlements/preview': { summary: 'Preview what a pharmacy is owed for a period' },
   'post /api/v1/command-centre/finance/settlements': { summary: 'Prepare a pharmacy settlement (idempotent)' },
   'post /api/v1/command-centre/finance/settlements/{}/approve': { summary: 'Approve a settlement (another person)' },
