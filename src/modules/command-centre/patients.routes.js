@@ -16,7 +16,7 @@ import { validate } from '../../middleware/validateMiddleware.js';
 import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
 import { maskIp } from '../audit/audit.context.js';
 import { decryptDeliveryDetails } from '../orders/orders.delivery.js';
-import { adminAudit, allow, can, ccError, handle, maskEmail, maskPhone, namesFor, pageQuery, paged, reason } from './cc.common.js';
+import { adminAudit, allow, can, ccError, deviceName, handle, maskEmail, maskPhone, namesFor, pageQuery, paged, reason } from './cc.common.js';
 
 export const patientRoutes = express.Router();
 export const emergencyRoutes = express.Router();
@@ -111,7 +111,7 @@ async function accountView(user) {
       lastSignInAt: user.lastLoginAt, twoStepVerification: Boolean(user.mfaTotp?.enabledAt), roles: user.roles.map((r) => r.role),
     },
     sessions: sessions.map((s) => ({
-      id: s.id, device: s.device.label, startedAt: s.createdAt, lastActiveAt: s.lastUsedAt, expiresAt: s.expiresAt,
+      id: s.id, device: deviceName(s.device.label), startedAt: s.createdAt, lastActiveAt: s.lastUsedAt, expiresAt: s.expiresAt,
       state: s.revokedAt ? 'SIGNED_OUT' : s.expiresAt <= now ? 'EXPIRED' : 'ACTIVE', endedAt: s.revokedAt, endedReason: s.revokedReason, twoStepVerifiedAt: s.mfaVerifiedAt,
     })),
     location: {

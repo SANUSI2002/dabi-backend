@@ -12,7 +12,7 @@ import { validate } from '../../middleware/validateMiddleware.js';
 import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
 import { allowedPlatformInviteRoles } from '../identity/identity.invitations.js';
 import { maskIp } from '../audit/audit.context.js';
-import { adminAudit, allow, ccError, handle, namesFor, reason } from './cc.common.js';
+import { adminAudit, allow, ccError, deviceName, handle, namesFor, reason } from './cc.common.js';
 
 export const platformAdminRoutes = express.Router();
 
@@ -75,7 +75,7 @@ platformAdminRoutes.get('/sessions', STAFF_READ, validate(z.object({ query: z.ob
       select: { id: true, userId: true, createdAt: true, lastUsedAt: true, expiresAt: true, revokedAt: true, revokedReason: true, mfaVerifiedAt: true, device: { select: { label: true } } },
     });
     const names = await namesFor(prisma, rows.map((r) => r.userId));
-    return { items: rows.map((r) => ({ ...r, device: r.device.label, staff: names.get(r.userId), current: r.id === req.user.sessionId, state: r.revokedAt ? 'SIGNED_OUT' : r.expiresAt <= now ? 'EXPIRED' : 'ACTIVE' })) };
+    return { items: rows.map((r) => ({ ...r, device: deviceName(r.device.label), staff: names.get(r.userId), current: r.id === req.user.sessionId, state: r.revokedAt ? 'SIGNED_OUT' : r.expiresAt <= now ? 'EXPIRED' : 'ACTIVE' })) };
   }));
 
 platformAdminRoutes.post('/sessions/:id/revoke', allow('platform.users.manage', 'platform.security.view'), requireRecentMfa,

@@ -7,6 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { requireAnyPermission } from '../../middleware/accessMiddleware.js';
+import { deviceLabel } from '../audit/audit.context.js';
 import { recordAudit } from '../audit/audit.service.js';
 
 export const allow = (...permissions) => requireAnyPermission(...permissions);
@@ -103,3 +104,6 @@ export async function namesFor(db, ids) {
 /** Offset pagination for admin lists that show "page N of M". */
 export const pageQuery = { page: z.coerce.number().int().min(1).max(10_000).default(1), limit: z.coerce.number().int().min(1).max(100).default(25) };
 export const paged = (items, total, { page, limit }) => ({ items, total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) });
+
+/** Devices are stored with the raw browser string on some sign-ins; show "Chrome on Windows" instead. */
+export const deviceName = (label) => (label && /Mozilla\/|AppleWebKit|Gecko\//.test(label) ? deviceLabel(label) : label);
