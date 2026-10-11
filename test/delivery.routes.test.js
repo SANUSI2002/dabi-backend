@@ -40,8 +40,13 @@ let state, tx, auditFailure, zeroUpdate, sequence;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const matches = (row, where = {}) =>
   Object.entries(where).every(([key, expected]) => {
+    if (key === "OR") return expected.some((branch) => matches(row, branch));
     const actual = row?.[key];
     if (expected && typeof expected === "object") {
+      if ("is" in expected)
+        return expected.is === null
+          ? actual == null
+          : matches(actual, expected.is);
       if ("some" in expected)
         return actual?.some((item) => matches(item, expected.some));
       if ("in" in expected) return expected.in.includes(actual);
@@ -87,6 +92,7 @@ const hydrate = (model, row) => {
     return {
       ...row,
       user: {
+        riderApplication: null,
         ...state.user.find((u) => u.id === row.userId),
         roles: state.userRole.filter((r) => r.userId === row.userId),
       },
@@ -266,6 +272,7 @@ beforeEach(() => {
     inventory: [{ availableQuantity: 4 }],
   };
   tx = {};
+  tx.riderApplication = { findUnique: vi.fn().mockResolvedValue(null) };
   for (const model of [
     "user",
     "userRole",

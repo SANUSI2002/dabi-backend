@@ -33,6 +33,24 @@ export const configure = (actorId, userId, data, platformAuthorized = false) =>
       if (!(await r.activeUser(tx, actorId))) throw fail("FORBIDDEN");
     } else await requireRole(tx, actorId, "SUPER_ADMIN");
     if (!(await r.activeUser(tx, userId))) throw fail("NOT_FOUND");
+    const riderApplication = await tx.riderApplication.findUnique({
+      where: { userId },
+      select: {
+        status: true,
+        licenceExpiresAt: true,
+        insuranceExpiresAt: true,
+      },
+    });
+    if (
+      data.isActive &&
+      riderApplication &&
+      (riderApplication.status !== "APPROVED" ||
+        riderApplication.licenceExpiresAt <=
+          new Date(new Date().toISOString().slice(0, 10)) ||
+        riderApplication.insuranceExpiresAt <=
+          new Date(new Date().toISOString().slice(0, 10)))
+    )
+      throw fail("CONFLICT");
     const result = await r.configure(tx, actorId, userId, data);
     if (!result) throw fail("NOT_FOUND");
     await r.audit(tx, actorId, "DELIVERY_PARTNER_CONFIGURED", result.id);

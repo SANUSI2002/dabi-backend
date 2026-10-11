@@ -1,0 +1,13 @@
+# Rider onboarding
+
+The rider application is independent of pharmacy ownership and patient clinical records. New accounts remain PENDING until email verification, and receive no delivery role or profile at registration.
+
+Routes: `/api/v1/riders/registration-config`, `/register`, `/verify-email`, `/resend-verification`; Sabi-authenticated `/me`, `/applications`, `/applications/:id` (PATCH), `/applications/:id/credentials/:kind` (raw PUT), `/applications/:id/submit`. All responses are no-store. Platform queue/detail and review/preview/retry/decision actions use `/api/v1/platform/riders` and require platform permissions plus recent MFA.
+
+Credential requirements are platform due diligence: driving licence, vehicle registration, insurance and future licence/insurance expiry dates. This checklist is not a claim of legal authorization to operate in every locality. File contents go to the user's approved Cloudmersive scanner; patient records are excluded. Files stay in private Supabase quarantine until the durable leased scanner verifies integrity and records CLEAN, then moves identical bytes to private clean storage. Previews are signed for 60 seconds. Authenticity decisions remain independent human reviews with recorded sources.
+
+Row locks and application version checks serialize revisions and decisions. No self-review/approval is permitted. Approval atomically creates the delivery role/profile, status, audit and durable email job. New applicant expiry/status is checked on every delivery authorization. Renewal returns to draft and pauses delivery access until approval. Legacy manually configured profiles without an application retain their existing path.
+
+Migration: `20261021090000_rider_onboarding`, additive only. Startup migration must finish before serving traffic. Existing Supabase/Cloudmersive/Resend server secrets are reused, never exposed in frontend bundles. `RIDER_REGISTRATION_ENABLED=false` stops new intake; `RIDER_WORKER_ENABLED=false` pauses both worker queues. `RIDER_PORTAL_URL` must be a clean HTTPS origin and defaults to the pharmacy site. Scanner/email failures stay queued with leases and bounded retries; expired/superseded email decisions cancel. Stable Resend idempotency keys prevent repeat delivery after worker crashes within the retry window.
+
+Not implemented by this phase: rider availability, automatic dispatch, GPS frontend publishing, earnings ledger/payouts, returns/disputes and a failed-mail operator recovery dashboard. The current owner's hosted API/database remain the existing test-release infrastructure; this implementation does not add backups or a restore plan.

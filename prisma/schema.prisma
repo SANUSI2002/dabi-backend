@@ -54,6 +54,7 @@ model User {
   dependents DependentProfile[]
   caregiverProfile CaregiverProfile?
   deliveryPartner DeliveryPartner?
+  riderApplication RiderApplication?
   organisationsOwned Organisation[]
   orders       Order[]
   identityMemberships OrganizationMembership[]
@@ -1451,6 +1452,82 @@ model DeliveryPartner {
   assignments DeliveryAssignment[]
   @@index([isActive])
   @@map("delivery_partners")
+}
+
+model RiderApplication {
+  id String @id @default(uuid())
+  userId String @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  fullName String @db.VarChar(160)
+  phone String @db.VarChar(30)
+  state String @db.VarChar(100)
+  city String @db.VarChar(100)
+  vehicleType String @db.VarChar(20)
+  licenceExpiresAt DateTime @db.Date
+  insuranceExpiresAt DateTime @db.Date
+  consentVersion String @db.VarChar(60)
+  consentedAt DateTime @default(now())
+  status String @default("DRAFT") @db.VarChar(30)
+  version Int @default(1)
+  submittedAt DateTime?
+  decidedAt DateTime?
+  decidedBy String?
+  decisionReason String? @db.VarChar(1000)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  credentials RiderCredential[]
+  emails RiderMailJob[]
+  @@index([status, createdAt, id])
+  @@map("rider_applications")
+}
+
+model RiderCredential {
+  id String @id @default(uuid())
+  applicationId String
+  application RiderApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  kind String @db.VarChar(40)
+  revision Int
+  storageKey String @unique
+  storageBucket String
+  contentType String
+  byteSize Int
+  sha256 String @db.VarChar(64)
+  scanStatus String @default("PENDING") @db.VarChar(30)
+  scanAttempts Int @default(0)
+  scanLeaseToken String?
+  scanLeaseExpiresAt DateTime?
+  scanErrorCode String?
+  scannerVersion String?
+  scannedAt DateTime?
+  reviewStatus String @default("PENDING") @db.VarChar(30)
+  sourceName String? @db.VarChar(200)
+  reference String? @db.VarChar(200)
+  note String? @db.VarChar(1000)
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([applicationId, kind, createdAt, id])
+  @@unique([applicationId, revision])
+  @@index([scanStatus, scanLeaseExpiresAt])
+  @@map("rider_credentials")
+}
+
+model RiderMailJob {
+  id String @id @default(uuid())
+  applicationId String
+  application RiderApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  kind String @db.VarChar(30)
+  version Int
+  status String @default("PENDING") @db.VarChar(20)
+  attempts Int @default(0)
+  leaseToken String?
+  leaseExpiresAt DateTime?
+  nextAttemptAt DateTime @default(now())
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([applicationId, kind, version])
+  @@index([status, nextAttemptAt])
+  @@map("rider_mail_jobs")
 }
 
 model DeliveryAssignment {
