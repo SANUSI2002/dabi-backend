@@ -5708,6 +5708,106 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
       x-generated: true
+  /api/v1/command-centre/pharmacy-exceptions:
+    get:
+      tags:
+        - Command Centre
+      summary: List marketplace pharmacy stock, expiry and listing exceptions by pharmacy and branch
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.ops.read`.
+      operationId: get_api_v1_command_centre_pharmacy_exceptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - OUT_OF_STOCK
+              - LOW_STOCK
+              - EXPIRED
+              - EXPIRING
+              - WITHDRAWN
+              - REJECTED
+        - name: within
+          in: query
+          required: false
+          schema:
+            default: 90
+            type: integer
+            minimum: -9007199254740991
+            maximum: 9007199254740991
+        - name: lowStockAt
+          in: query
+          required: false
+          schema:
+            default: 0
+            type: integer
+            minimum: 0
+            maximum: 1000000
+        - name: pharmacyId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/command-centre/pricing/delivery:
     get:
       tags:

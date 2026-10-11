@@ -223,6 +223,7 @@ const OVERRIDES = {
   'get /api/v1/command-centre/consultations/{}': { summary: 'Get a consultation’s status and timeline (no clinical content)' },
   'get /api/v1/command-centre/providers/credentials': { summary: 'List provider licences expiring or expired' },
   'get /api/v1/command-centre/providers/summary': { summary: 'Count providers by status' },
+  'get /api/v1/command-centre/pharmacy-exceptions': { summary: 'List marketplace pharmacy stock, expiry and listing exceptions by pharmacy and branch' },
   'post /api/v1/command-centre/providers/doctors/{}/suspend': { summary: 'Suspend a doctor with a reason' },
   'post /api/v1/command-centre/providers/doctors/{}/reinstate': { summary: 'Reinstate a suspended doctor with a reason' },
   'get /api/v1/command-centre/finance/summary': { summary: 'Get collected money, revenue split, refunds and settlements for a period' },

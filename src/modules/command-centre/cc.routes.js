@@ -10,6 +10,7 @@ import { financeRoutes } from './finance.routes.js';
 import { opsRoutes } from './ops.routes.js';
 import { deliveryRoutes, orderRoutes } from './orders.routes.js';
 import { overviewRoutes } from './overview.routes.js';
+import { pharmacyRoutes } from './pharmacy.routes.js';
 import { consultationRoutes, providerRoutes } from './oversight.routes.js';
 import { emergencyRoutes, patientRoutes } from './patients.routes.js';
 import { pricingRoutes } from './pricing.routes.js';
@@ -33,5 +34,6 @@ router.use('/cases', caseRoutes);
 router.use('/ops', opsRoutes);
 router.use('/audit', auditRoutes);
 router.use('/pricing', pricingRoutes);
+router.use('/pharmacy-exceptions', pharmacyRoutes);
 
 export default router;
