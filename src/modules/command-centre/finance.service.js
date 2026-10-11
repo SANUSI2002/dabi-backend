@@ -128,7 +128,7 @@ export async function applyRefundWebhook(event) {
         ? { status: 'REFUNDED', refundedAt: new Date(), providerStatus: 'processed', providerRefundReference: c.providerRefundReference ?? refundId, version: { increment: 1 } }
         : { status: 'FAILED', providerStatus: 'failed', failureReason: String(data.reason ?? data.message ?? 'Refund failed at Paystack').slice(0, 300), version: { increment: 1 } },
     });
-    return { applied: true, reference: transactionReference, detail: `Refund ${outcome.toLowerCase()}` };
+    return { applied: true, reference: transactionReference, detail: outcome === 'REFUNDED' ? 'Refund processed by Paystack' : 'Refund failed at Paystack' };
   });
 }
 

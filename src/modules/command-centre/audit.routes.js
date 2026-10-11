@@ -37,7 +37,8 @@ const whereFor = (f) => ({
   ...(f.resourceType ? { resourceType: f.resourceType } : {}), ...(f.resourceId ? { resourceId: f.resourceId } : {}),
 });
 const view = (r, names) => ({
-  id: r.id, at: r.createdAt, category: r.category, action: r.action, summary: r.summary,
+  id: r.id, at: r.createdAt, category: r.category, action: r.action,
+  summary: /^You /.test(r.summary) ? `${names.get(r.actorUserId) ?? 'Someone'} ${r.summary.slice(4)}` : r.summary,
   actor: names.get(r.actorUserId) ?? 'Unknown', actorUserId: r.actorUserId,
   subject: r.subjectUserId ? names.get(r.subjectUserId) ?? 'Unknown' : null, subjectUserId: r.subjectUserId,
   resourceType: r.resourceType, resourceId: r.resourceId,
