@@ -68,7 +68,31 @@ opsRoutes.get('/integrations', allow(...READ), validate(z.object({ query: none, 
 // ------------------------------------------------------------------------------------------------
 // Jobs
 // ------------------------------------------------------------------------------------------------
-const JOB_TYPES = ['notification', 'reminder', 'pharmacy-email', 'emr-webhook'];
+const JOB_TYPES = ['notification', 'reminder', 'pharmacy-email', 'emr-webhook', 'document-scan'];
+const SCAN_STUCK_MS = 15 * 60_000;
+
+/**
+ * Malware scans of uploaded files across products: patient documents, doctor and pharmacy
+ * credentials, organisation application evidence. Status is one of PENDING (and how long),
+ * FAILED / INFECTED / REJECTED, CLEAN. Retries happen on the existing review pages.
+ */
+async function scanRows(now = new Date()) {
+  const stuck = new Date(now.getTime() - SCAN_STUCK_MS);
+  const bad = ['FAILED', 'INFECTED', 'REJECTED'];
+  const [docs, doctor, pharmacy, evidence] = await Promise.all([
+    prisma.medicalDocument.findMany({ where: { deletedAt: null, OR: [{ status: 'PENDING_SCAN', updatedAt: { lt: stuck } }, { status: { in: ['INFECTED', 'REJECTED'] } }] }, orderBy: { updatedAt: 'desc' }, take: 200, select: { id: true, kind: true, status: true, scanVerdict: true, updatedAt: true, createdAt: true } }),
+    prisma.doctorCredential.findMany({ where: { OR: [{ scanStatus: { in: bad } }, { scanStatus: 'PENDING', createdAt: { lt: stuck } }] }, orderBy: { createdAt: 'desc' }, take: 200, select: { id: true, kind: true, scanStatus: true, scanAttempts: true, scanErrorCode: true, createdAt: true, application: { select: { professional: { select: { id: true, user: { select: { full_name: true } } } } } } } }),
+    prisma.pharmacyCredential.findMany({ where: { OR: [{ scanStatus: { in: bad } }, { scanStatus: 'PENDING', createdAt: { lt: stuck } }] }, orderBy: { createdAt: 'desc' }, take: 200, select: { id: true, kind: true, scanStatus: true, scanAttempts: true, scanErrorCode: true, createdAt: true, pharmacy: { select: { id: true, name: true } } } }),
+    prisma.platformApplicationEvidence.findMany({ where: { OR: [{ scanStatus: { in: bad } }, { scanStatus: 'PENDING', createdAt: { lt: stuck } }] }, orderBy: { createdAt: 'desc' }, take: 200, select: { id: true, requirementKey: true, scanStatus: true, scanAttempts: true, scanErrorCode: true, createdAt: true, application: { select: { id: true, reference: true, organizationName: true } } } }),
+  ]);
+  const scanState = (s) => (s === 'PENDING_SCAN' || s === 'PENDING' ? 'PENDING' : s);
+  return [
+    ...docs.map((d) => ({ id: d.id, source: 'Patient document', owner: 'A patient (contents not shown)', what: d.kind, status: scanState(d.status), attempts: null, error: d.scanVerdict, since: d.updatedAt, retryOn: null })),
+    ...doctor.map((c) => ({ id: c.id, source: 'Doctor credential', owner: c.application.professional.user.full_name, what: c.kind, status: c.scanStatus, attempts: c.scanAttempts, error: c.scanErrorCode, since: c.createdAt, retryOn: 'doctors' })),
+    ...pharmacy.map((c) => ({ id: c.id, source: 'Pharmacy credential', owner: c.pharmacy.name, what: c.kind, status: c.scanStatus, attempts: c.scanAttempts, error: c.scanErrorCode, since: c.createdAt, retryOn: 'pharmacies' })),
+    ...evidence.map((e) => ({ id: e.id, source: 'Organisation evidence', owner: `${e.application.organizationName} (${e.application.reference})`, what: e.requirementKey, status: e.scanStatus, attempts: e.scanAttempts, error: e.scanErrorCode, since: e.createdAt, retryOn: 'onboarding' })),
+  ].sort((a, b) => b.since - a.since);
+}
 
 async function jobSummary(now = new Date()) {
   const day = new Date(now - DAY);
@@ -87,6 +111,7 @@ async function jobSummary(now = new Date()) {
     notification: { window: 'last 24 h', counts: fold(notifications), retryable: true },
     reminder: { window: 'last 24 h', counts: fold(reminders), retryable: false, note: 'Medicine reminders are time-specific; a failed one is not re-sent late.' },
     'pharmacy-email': { window: 'all time', counts: fold(emails), retryable: true },
+    'document-scan': { window: 'needing attention (failed, infected, rejected, or pending > 15 min)', counts: (await scanRows(now)).reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {}), retryable: false, note: 'Retry a scan from the doctor, pharmacy or application review page; patient documents are rescanned automatically.' },
     'emr-webhook': { window: 'all time', counts: fold(emr.deliveries), retryable: true, outbox: { pending: emr.pendingOutbox, oldestPendingAt: emr.oldestPendingOutbox?.createdAt ?? null } },
   };
 }
@@ -107,6 +132,10 @@ opsRoutes.get('/jobs', allow(...READ),
       ]);
       const names = await namesFor(prisma, rows.map((r) => r.userId));
       return paged(rows.map((r) => ({ ...r, recipient: names.get(r.userId), category: r.notification.category, eventType: r.notification.eventType, notification: undefined, retryable: r.status === 'FAILED' && Date.now() - r.notification.createdAt.getTime() < DAY })), total, { page, limit });
+    }
+    if (type === 'document-scan') {
+      const rows = (await scanRows()).filter((r) => !status || r.status === status);
+      return paged(rows.slice(skip, skip + limit).map((r) => ({ ...r, retryable: false })), rows.length, { page, limit });
     }
     if (type === 'reminder') {
       const where = status ? { status } : {};
@@ -141,6 +170,7 @@ opsRoutes.post('/jobs/:type/:id/retry', allow('platform.jobs.manage'),
     const now = new Date();
     const audit = (tx, summary) => adminAudit(tx, req, { summary, resourceType: `job:${type}`, resourceId: id, reason: req.body.reason, after: { status: 'RETRY_QUEUED' } });
     if (type === 'reminder') throw ccError('NOT_RETRYABLE', 409, 'Medicine reminders are time-specific and are not re-sent late.');
+    if (type === 'document-scan') throw ccError('NOT_RETRYABLE', 409, 'Retry scans from the review page for that document.');
     if (type === 'notification') {
       return prisma.$transaction(async (tx) => {
         const d = await tx.notificationDelivery.findUnique({ where: { id }, select: { id: true, status: true, notification: { select: { createdAt: true } } } });

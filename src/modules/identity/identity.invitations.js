@@ -9,7 +9,9 @@ const INVITE_LIFETIME_MS = 48 * 60 * 60 * 1000;
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const normalizeEmail = (value) => value.trim().toLowerCase();
 const platformRoles = new Set(['SABI_SUPPORT', 'SABI_COMPLIANCE', 'SABI_PHARMACY_COMPLIANCE']);
-const superAdminRoles = new Set([...platformRoles, 'SABI_PLATFORM_ADMIN', 'SABI_SECURITY_ADMIN']);
+// Command Centre roles (operations, finance, clinical oversight) carry sensitive data and money
+// permissions, so only a super admin may grant them.
+const superAdminRoles = new Set([...platformRoles, 'SABI_PLATFORM_ADMIN', 'SABI_SECURITY_ADMIN', 'SABI_OPERATIONS', 'SABI_FINANCE', 'SABI_CLINICAL_OVERSIGHT']);
 const tenantRoles = {
   PHARMACY: new Set(['PHARMACY_STAFF']),
   HOSPITAL: new Set(['HOSPITAL_ADMIN', 'FINANCE_OFFICER', 'INVENTORY_OFFICER', 'HR_OFFICER', 'RECEPTIONIST']),
