@@ -16,11 +16,14 @@ export const safeDocumentSelect = {
   createdAt: true,
   updatedAt: true,
   deletedAt: true,
+  scanErrorCode: true,
+  scanAttempts: true,
 };
 export const internalDocumentSelect = {
   ...safeDocumentSelect,
   ownerPatientId: true,
   objectKey: true,
+  uploadBackend: true,
 };
 export const audit = (tx, userId, action, documentId, shareId) =>
   tx.activityLog.create({
@@ -99,7 +102,7 @@ export const recipientEligible = async (tx, patientId, recipientId) => {
         status: "ACTIVE",
         revokedAt: null,
         permissions: { has: "RECORDS" },
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        OR: [{ accessExpiresAt: null }, { accessExpiresAt: { gt: new Date() } }],
       },
       select: { id: true },
     }),

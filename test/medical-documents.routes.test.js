@@ -131,7 +131,10 @@ describe('secure medical document HTTP lifecycle', () => {
     db.documents[0].status = 'CLEAN';
     expect((await request(app).post(`/api/v1/medical-documents/${documentId}/download`).set(token(owner))).body.data.url).toContain('signed.invalid');
     db.shares.push({ id: shareId, documentId, recipientId: recipient, expiresAt: new Date(Date.now() + 60000), revokedAt: null });
+    db.eligibleCaregivers.add(recipient);
     expect((await request(app).post(`/api/v1/medical-documents/shared-with-me/${shareId}/download`).set(token(recipient))).status).toBe(200);
+    db.eligibleCaregivers.delete(recipient);
+    expect((await request(app).post(`/api/v1/medical-documents/shared-with-me/${shareId}/download`).set(token(recipient))).status).toBe(404);
     expect((await request(app).post(`/api/v1/medical-documents/shared-with-me/${shareId}/download`)).status).toBe(401);
     expect((await request(app).get('/api/v1/medical-documents/public/download')).status).toBe(401);
   });

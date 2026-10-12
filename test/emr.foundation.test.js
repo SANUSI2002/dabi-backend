@@ -23,6 +23,7 @@ vi.mock('../src/middleware/authMiddleware.js', () => ({
   protect: (req, res, next) => (req.get('authorization') ? (req.user = { id: 'user-1', organizationId: access.organizationId }, next()) : res.status(401).json({ status: 'error' })),
 }));
 vi.mock('../src/middleware/accessMiddleware.js', () => ({
+  requireAnyPermission: (...codes) => (req, res, next) => codes.some((c) => req.accessContext?.permissions?.includes(c)) ? next() : res.status(403).json({ status: 'error' }),
   requireOrganization: (req, _res, next) => {
     req.accessContext = { organization: { id: access.organizationId, facilityId: 'facility-1', type: 'HOSPITAL' }, roles: [], permissions: access.permissions };
     next();

@@ -127,6 +127,7 @@ const assignmentSelect = {
   fulfilmentId: true,
   status: true,
   assignedAt: true,
+  offerExpiresAt: true,
   respondedAt: true,
   pickedUpAt: true,
   outForDeliveryAt: true,
@@ -138,27 +139,51 @@ const pickupSelect = {
   address: true,
   contactPhone: true,
 };
-export const createAssignment = (tx, actorId, fulfilmentId, partnerId) => {
+export const createAssignment = async (tx, actorId, fulfilmentId, partnerId) => {
+  await tx.$queryRaw`SELECT id FROM rider_pay_policies WHERE id = 'default' FOR SHARE`;
+  const policy = await tx.riderPayPolicy.findUnique({ where: { id: 'default' } });
+  let pay = {};
+  if (policy?.published) {
+    const f = await tx.orderFulfilment.findUnique({ where: { id: fulfilmentId }, select: { deliveryQuote: true } });
+    const quote = f?.deliveryQuote;
+    if (!Number.isFinite(quote?.distanceKm) || quote.distanceKm < 0 || !Number.isSafeInteger(quote?.ratePerKmMinor) || quote.ratePerKmMinor <= 0) throw Object.assign(new Error('This delivery needs a frozen kilometre quote before a rider earning can be offered.'), { code: 'RIDER_QUOTE_REQUIRED', status: 409 });
+    const gross = Math.round(Math.round(quote.distanceKm * 1000) * quote.ratePerKmMinor / 1000);
+    const offer = Math.floor((gross * policy.riderShareBps + 5000) / 10000);
+    if (!Number.isSafeInteger(gross) || gross > 1000000000 || !Number.isSafeInteger(offer) || offer <= 0) throw Object.assign(new Error('The delivery price cannot produce a valid rider earning.'), { code: 'RIDER_QUOTE_REQUIRED', status: 409 });
+    pay = { earningOfferMinor: offer, payGrossMinor: gross, payShareBps: policy.riderShareBps, payRetainedMinor: gross - offer, payPolicyVersion: policy.version };
+  }
+  await tx.$queryRaw`SELECT id FROM delivery_partners WHERE id = ${partnerId} FOR UPDATE`;
+  if (policy?.published) {
+    const open = await tx.deliveryAssignment.count({ where: { partnerId, status: { in: ['PENDING', 'ACCEPTED'] } } });
+    if (open >= policy.maxOpenAssignments) throw Object.assign(new Error('CONFLICT'), { code: 'CONFLICT' });
+  }
   const id = randomUUID();
-  return tx.deliveryAssignment.create({
+  const assignment = await tx.deliveryAssignment.create({
     data: {
       id,
       fulfilmentId,
       partnerId,
       assignedByUserId: actorId,
+      ...pay,
+      ...(policy?.published ? { offerExpiresAt: new Date(Date.now() + policy.offerExpiryMinutes * 60000) } : {}),
       ...issueCodes(id),
     },
-    select: assignmentSelect,
+    select: { ...assignmentSelect, earningOfferMinor: true, payPolicyVersion: true },
   });
+  const rider = await tx.deliveryPartner.findFirst({ where: { id: partnerId }, select: { userId: true } });
+  await tx.notification.create({ data: { userId: rider.userId, title: 'New delivery offer', message: assignment.earningOfferMinor == null ? 'A new delivery is waiting. Open the offer to review, accept or reject it.' : `You can earn ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(assignment.earningOfferMinor / 100)} for this delivery. Open the offer to accept or reject it.`, category: 'DELIVERY', eventType: 'delivery.offer', eventKey: `delivery-offer:${id}`, link: `/rider/delivery/${id}` } });
+  return assignment;
 };
 export const assignments = (tx, partnerId, { limit, offset }) =>
   tx.deliveryAssignment.findMany({
     where: { partnerId, status: { in: ["PENDING", "ACCEPTED"] } },
     select: {
       ...assignmentSelect,
+      earningOfferMinor: true,
       fulfilment: {
         select: {
           status: true,
+          deliveryQuote: true,
           pharmacy: { select: pickupSelect },
           order: { select: { reference: true } },
         },
@@ -182,9 +207,11 @@ export const history = (tx, partnerId, { limit, offset }) =>
     where: { partnerId, status: { in: ["COMPLETED", "REJECTED"] } },
     select: {
       ...assignmentSelect,
+      earningOfferMinor: true,
       fulfilment: {
         select: {
           status: true,
+          deliveryQuote: true,
           pharmacy: { select: pickupSelect },
           order: { select: { reference: true } },
         },
@@ -203,11 +230,15 @@ export const assigned = (tx, partnerId, id) =>
     },
     select: {
       ...assignmentSelect,
+      partnerId: true,
+      earningOfferMinor: true,
+      payPolicyVersion: true,
       ...codeFields,
       fulfilment: {
         select: {
           id: true,
           status: true,
+          deliveryQuote: true,
           pharmacy: { select: pickupSelect },
           order: {
             select: { reference: true, encryptedDeliveryDetails: true },

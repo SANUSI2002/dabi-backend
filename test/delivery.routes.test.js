@@ -269,9 +269,12 @@ beforeEach(() => {
     deliveryAssignment: [],
     deliveryTrackingPoint: [],
     activityLog: [],
+    notification: [],
     inventory: [{ availableQuantity: 4 }],
   };
   tx = {};
+  tx.$queryRaw = vi.fn().mockResolvedValue([]);
+  tx.riderPayPolicy = { findUnique: vi.fn().mockResolvedValue({ published: false }) };
   tx.riderApplication = { findUnique: vi.fn().mockResolvedValue(null) };
   for (const model of [
     "user",
@@ -283,6 +286,7 @@ beforeEach(() => {
     "deliveryAssignment",
     "deliveryTrackingPoint",
     "activityLog",
+    "notification",
   ]) {
     tx[model] = {
       count: vi.fn(

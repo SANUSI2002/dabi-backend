@@ -10,6 +10,7 @@ import express from 'express';
 import { z } from 'zod';
 import prisma from '../../config/db.js';
 import { validate } from '../../middleware/validateMiddleware.js';
+import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
 import { configured as paystackConfigured } from '../payments/paystack.adapter.js';
 import { roadRoutingConfigured } from '../checkout-pricing/distance.js';
 import { whatsappConfig } from '../whatsapp/whatsapp.provider.js';
@@ -68,7 +69,7 @@ opsRoutes.get('/integrations', allow(...READ), validate(z.object({ query: none, 
 // ------------------------------------------------------------------------------------------------
 // Jobs
 // ------------------------------------------------------------------------------------------------
-const JOB_TYPES = ['notification', 'reminder', 'pharmacy-email', 'emr-webhook', 'document-scan'];
+const JOB_TYPES = ['notification', 'reminder', 'pharmacy-email', 'emr-webhook', 'document-scan', 'subscription-email', 'rider-transfer', 'rider-email'];
 const SCAN_STUCK_MS = 15 * 60_000;
 
 /**
@@ -80,14 +81,14 @@ async function scanRows(now = new Date()) {
   const stuck = new Date(now.getTime() - SCAN_STUCK_MS);
   const bad = ['FAILED', 'INFECTED', 'REJECTED'];
   const [docs, doctor, pharmacy, evidence] = await Promise.all([
-    prisma.medicalDocument.findMany({ where: { deletedAt: null, OR: [{ status: 'PENDING_SCAN', updatedAt: { lt: stuck } }, { status: { in: ['INFECTED', 'REJECTED'] } }] }, orderBy: { updatedAt: 'desc' }, take: 200, select: { id: true, kind: true, status: true, scanVerdict: true, updatedAt: true, createdAt: true } }),
+    prisma.medicalDocument.findMany({ where: { deletedAt: null, OR: [{ status: 'PENDING_SCAN', updatedAt: { lt: stuck } }, { status: { in: ['INFECTED', 'REJECTED'] } }] }, orderBy: { updatedAt: 'desc' }, take: 200, select: { id: true, kind: true, status: true, scanVerdict: true, scanAttempts: true, scanErrorCode: true, uploadBackend: true, scanLeaseToken: true, updatedAt: true, createdAt: true } }),
     prisma.doctorCredential.findMany({ where: { OR: [{ scanStatus: { in: bad } }, { scanStatus: 'PENDING', createdAt: { lt: stuck } }] }, orderBy: { createdAt: 'desc' }, take: 200, select: { id: true, kind: true, scanStatus: true, scanAttempts: true, scanErrorCode: true, createdAt: true, application: { select: { professional: { select: { id: true, user: { select: { full_name: true } } } } } } } }),
     prisma.pharmacyCredential.findMany({ where: { OR: [{ scanStatus: { in: bad } }, { scanStatus: 'PENDING', createdAt: { lt: stuck } }] }, orderBy: { createdAt: 'desc' }, take: 200, select: { id: true, kind: true, scanStatus: true, scanAttempts: true, scanErrorCode: true, createdAt: true, pharmacy: { select: { id: true, name: true } } } }),
     prisma.platformApplicationEvidence.findMany({ where: { OR: [{ scanStatus: { in: bad } }, { scanStatus: 'PENDING', createdAt: { lt: stuck } }] }, orderBy: { createdAt: 'desc' }, take: 200, select: { id: true, requirementKey: true, scanStatus: true, scanAttempts: true, scanErrorCode: true, createdAt: true, application: { select: { id: true, reference: true, organizationName: true } } } }),
   ]);
   const scanState = (s) => (s === 'PENDING_SCAN' || s === 'PENDING' ? 'PENDING' : s);
   return [
-    ...docs.map((d) => ({ id: d.id, source: 'Patient document', owner: 'A patient (contents not shown)', what: d.kind, status: scanState(d.status), attempts: null, error: d.scanVerdict, since: d.updatedAt, retryOn: null })),
+    ...docs.map((d) => ({ id: d.id, source: 'Patient document', owner: 'A patient (contents not shown)', what: d.kind, status: scanState(d.status), attempts: d.scanAttempts, error: d.scanErrorCode || d.scanVerdict, since: d.updatedAt, retryOn: null, retryable: d.uploadBackend === 'supabase' && d.status === 'PENDING_SCAN' && d.scanAttempts >= 5 && !d.scanLeaseToken })),
     ...doctor.map((c) => ({ id: c.id, source: 'Doctor credential', owner: c.application.professional.user.full_name, what: c.kind, status: c.scanStatus, attempts: c.scanAttempts, error: c.scanErrorCode, since: c.createdAt, retryOn: 'doctors' })),
     ...pharmacy.map((c) => ({ id: c.id, source: 'Pharmacy credential', owner: c.pharmacy.name, what: c.kind, status: c.scanStatus, attempts: c.scanAttempts, error: c.scanErrorCode, since: c.createdAt, retryOn: 'pharmacies' })),
     ...evidence.map((e) => ({ id: e.id, source: 'Organisation evidence', owner: `${e.application.organizationName} (${e.application.reference})`, what: e.requirementKey, status: e.scanStatus, attempts: e.scanAttempts, error: e.scanErrorCode, since: e.createdAt, retryOn: 'onboarding' })),
@@ -107,7 +108,15 @@ async function jobSummary(now = new Date()) {
     })),
   ]);
   const fold = (rows) => Object.fromEntries(rows.map((r) => [r.status, r._count._all]));
+  const [subscriptionMail, riderMail, transfers] = await Promise.all([
+    prisma.subscriptionEmailJob.groupBy({ by: ['status'], _count: { _all: true } }),
+    prisma.riderMailJob.groupBy({ by: ['status'], _count: { _all: true } }),
+    prisma.riderTransferAttempt.groupBy({ by: ['status'], _count: { _all: true } }),
+  ]);
   return {
+    'subscription-email': { window: 'all time', counts: fold(subscriptionMail), retryable: true },
+    'rider-email': { window: 'all time', counts: fold(riderMail), retryable: false, note: 'Onboarding mail retries are controlled by the rider worker.' },
+    'rider-transfer': { window: 'all time', counts: fold(transfers), retryable: true, note: 'Retry means independent provider verification, never submitting a second transfer.' },
     notification: { window: 'last 24 h', counts: fold(notifications), retryable: true },
     reminder: { window: 'last 24 h', counts: fold(reminders), retryable: false, note: 'Medicine reminders are time-specific; a failed one is not re-sent late.' },
     'pharmacy-email': { window: 'all time', counts: fold(emails), retryable: true },
@@ -135,7 +144,7 @@ opsRoutes.get('/jobs', allow(...READ),
     }
     if (type === 'document-scan') {
       const rows = (await scanRows()).filter((r) => !status || r.status === status);
-      return paged(rows.slice(skip, skip + limit).map((r) => ({ ...r, retryable: false })), rows.length, { page, limit });
+      return paged(rows.slice(skip, skip + limit).map((r) => ({ ...r, retryable: r.retryable || false })), rows.length, { page, limit });
     }
     if (type === 'reminder') {
       const where = status ? { status } : {};
@@ -154,6 +163,13 @@ opsRoutes.get('/jobs', allow(...READ),
       ]);
       return paged(rows.map((r) => ({ ...r, recipient: maskEmail(r.recipient), retryable: r.status === 'FAILED' && r.lastErrorCode !== 'RECIPIENT_NOT_ALLOWED' })), total, { page, limit });
     }
+    if (type === 'subscription-email' || type === 'rider-email' || type === 'rider-transfer') {
+      const model = type === 'subscription-email' ? prisma.subscriptionEmailJob : type === 'rider-email' ? prisma.riderMailJob : prisma.riderTransferAttempt;
+      const where = status ? { status } : {};
+      const select = type === 'subscription-email' ? { id: true, kind: true, status: true, recipient: true, attempts: true, firstAttemptAt: true, lastErrorCode: true, createdAt: true, sentAt: true } : type === 'rider-email' ? { id: true, kind: true, status: true, attempts: true, createdAt: true, sentAt: true } : { id: true, reference: true, status: true, number: true, errorCode: true, createdAt: true, nextCheckAt: true };
+      const [rows, total] = await Promise.all([model.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit, select }), model.count({ where })]);
+      return paged(rows.map((r) => ({ ...r, ...(r.recipient ? { recipient: maskEmail(r.recipient) } : {}), retryable: type === 'rider-transfer' || (type === 'subscription-email' && r.status === 'FAILED' && r.firstAttemptAt && Date.now() - r.firstAttemptAt < 23 * HOUR && !['RECIPIENT_NOT_ALLOWED', 'INVOICE_VOID'].includes(r.lastErrorCode)) })), total, { page, limit });
+    }
     // EMR webhooks: read in the worker context (tenant row-level security allows deliveries only).
     const { rows, total } = await withWorker(async (tx) => {
       const where = status ? { status } : {};
@@ -163,14 +179,29 @@ opsRoutes.get('/jobs', allow(...READ),
     return paged(rows.map((r) => ({ ...r, organization: orgs.get(r.organizationId) ?? null, retryable: r.status === 'DEAD' })), total, { page, limit });
   }));
 
-opsRoutes.post('/jobs/:type/:id/retry', allow('platform.jobs.manage'),
+opsRoutes.post('/jobs/:type/:id/retry', allow('platform.jobs.manage'), requireRecentMfa,
   validate(z.object({ body: z.object({ reason }).strict(), query: none, params: z.object({ type: z.enum(JOB_TYPES), id: z.string().uuid() }).strict() })),
   handle(async (req) => {
     const { type, id } = req.params;
     const now = new Date();
     const audit = (tx, summary) => adminAudit(tx, req, { summary, resourceType: `job:${type}`, resourceId: id, reason: req.body.reason, after: { status: 'RETRY_QUEUED' } });
     if (type === 'reminder') throw ccError('NOT_RETRYABLE', 409, 'Medicine reminders are time-specific and are not re-sent late.');
-    if (type === 'document-scan') throw ccError('NOT_RETRYABLE', 409, 'Retry scans from the review page for that document.');
+    if (type === 'rider-email') throw ccError('NOT_RETRYABLE', 409, 'Rider onboarding mail retries are controlled by the rider worker.');
+    if (type === 'document-scan') return prisma.$transaction(async (tx) => {
+      const changed = await tx.medicalDocument.updateMany({ where: { id, uploadBackend: 'supabase', status: 'PENDING_SCAN', scanAttempts: { gte: 5 }, scanErrorCode: { not: null }, scanLeaseToken: null }, data: { scanAttempts: 0, scanErrorCode: null, scanLeaseExpiresAt: null } });
+      if (!changed.count) throw ccError('NOT_RETRYABLE', 409, 'Only a delayed patient scan can be retried here; credential decisions remain on their review page.');
+      await audit(tx, 'Queued delayed patient-document security screening'); return { id, status: 'PENDING_SCAN' };
+    });
+    if (type === 'subscription-email') return prisma.$transaction(async (tx) => {
+      const changed = await tx.subscriptionEmailJob.updateMany({ where: { id, status: 'FAILED', firstAttemptAt: { gt: new Date(now - 23 * HOUR) }, lastErrorCode: { notIn: ['RECIPIENT_NOT_ALLOWED', 'INVOICE_VOID'] } }, data: { status: 'QUEUED', attempts: 0, nextAttemptAt: now } });
+      if (!changed.count) throw ccError('NOT_RETRYABLE', 409, 'This email cannot be safely retried outside its idempotency window.');
+      await audit(tx, 'Queued subscription email within provider idempotency window'); return { id, status: 'QUEUED' };
+    });
+    if (type === 'rider-transfer') return prisma.$transaction(async (tx) => {
+      const changed = await tx.riderTransferAttempt.updateMany({ where: { id }, data: { nextCheckAt: now, verificationRequested: true } });
+      if (!changed.count) throw ccError('NOT_FOUND', 404, 'Transfer not found.');
+      await audit(tx, 'Queued independent rider transfer verification (no money sent)'); return { id, status: 'VERIFICATION_QUEUED' };
+    });
     if (type === 'notification') {
       return prisma.$transaction(async (tx) => {
         const d = await tx.notificationDelivery.findUnique({ where: { id }, select: { id: true, status: true, notification: { select: { createdAt: true } } } });

@@ -6,6 +6,7 @@ import {
   getUploadMaxBytes,
 } from "./medical-documents.storage.js";
 import { buildEmergencySummaryPdf } from "./medical-documents.pdf.js";
+import { signedClinicalDocument } from './medical-documents.intake.js';
 
 const error = (code, status = 400) =>
   Object.assign(new Error(code), { code, status });
@@ -60,6 +61,7 @@ const stripInternal = (item) => {
   const safe = { ...item };
   delete safe.objectKey;
   delete safe.ownerPatientId;
+  delete safe.uploadBackend;
   return safe;
 };
 export const list = repository.listOwned;
@@ -121,6 +123,7 @@ const authorizeDownload = async (userId, id, shareId) => {
         select: repository.internalDocumentSelect,
       });
   if (!item) throw error("RESOURCE_NOT_FOUND", 404);
+  if (shareId && !(await repository.recipientEligible(repository.prisma, item.ownerPatientId, userId))) throw error('RESOURCE_NOT_FOUND', 404);
   await repository.transaction((tx) =>
     repository.audit(
       tx,
@@ -131,7 +134,7 @@ const authorizeDownload = async (userId, id, shareId) => {
     ),
   );
   try {
-    return await storage().createDownload(item.objectKey);
+    return item.uploadBackend === 'supabase' ? await signedClinicalDocument(item) : await storage().createDownload(item.objectKey);
   } catch (cause) {
     throw error(
       cause.code === "DOCUMENT_STORAGE_UNAVAILABLE"
@@ -143,10 +146,24 @@ const authorizeDownload = async (userId, id, shareId) => {
 };
 export const ownerDownload = (userId, id) => authorizeDownload(userId, id);
 
+export const shareRecipients = async (patientId) => {
+  const active = { status: 'ACTIVE', revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] };
+  const [doctors, caregivers] = await Promise.all([
+    repository.prisma.doctorCareRelationship.findMany({ where: { patientId, ...active, doctorProfile: { professionType: 'DOCTOR', verificationStatus: 'VERIFIED', user: { accountStatus: 'ACTIVE' } } }, select: { doctorProfile: { select: { userId: true, user: { select: { full_name: true } } } } }, take: 100 }),
+    repository.prisma.careRelationship.findMany({ where: { patientId, status: 'ACTIVE', revokedAt: null, OR: [{ accessExpiresAt: null }, { accessExpiresAt: { gt: new Date() } }], permissions: { has: 'RECORDS' }, caregiver: { accountStatus: 'ACTIVE' } }, select: { caregiverId: true, caregiver: { select: { full_name: true } } }, take: 100 }),
+  ]);
+  return { items: [ ...doctors.map((r) => ({ id: r.doctorProfile.userId, name: r.doctorProfile.user.full_name || 'Your doctor', type: 'DOCTOR' })), ...caregivers.map((r) => ({ id: r.caregiverId, name: r.caregiver.full_name || 'Your caregiver', type: 'CAREGIVER' })) ] };
+};
+export const listShares = async (patientId, id) => {
+  if (!(await repository.owned(repository.prisma, patientId, id))) throw error('RESOURCE_NOT_FOUND', 404);
+  const rows = await repository.prisma.medicalDocumentShare.findMany({ where: { documentId: id }, select: { id: true, recipientId: true, expiresAt: true, revokedAt: true, createdAt: true, recipient: { select: { full_name: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: 100 });
+  return { items: rows.map((r) => ({ id: r.id, recipientId: r.recipientId, name: r.recipient.full_name || 'Shared recipient', expiresAt: r.expiresAt, revokedAt: r.revokedAt, createdAt: r.createdAt })) };
+};
+
 export const createShare = (ownerPatientId, documentId, data) =>
   repository.transaction(async (tx) => {
     const document = await repository.owned(tx, ownerPatientId, documentId);
-    if (!document || document.status === "DELETED")
+    if (!document || document.status !== "CLEAN")
       throw error("RESOURCE_NOT_FOUND", 404);
     if (
       data.recipientId === ownerPatientId ||
@@ -186,7 +203,10 @@ export const sharedWithMe = async (recipientId, q) => {
     recipientId,
     revokedAt: null,
     expiresAt: { gt: new Date() },
-    document: { status: { not: "DELETED" }, deletedAt: null },
+    document: { status: 'CLEAN', deletedAt: null, owner: { OR: [
+      { doctorCareAsPatient: { some: { status: 'ACTIVE', revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }], doctorProfile: { userId: recipientId, professionType: 'DOCTOR', verificationStatus: 'VERIFIED' } } } },
+      { careRelationshipsOwned: { some: { caregiverId: recipientId, status: 'ACTIVE', revokedAt: null, permissions: { has: 'RECORDS' }, OR: [{ accessExpiresAt: null }, { accessExpiresAt: { gt: new Date() } }] } } },
+    ] } },
   };
   const [items, total] = await Promise.all([
     repository.prisma.medicalDocumentShare.findMany({
@@ -260,8 +280,13 @@ export const remove = async (ownerPatientId, id) => {
       data: { revokedAt: new Date() },
     });
     await repository.audit(tx, ownerPatientId, "DOCUMENT_DELETED", id);
+    if (item.uploadBackend === 'supabase') {
+      await tx.medicalDocument.update({ where: { id }, data: { storageCleanupPending: true, cleanupObjectKeys: { push: item.objectKey } } });
+      return null;
+    }
     return item.objectKey;
   });
+  if (!objectKey) return;
   try {
     await storage().delete(objectKey);
   } catch (cause) {

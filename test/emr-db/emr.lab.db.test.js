@@ -142,7 +142,8 @@ describe('order → collect → result → verify', () => {
     const events = await prisma.emrOutboxEvent.findMany({ where: { aggregateId: labOrder.id }, orderBy: { createdAt: 'asc' } });
     expect(events.map((e) => e.eventType)).toEqual(['lab.ordered', 'lab.result.released', 'lab.result.critical', 'lab.result.released']);
     expect(events.find((e) => e.eventType === 'lab.result.critical').payload.data).toMatchObject({ itemId: fbc.id, criticalCount: 1 });
-    expect(JSON.stringify(events)).not.toMatch(/6\.8|POSITIVE|Haemoglobin|Pale/);
+    // Timestamps can legitimately contain “6.8”; check the event data, not clock digits.
+    expect(JSON.stringify(events.map((event) => event.payload.data))).not.toMatch(/6\.8|POSITIVE|Haemoglobin|Pale/);
   });
 
   it('released values are locked; a correction supersedes them and keeps the history', async () => {

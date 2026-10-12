@@ -3,6 +3,7 @@ import {
   DOCUMENT_CONTENT_TYPES,
   getUploadMaxBytes,
 } from "./medical-documents.storage.js";
+import { intakeMaxBytes } from './medical-documents.intake.js';
 
 const uuid = z.uuid();
 const kinds = [
@@ -43,6 +44,9 @@ export const upload = z.object({
     medicalRecordId: uuid.optional(),
   }),
 });
+export const documentFilename = filename;
+export const receive = z.object({ query: z.object({ kind: z.enum(kinds), medicalRecordId: uuid.optional() }).strict() });
+export const intakeLimit = intakeMaxBytes;
 export const list = z.object({
   query: z
     .object({
@@ -69,8 +73,8 @@ export const share = z.object({
     expiresAt: z.iso
       .datetime()
       .refine(
-        (value) => new Date(value).getTime() > Date.now(),
-        "Expiry must be in the future",
+        (value) => new Date(value).getTime() > Date.now() && new Date(value).getTime() <= Date.now() + 90 * 86400000,
+        "Choose an expiry within the next 90 days",
       ),
   }),
 });

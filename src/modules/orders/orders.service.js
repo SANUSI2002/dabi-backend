@@ -172,6 +172,7 @@ export const create = async (patientId, data) => {
           subtotalMinor,
           tierRadiusKm: tier ? tier.deliveryRadiusKm : null,
         });
+        deliveryQuote.pickup = { id: origin.id, name: origin.name, address: origin.address, contactPhone: pharmacy.contactPhone, latitude: origin.latitude, longitude: origin.longitude };
       }
       const deliveryFeeMinor = deliveryQuote?.feeMinor ?? 0;
       fulfilments.push({

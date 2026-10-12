@@ -42,6 +42,7 @@ export const rotateDeliveryCode = handle((q) =>
 );
 export const errorHandler = (error, req, res, next) => {
   const codeMessages = {
+    RIDER_QUOTE_REQUIRED: 'This delivery needs a valid kilometre price before a rider earning can be offered. Contact operations.',
     CODE_REQUIRED: "Enter the six-digit handover code.",
     CODE_INVALID: "Incorrect handover code. Ask the code holder to check it.",
     CODE_LOCKED:
@@ -62,6 +63,7 @@ export const errorHandler = (error, req, res, next) => {
       CONFLICT: 409,
       P2002: 409,
       P2034: 409,
+      RIDER_QUOTE_REQUIRED: 409,
     }[error.code] ?? 500;
   const message = {
     403: "Access denied",

@@ -143,7 +143,7 @@ platformAdminRoutes.get('/tenants', allow('platform.ops.read', 'platform.onboard
     });
     return {
       generatedAt: now.toISOString(),
-      billingNote: 'Subscription prices come from the package version the customer was approved on. Sabi does not yet invoice or collect Sabi OS subscriptions, so there are no invoices or payments to show.',
+      billingNote: 'Subscription prices come from the accepted package version. Issue and reconcile customer subscription invoices in Invoices; checkout and provider verification are required before a payment is confirmed.',
       items: rows.map((a) => {
         const org = a.approvedOrganisation;
         const setup = a.setupCompletedAt ? 'LIVE' : a.setupSentAt ? (a.setupDeadlineAt && a.setupDeadlineAt < now ? 'SETUP_OVERDUE' : 'SETUP_SENT') : 'APPROVED_NOT_PROVISIONED';

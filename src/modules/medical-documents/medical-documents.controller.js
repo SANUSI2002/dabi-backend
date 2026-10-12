@@ -1,7 +1,12 @@
 import * as service from "./medical-documents.service.js";
+import { intakeConfig, receiveDocument, retryDocumentScan } from './medical-documents.intake.js';
+import { documentFilename } from './medical-documents.validator.js';
 
 const sendError = (error, res, next) => {
   const known = {
+    DOCUMENT_INTAKE_UNAVAILABLE: [503, 'DOCUMENT_INTAKE_UNAVAILABLE', 'Secure document intake is temporarily unavailable. Please try again later.'],
+    DOCUMENT_BYTES_INVALID: [400, 'DOCUMENT_BYTES_INVALID', 'Choose a valid PDF, PNG or JPEG within the displayed file-size limit.'],
+    INTAKE_KEY_REUSED: [409, 'INTAKE_KEY_REUSED', 'This upload reference belongs to a different file. Please select the file again.'],
     DOCUMENT_STORAGE_UNAVAILABLE: [
       503,
       "DOCUMENT_STORAGE_UNAVAILABLE",
@@ -42,6 +47,16 @@ const action = (handler) => async (req, res, next) => {
     sendError(error, res, next);
   }
 };
+export const config = action(async (req, res) => res.json({ status: 'success', data: intakeConfig() }));
+export const receive = action(async (req, res) => {
+  let filename;
+  try { filename = documentFilename.parse(decodeURIComponent(req.get('X-Document-Filename') || '')); }
+  catch { return res.status(400).json({ status: 'error', code: 'DOCUMENT_BYTES_INVALID', message: 'Choose a file with a valid filename.' }); }
+  res.status(202).json({ status: 'success', data: await receiveDocument(req.user.id, { ...req.query, filename, contentType: req.get('content-type')?.split(';')[0] }, req.body, req.get('Idempotency-Key')) });
+});
+export const retryScan = action(async (req, res) => res.json({ status: 'success', data: await retryDocumentScan(req.user.id, req.params.id) }));
+export const recipients = action(async (req, res) => res.json({ status: 'success', data: await service.shareRecipients(req.user.id) }));
+export const shares = action(async (req, res) => res.json({ status: 'success', data: await service.listShares(req.user.id, req.params.id) }));
 
 export const initializeUpload = action(async (req, res) =>
   res

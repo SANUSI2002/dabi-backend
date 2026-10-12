@@ -134,6 +134,8 @@ tags:
     description: "Sabi platform operations: pricing, oversight, finance, support and audit. Platform staff only; every action is permission-checked and audited."
   - name: Riders
     description: Riders endpoints.
+  - name: Public
+    description: Public endpoints.
 paths:
   /api/health:
     get:
@@ -5430,6 +5432,9 @@ paths:
               - pharmacy-email
               - emr-webhook
               - document-scan
+              - subscription-email
+              - rider-transfer
+              - rider-email
         - name: status
           in: query
           required: false
@@ -5483,6 +5488,8 @@ paths:
         Platform staff only (no organization context).
 
         Requires the permission `platform.jobs.manage`.
+
+        Requires a recent multi-factor verification.
       operationId: post_api_v1_command_centre_ops_jobs_type_id_retry
       security:
         - bearerAuth: []
@@ -5498,6 +5505,9 @@ paths:
               - pharmacy-email
               - emr-webhook
               - document-scan
+              - subscription-email
+              - rider-transfer
+              - rider-email
         - name: id
           in: path
           required: true
@@ -7294,6 +7304,1189 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
       x-generated: true
+  /api/v1/command-centre/rider-operations/dispatch/{id}:
+    post:
+      tags:
+        - Command Centre
+      summary: Post dispatch
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.delivery.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_rider_operations_dispatch_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/rider-operations/exceptions:
+    get:
+      tags:
+        - Command Centre
+      summary: List exceptions
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.delivery.manage`.
+      operationId: get_api_v1_command_centre_rider_operations_exceptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          required: false
+          schema:
+            default: OPEN
+            type: string
+            enum:
+              - OPEN
+              - RESOLVED
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/rider-operations/exceptions/{id}/resolve:
+    post:
+      tags:
+        - Command Centre
+      summary: Record resolve for exception
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.delivery.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_rider_operations_exceptions_id_resolve
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                resolution:
+                  type: string
+                  enum:
+                    - REATTEMPT
+                    - CONTACTED_RECIPIENT
+                    - RETURN_ARRANGED
+                    - RESOLVED_BY_SUPPORT
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - resolution
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/rider-operations/payouts:
+    get:
+      tags:
+        - Command Centre
+      summary: List payouts
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.finance.manage`, `platform.finance.approve`.
+      operationId: get_api_v1_command_centre_rider_operations_payouts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - REQUESTED
+              - APPROVED
+              - SUBMITTED
+              - PAID
+              - FAILED
+              - REVERSED
+              - NEEDS_PROVIDER_AUTH
+              - UNKNOWN
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/rider-operations/payouts/{id}/approve:
+    post:
+      tags:
+        - Command Centre
+      summary: Approve payout
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.approve`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_rider_operations_payouts_id_approve
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/rider-operations/payouts/{id}/authorise:
+    post:
+      tags:
+        - Command Centre
+      summary: Record authorise for payout
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_rider_operations_payouts_id_authorise
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                otp:
+                  type: string
+                  pattern: ^\d{6}$
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - otp
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/rider-operations/payouts/{id}/reconcile:
+    post:
+      tags:
+        - Command Centre
+      summary: Record reconcile for payout
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_rider_operations_payouts_id_reconcile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/rider-operations/payouts/{id}/submit:
+    post:
+      tags:
+        - Command Centre
+      summary: Submit payout
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_rider_operations_payouts_id_submit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/rider-operations/policy:
+    get:
+      tags:
+        - Command Centre
+      summary: Get policy
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.pricing.manage`, `platform.finance.read`, `platform.delivery.manage`.
+      operationId: get_api_v1_command_centre_rider_operations_policy
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    put:
+      tags:
+        - Command Centre
+      summary: Set policy of rider operation
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.pricing.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: put_api_v1_command_centre_rider_operations_policy
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                riderShareBps:
+                  type: integer
+                  minimum: 1
+                  maximum: 10000
+                published:
+                  type: boolean
+                offerExpiryMinutes:
+                  default: 15
+                  type: integer
+                  minimum: 5
+                  maximum: 60
+                maxOpenAssignments:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                maxPickupKm:
+                  type: number
+                  minimum: 0.1
+                  maximum: 100
+                automaticDispatch:
+                  type: boolean
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - riderShareBps
+                - published
+                - maxOpenAssignments
+                - maxPickupKm
+                - automaticDispatch
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/rider-operations/riders:
+    get:
+      tags:
+        - Command Centre
+      summary: List riders
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.delivery.manage`.
+      operationId: get_api_v1_command_centre_rider_operations_riders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/runtime/presentation/{id}:
+    get:
+      tags:
+        - Command Centre
+      summary: Get presentation
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.settings.manage`.
+      operationId: get_api_v1_command_centre_runtime_presentation_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    put:
+      tags:
+        - Command Centre
+      summary: Replace presentation
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: put_api_v1_command_centre_runtime_presentation_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+                displayName:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+                  pattern: ^[^\p{Cc}<>]*$
+                tagline:
+                  type: string
+                  maxLength: 180
+                  pattern: ^[^\p{Cc}<>]*$
+                accentColor:
+                  type: string
+                  pattern: ^#[a-f\d]{6}$
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - displayName
+                - tagline
+                - accentColor
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/runtime/settings:
+    get:
+      tags:
+        - Command Centre
+      summary: List settings
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.ops.read`, `platform.settings.manage`.
+      operationId: get_api_v1_command_centre_runtime_settings
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    put:
+      tags:
+        - Command Centre
+      summary: Set settings of runtime
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: put_api_v1_command_centre_runtime_settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                supportEmail:
+                  type: string
+                  maxLength: 254
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                infoEmail:
+                  type: string
+                  maxLength: 254
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                trackingRetentionDays:
+                  type: integer
+                  minimum: 7
+                  maximum: 90
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - supportEmail
+                - infoEmail
+                - trackingRetentionDays
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/runtime/subscription-invoices:
+    get:
+      tags:
+        - Command Centre
+      summary: List subscription invoices
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires any of the permissions `platform.finance.read`, `platform.subscriptions.manage`.
+      operationId: get_api_v1_command_centre_runtime_subscription_invoices
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: organizationId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - OPEN
+              - PAID
+              - VOID
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    post:
+      tags:
+        - Command Centre
+      summary: Create subscription invoice
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.subscriptions.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_runtime_subscription_invoices
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                organizationId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                requestKey:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                periodStart:
+                  type: string
+                  format: date
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                dueAt:
+                  type: string
+                  format: date
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - organizationId
+                - requestKey
+                - periodStart
+                - dueAt
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/runtime/subscription-invoices/{id}/reconcile:
+    post:
+      tags:
+        - Command Centre
+      summary: Record reconcile for subscription invoice
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.finance.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_runtime_subscription_invoices_id_reconcile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/runtime/subscription-invoices/{id}/void:
+    post:
+      tags:
+        - Command Centre
+      summary: Void subscription invoice
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.subscriptions.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_runtime_subscription_invoices_id_void
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/command-centre/search:
     get:
       tags:
@@ -8033,6 +9226,100 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/delivery/assignments/{id}/exceptions:
+    post:
+      tags:
+        - Delivery
+      summary: Create exception for assignment
+      operationId: post_api_v1_delivery_assignments_id_exceptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind:
+                  type: string
+                  enum:
+                    - RECIPIENT_UNAVAILABLE
+                    - ADDRESS_ISSUE
+                    - PACKAGE_DAMAGED
+                    - VEHICLE_BREAKDOWN
+                    - SAFETY_ISSUE
+                    - OTHER
+                note:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - kind
+                - note
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    get:
+      tags:
+        - Delivery
+      summary: List exceptions of assignment
+      operationId: get_api_v1_delivery_assignments_id_exceptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/delivery/assignments/{id}/locations:
     post:
       tags:
@@ -8153,6 +9440,215 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/delivery/availability:
+    get:
+      tags:
+        - Delivery
+      summary: Get availability
+      operationId: get_api_v1_delivery_availability
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    put:
+      tags:
+        - Delivery
+      summary: Set availability of delivery
+      operationId: put_api_v1_delivery_availability
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                available:
+                  type: boolean
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                durationMinutes:
+                  default: 60
+                  anyOf:
+                    - type: number
+                      const: 30
+                    - type: number
+                      const: 60
+                    - type: number
+                      const: 120
+                    - type: number
+                      const: 240
+                    - type: number
+                      const: 480
+                location:
+                  type: object
+                  properties:
+                    latitude:
+                      type: number
+                      minimum: -90
+                      maximum: 90
+                    longitude:
+                      type: number
+                      minimum: -180
+                      maximum: 180
+                    accuracyMeters:
+                      type: number
+                      minimum: 0
+                      maximum: 1000
+                  required:
+                    - latitude
+                    - longitude
+                    - accuracyMeters
+                  additionalProperties: false
+              required:
+                - available
+                - expectedVersion
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/delivery/bank-account:
+    put:
+      tags:
+        - Delivery
+      summary: Set bank account of delivery
+      description: Requires a recent multi-factor verification.
+      operationId: put_api_v1_delivery_bank_account
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bankCode:
+                  type: string
+                  pattern: ^\d{3,6}$
+                accountNumber:
+                  type: string
+                  pattern: ^\d{10}$
+                expectedRevision:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+              required:
+                - bankCode
+                - accountNumber
+                - expectedRevision
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/delivery/banks:
+    get:
+      tags:
+        - Delivery
+      summary: List banks
+      operationId: get_api_v1_delivery_banks
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/delivery/earnings:
+    get:
+      tags:
+        - Delivery
+      summary: List earnings
+      operationId: get_api_v1_delivery_earnings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/delivery/fulfilments/{id}/assignment:
     post:
       tags:
@@ -8361,6 +9857,64 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
       x-generated: true
+  /api/v1/delivery/offer-notifications:
+    get:
+      tags:
+        - Delivery
+      summary: List offer notifications
+      operationId: get_api_v1_delivery_offer_notifications
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/delivery/offer-notifications/{id}/read:
+    post:
+      tags:
+        - Delivery
+      summary: Record read for offer notification
+      operationId: post_api_v1_delivery_offer_notifications_id_read
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/delivery/operations/partners/{id}:
     put:
       tags:
@@ -8504,6 +10058,52 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/delivery/payouts:
+    post:
+      tags:
+        - Delivery
+      summary: Create payout
+      description: Requires a recent multi-factor verification.
+      operationId: post_api_v1_delivery_payouts
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                requestKey:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                expectedBankRevision:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+              required:
+                - requestKey
+                - expectedBankRevision
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/delivery/platform/partners/{id}:
     put:
       tags:
@@ -8562,6 +10162,56 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/delivery/presence:
+    post:
+      tags:
+        - Delivery
+      summary: Presence delivery
+      operationId: post_api_v1_delivery_presence
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                latitude:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+                longitude:
+                  type: number
+                  minimum: -180
+                  maximum: 180
+                accuracyMeters:
+                  type: number
+                  minimum: 0
+                  maximum: 1000
+              required:
+                - latitude
+                - longitude
+                - accuracyMeters
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "409":
           $ref: "#/components/responses/Conflict"
         "429":
@@ -20977,6 +22627,199 @@ paths:
         "500":
           $ref: "#/components/responses/EmrServerError"
       x-generated: true
+  /api/v1/emr/organizations/{organizationId}/runtime/presentation:
+    get:
+      tags:
+        - EMR
+      summary: Get presentation
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: get_api_v1_emr_organizations_organizationId_runtime_presentation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/runtime/subscription:
+    get:
+      tags:
+        - EMR
+      summary: Get subscription
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires any of the permissions `membership.manage`, `billing.read`.
+      operationId: get_api_v1_emr_organizations_organizationId_runtime_subscription
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: page
+          in: query
+          required: false
+          schema:
+            default: 1
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 25
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/runtime/subscription/{id}/check:
+    post:
+      tags:
+        - EMR
+      summary: Record check for subscription
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires any of the permissions `membership.manage`, `billing.read`.
+      operationId: post_api_v1_emr_organizations_organizationId_runtime_subscription_id_check
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/runtime/subscription/{id}/pay:
+    post:
+      tags:
+        - EMR
+      summary: Record pay for subscription
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `membership.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_emr_organizations_organizationId_runtime_subscription_id_pay
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
   /api/v1/emr/organizations/{organizationId}/staff:
     get:
       tags:
@@ -23933,6 +25776,42 @@ paths:
           $ref: "#/components/responses/ServerError"
         "503":
           $ref: "#/components/responses/StorageUnavailable"
+  /api/v1/medical-documents/{id}/retry-scan:
+    post:
+      tags:
+        - Medical Documents
+      summary: Record retry scan for medical document
+      operationId: post_api_v1_medical_documents_id_retry_scan
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/medical-documents/{id}/shares:
     post:
       tags:
@@ -23974,6 +25853,39 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+    get:
+      tags:
+        - Medical Documents
+      summary: List shares of medical document
+      operationId: get_api_v1_medical_documents_id_shares
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/medical-documents/{id}/shares/{shareId}/revoke:
     post:
       tags:
@@ -24010,6 +25922,28 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/medical-documents/config:
+    get:
+      tags:
+        - Medical Documents
+      summary: Get config
+      operationId: get_api_v1_medical_documents_config
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/medical-documents/emergency-summary.pdf:
     get:
       tags:
@@ -24035,6 +25969,28 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/medical-documents/recipients:
+    get:
+      tags:
+        - Medical Documents
+      summary: List recipients
+      operationId: get_api_v1_medical_documents_recipients
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/medical-documents/shared-with-me:
     get:
       tags:
@@ -24145,6 +26101,51 @@ paths:
           $ref: "#/components/responses/ServerError"
         "503":
           $ref: "#/components/responses/StorageUnavailable"
+  /api/v1/medical-documents/uploads/receive:
+    post:
+      tags:
+        - Medical Documents
+      summary: Receive upload
+      operationId: post_api_v1_medical_documents_uploads_receive
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - MEDICAL_RECORD
+              - LAB_RESULT
+              - IMAGING
+              - EXTERNAL_PRESCRIPTION
+              - OTHER
+        - name: medicalRecordId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/medical-records:
     get:
       tags:
@@ -33537,6 +35538,25 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/public/runtime/contact:
+    get:
+      tags:
+        - Public
+      summary: Get contact
+      operationId: get_api_v1_public_runtime_contact
+      security: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
   /api/v1/reservations:
     post:
       tags:

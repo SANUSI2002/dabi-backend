@@ -9,8 +9,9 @@ const FORMATS = { 'application/pdf': ['PDF'], 'image/jpeg': ['JPG', 'JPEG'], 'im
 const REQUIRED_FLAGS = THREAT_FLAGS.slice(0, 6);
 const fail = (code) => { throw new Error(code); };
 
-// Only credential evidence may call this adapter. It deliberately has no URL
-// scanning option, no arbitrary endpoint, and never transmits Supabase keys/URLs.
+// Credential evidence and the separately owner-approved patient-document worker call this
+// adapter. There is no URL scanning option or arbitrary endpoint. Supabase keys/URLs,
+// original filenames and account identity are never transmitted to the scanner.
 export async function scanWithCloudmersive(bytes, { contentType } = {}, fetcher = globalThis.fetch) {
   if (!cloudmersiveConfigured()) fail('CLOUDMERSIVE_NOT_CONFIGURED');
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) fail('EVIDENCE_BYTES_INVALID');

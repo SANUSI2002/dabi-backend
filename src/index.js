@@ -10,6 +10,10 @@ import { startVideoCleanup } from './modules/doctor-video/doctor-video.service.j
 import { startEmrWorker, stopEmrWorker } from './modules/emr/core/worker.js';
 import { startNotificationWorker, stopNotificationWorker } from './modules/notifications/notification.worker.js';
 import { startRiderWorker } from './modules/riders/riders.worker.js';
+import { startPatientDocumentWorker } from './modules/medical-documents/medical-documents.worker.js';
+import { startAutoDispatchWorker } from './modules/riders/riders.operations.js';
+import { startRiderTransferReconciler } from './modules/riders/riders.payments.js';
+import { startRuntimeWorker } from './modules/command-centre/runtime.worker.js';
 
 const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, () => {
@@ -30,10 +34,14 @@ const stopEvidenceScanner = startEvidenceScanner();
 const stopPharmacyScanner = startPharmacyScanner();
 const stopPharmacyMail = startPharmacyMailWorker();
 const stopRiderWorker = startRiderWorker();
+const stopPatientDocuments = startPatientDocumentWorker();
+const stopAutoDispatch = startAutoDispatchWorker();
+const stopRiderTransfers = startRiderTransferReconciler();
+const stopRuntime = startRuntimeWorker();
 const stopVideoCleanup = startVideoCleanup();
 // EMR worker (telehealth handoff, outbox → webhooks). Off by default; safe on several instances.
 if (process.env.EMR_OUTBOX_WORKER === 'true') startEmrWorker();
 // Medication reminders and WhatsApp deliveries. On by default; safe on several instances.
 if (process.env.NOTIFICATION_WORKER !== 'false') startNotificationWorker();
-const shutdown = () => { stopRiderWorker(); stopNotificationWorker(); stopVideoCleanup(); stopEmrWorker(); stopPharmacyMail(); stopPharmacyScanner(); stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
+const shutdown = () => { stopRuntime(); stopAutoDispatch(); stopRiderTransfers(); stopPatientDocuments(); stopRiderWorker(); stopNotificationWorker(); stopVideoCleanup(); stopEmrWorker(); stopPharmacyMail(); stopPharmacyScanner(); stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
 process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown);

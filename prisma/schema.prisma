@@ -1450,6 +1450,16 @@ model DeliveryPartner {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
   assignments DeliveryAssignment[]
+  isAvailable Boolean @default(false) @map("is_available")
+  availableUntil DateTime? @map("available_until")
+  availabilityVersion Int @default(1) @map("availability_version")
+  lastLatitude Float? @map("last_latitude")
+  lastLongitude Float? @map("last_longitude")
+  locationAccuracyMeters Float? @map("location_accuracy_meters")
+  locationUpdatedAt DateTime? @map("location_updated_at")
+  earnings RiderEarning[]
+  payouts RiderPayout[]
+  bankAccount RiderBankAccount?
   @@index([isActive])
   @@map("delivery_partners")
 }
@@ -1538,6 +1548,7 @@ model DeliveryAssignment {
   status DeliveryAssignmentStatus @default(PENDING)
   rejectionReason String? @map("rejection_reason") @db.VarChar(300)
   assignedAt DateTime @default(now()) @map("assigned_at")
+  offerExpiresAt DateTime? @map("offer_expires_at")
   respondedAt DateTime? @map("responded_at")
   pickedUpAt DateTime? @map("picked_up_at")
   outForDeliveryAt DateTime? @map("out_for_delivery_at")
@@ -1555,6 +1566,13 @@ model DeliveryAssignment {
   fulfilment OrderFulfilment @relation(fields: [fulfilmentId], references: [id], onDelete: Restrict)
   partner DeliveryPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
   trackingPoints DeliveryTrackingPoint[]
+  earningOfferMinor Int? @map("earning_offer_minor")
+  payGrossMinor Int? @map("pay_gross_minor")
+  payShareBps Int? @map("pay_share_bps")
+  payRetainedMinor Int? @map("pay_retained_minor")
+  payPolicyVersion Int? @map("pay_policy_version")
+  earning RiderEarning?
+  exceptions DeliveryException[]
   @@index([partnerId, status, assignedAt])
   @@index([fulfilmentId, assignedAt])
   @@map("delivery_assignments")
@@ -1565,10 +1583,210 @@ model DeliveryTrackingPoint {
   assignmentId String @map("assignment_id")
   latitude Float
   longitude Float
+  accuracyMeters Float? @map("accuracy_meters")
   recordedAt DateTime @default(now()) @map("recorded_at")
   assignment DeliveryAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   @@index([assignmentId, recordedAt])
   @@map("delivery_tracking_points")
+}
+
+model RiderPayPolicy {
+  id String @id @default("default")
+  version Int @default(1)
+  published Boolean @default(false)
+  riderShareBps Int @default(8000) @map("rider_share_bps")
+  maxOpenAssignments Int @default(1) @map("max_open_assignments")
+  maxPickupKm Float @default(5) @map("max_pickup_km")
+  offerExpiryMinutes Int @default(15) @map("offer_expiry_minutes")
+  automaticDispatch Boolean @default(false) @map("automatic_dispatch")
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("rider_pay_policies")
+}
+
+model PlatformRuntimeSettings {
+  id String @id @default("default")
+  version Int @default(1)
+  supportEmail String @default("support@sabihealth.org") @map("support_email")
+  infoEmail String @default("info@sabihealth.org") @map("info_email")
+  trackingRetentionDays Int @default(30) @map("tracking_retention_days")
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("platform_runtime_settings")
+}
+model TenantPresentation {
+  organizationId String @id @map("organization_id")
+  version Int @default(1)
+  displayName String @map("display_name") @db.VarChar(120)
+  tagline String @default("") @db.VarChar(180)
+  accentColor String @default("#065f46") @map("accent_color") @db.VarChar(7)
+  updatedByUserId String @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("tenant_presentations")
+}
+model SubscriptionInvoice {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  applicationId String @map("application_id")
+  packageVersionId String @map("package_version_id")
+  packageName String @map("package_name")
+  cycle String
+  amountMinor Int @map("amount_minor")
+  currency String @default("NGN")
+  reference String @unique
+  requestKey String @unique @map("request_key")
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd DateTime @map("period_end") @db.Date
+  dueAt DateTime @map("due_at") @db.Date
+  status String @default("OPEN")
+  createdByUserId String @map("created_by_user_id")
+  paidAt DateTime? @map("paid_at")
+  voidedAt DateTime? @map("voided_at")
+  voidReason String? @map("void_reason")
+  createdAt DateTime @default(now()) @map("created_at")
+  payment SubscriptionPayment?
+  emails SubscriptionEmailJob[]
+  @@index([organizationId, periodStart])
+  @@map("subscription_invoices")
+}
+model SubscriptionPayment {
+  id String @id @default(uuid())
+  invoiceId String @unique @map("invoice_id")
+  invoice SubscriptionInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  reference String @unique
+  status String @default("CREATED")
+  checkoutUrl String? @map("checkout_url")
+  leaseToken String? @map("lease_token")
+  leaseUntil DateTime? @map("lease_until")
+  nextCheckAt DateTime @default(now()) @map("next_check_at")
+  errorCode String? @map("error_code")
+  verifiedAt DateTime? @map("verified_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@index([status, nextCheckAt])
+  @@map("subscription_payments")
+}
+model SubscriptionEmailJob {
+  id String @id @default(uuid())
+  invoiceId String @map("invoice_id")
+  invoice SubscriptionInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  kind String
+  recipient String
+  subject String
+  message String
+  status String @default("QUEUED")
+  attempts Int @default(0)
+  leaseToken String? @map("lease_token")
+  leaseUntil DateTime? @map("lease_until")
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  firstAttemptAt DateTime? @map("first_attempt_at")
+  lastErrorCode String? @map("last_error_code")
+  sentAt DateTime? @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([invoiceId, kind])
+  @@index([status, nextAttemptAt])
+  @@map("subscription_email_jobs")
+}
+model RiderBankAccount {
+  partnerId String @id @map("partner_id")
+  partner DeliveryPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  recipientCode String @map("recipient_code")
+  bankCode String @map("bank_code")
+  bankName String @map("bank_name")
+  accountName String @map("account_name")
+  accountLast4 String @map("account_last4") @db.VarChar(4)
+  revision Int @default(1)
+  verifiedAt DateTime @default(now()) @map("verified_at")
+  @@map("rider_bank_accounts")
+}
+model RiderEarning {
+  id String @id @default(uuid())
+  partnerId String @map("partner_id")
+  assignmentId String @unique @map("assignment_id")
+  amountMinor Int @map("amount_minor")
+  policyVersion Int @map("policy_version")
+  createdAt DateTime @default(now()) @map("created_at")
+  partner DeliveryPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  assignment DeliveryAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  payoutLine RiderPayoutLine?
+  @@unique([partnerId, id])
+  @@index([partnerId, createdAt])
+  @@map("rider_earnings")
+}
+model RiderPayout {
+  id String @id @default(uuid())
+  partnerId String @map("partner_id")
+  requestKey String @map("request_key")
+  reference String @unique
+  amountMinor Int @map("amount_minor")
+  currency String @default("NGN")
+  bankRevision Int @map("bank_revision")
+  recipientCode String @map("recipient_code")
+  accountLast4 String @map("account_last4") @db.VarChar(4)
+  status String @default("REQUESTED") @db.VarChar(30)
+  requestedByUserId String @map("requested_by_user_id")
+  approvedByUserId String? @map("approved_by_user_id")
+  approvedAt DateTime? @map("approved_at")
+  submittedAt DateTime? @map("submitted_at")
+  paidAt DateTime? @map("paid_at")
+  providerTransferCode String? @map("provider_transfer_code")
+  providerErrorCode String? @map("provider_error_code")
+  submitLeaseUntil DateTime? @map("submit_lease_until")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  partner DeliveryPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  lines RiderPayoutLine[]
+  attempts RiderTransferAttempt[]
+  @@unique([partnerId, requestKey])
+  @@unique([partnerId, id])
+  @@index([status, createdAt])
+  @@map("rider_payouts")
+}
+model RiderPayoutLine {
+  id String @id @default(uuid())
+  partnerId String @map("partner_id")
+  payoutId String @map("payout_id")
+  earningId String @unique @map("earning_id")
+  payout RiderPayout @relation(fields: [partnerId, payoutId], references: [partnerId, id], onDelete: Restrict)
+  earning RiderEarning @relation(fields: [partnerId, earningId], references: [partnerId, id], onDelete: Restrict)
+  @@unique([partnerId, earningId])
+  @@map("rider_payout_lines")
+}
+model RiderTransferAttempt {
+  id String @id @default(uuid())
+  payoutId String @map("payout_id")
+  number Int
+  reference String @unique
+  status String @default("PENDING") @db.VarChar(30)
+  providerTransferCode String? @map("provider_transfer_code")
+  errorCode String? @map("error_code") @db.VarChar(80)
+  leaseToken String? @map("lease_token")
+  leaseUntil DateTime? @map("lease_until")
+  nextCheckAt DateTime @default(now()) @map("next_check_at")
+  verificationRequested Boolean @default(false) @map("verification_requested")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  payout RiderPayout @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  @@unique([payoutId, number])
+  @@index([status, nextCheckAt])
+  @@map("rider_transfer_attempts")
+}
+model DeliveryException {
+  id String @id @default(uuid())
+  assignmentId String @map("assignment_id")
+  kind String @db.VarChar(40)
+  note String @db.VarChar(500)
+  status String @default("OPEN") @db.VarChar(20)
+  resolution String? @db.VarChar(40)
+  resolutionNote String? @map("resolution_note") @db.VarChar(500)
+  reportedByUserId String @map("reported_by_user_id")
+  resolvedByUserId String? @map("resolved_by_user_id")
+  resolvedAt DateTime? @map("resolved_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  assignment DeliveryAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  @@index([status, createdAt])
+  @@map("delivery_exceptions")
 }
 
 model CaregiverProfile {
@@ -2072,6 +2290,14 @@ model MedicalDocument {
   medicalRecord        MedicalRecord?        @relation(fields: [medicalRecordId], references: [id], onDelete: SetNull)
   shares               MedicalDocumentShare[]
   scanResults          MedicalDocumentScanResult[]
+  uploadBackend        String                @default("legacy") @map("upload_backend") @db.VarChar(20)
+  intakeKey            String?               @unique @map("intake_key") @db.VarChar(80)
+  scanLeaseToken       String?               @map("scan_lease_token")
+  scanLeaseExpiresAt   DateTime?             @map("scan_lease_expires_at")
+  scanAttempts         Int                   @default(0) @map("scan_attempts")
+  scanErrorCode        String?               @map("scan_error_code") @db.VarChar(80)
+  storageCleanupPending Boolean              @default(false) @map("storage_cleanup_pending")
+  cleanupObjectKeys     String[]              @default([]) @map("cleanup_object_keys")
 
   @@index([ownerPatientId, status, createdAt])
   @@index([medicalRecordId])

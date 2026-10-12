@@ -30,6 +30,7 @@ import { dashboardRoutes } from './dashboard/dashboard.routes.js';
 import { appointmentRoutes } from './appointments/appointments.routes.js';
 import { imagingRoutes } from './radiology/radiology.routes.js';
 import { procedureRoutes } from './procedures/procedures.routes.js';
+import { tenantRuntimeRoutes } from '../command-centre/runtime.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -40,6 +41,7 @@ router.get('/internal/metrics', protect, requirePlatform, (req, res) => {
 });
 
 const tenant = express.Router({ mergeParams: true });
+tenant.use('/runtime', tenantRuntimeRoutes);
 tenant.use('/patients', patientRoutes);
 tenant.use('/patients/:patientId', patientPharmacyRoutes);
 tenant.use('/patients/:patientId', patientRecordRoutes);

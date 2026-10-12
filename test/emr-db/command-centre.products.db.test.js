@@ -121,7 +121,8 @@ describe('platform administration', () => {
     const tenants = await as(ops).get('/tenants');
     const mine = tenants.body.data.items.find((t) => t.organizationId === tenant.organizationId);
     expect(mine).toMatchObject({ provisioning: { state: 'LIVE' }, entitlements: expect.arrayContaining(['emr']), subscription: { billingCycle: 'Monthly' } });
-    expect(tenants.body.data.billingNote).toMatch(/does not yet invoice/);
+    expect(tenants.body.data.billingNote).toMatch(/accepted package version/);
+    expect(tenants.body.data.billingNote).toMatch(/provider verification/);
     const analytics = await as(ops).get('/analytics?weeks=4');
     expect(analytics.body.data.activity.length).toBeGreaterThanOrEqual(4);
   });

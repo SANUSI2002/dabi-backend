@@ -16,6 +16,8 @@ import { emergencyRoutes, patientRoutes } from './patients.routes.js';
 import { platformAdminRoutes } from './platform.routes.js';
 import { pricingRoutes } from './pricing.routes.js';
 import { productRoutes } from './products.routes.js';
+import { riderControlRoutes } from '../riders/riders.operations.routes.js';
+import { runtimeRoutes } from './runtime.routes.js';
 
 const router = express.Router();
 router.use(protect, requirePlatform);
@@ -39,5 +41,7 @@ router.use('/pricing', pricingRoutes);
 router.use('/', productRoutes);
 router.use('/', platformAdminRoutes);
 router.use('/pharmacy-exceptions', pharmacyRoutes);
+router.use('/rider-operations', riderControlRoutes);
+router.use('/runtime', runtimeRoutes);
 
 export default router;

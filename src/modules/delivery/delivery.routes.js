@@ -8,6 +8,7 @@ import {
   requirePermission,
 } from "../../middleware/accessMiddleware.js";
 import { requireRecentMfa } from "../../middleware/mfaMiddleware.js";
+import { riderOperationsRoutes } from '../riders/riders.operations.routes.js';
 
 const router = express.Router();
 router.use((req, res, next) => {
@@ -15,6 +16,7 @@ router.use((req, res, next) => {
   next();
 });
 router.use(protect);
+router.use(riderOperationsRoutes);
 router.get("/me", validate(v.self), c.me);
 router.get("/history", validate(v.list), c.history);
 // Controlled operations endpoint: configures an existing account, never public signup.

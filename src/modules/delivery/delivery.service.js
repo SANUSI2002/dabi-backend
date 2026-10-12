@@ -1,4 +1,5 @@
 import * as r from "./delivery.repository.js";
+import { earnDelivery } from '../riders/riders.operations.js';
 import { decryptDeliveryDetails } from "../orders/orders.delivery.js";
 import {
   newCode,
@@ -65,6 +66,7 @@ export const partners = (userId, page) =>
 export const assign = (userId, id, { partnerId }) =>
   r.transaction(async (tx) => {
     await requireRole(tx, userId, "PHARMACY_ADMIN");
+    await tx.$queryRaw`SELECT id FROM order_fulfilments WHERE id = ${id} FOR UPDATE`;
     const f = await r.assignable(tx, userId, id);
     if (!f) throw fail("NOT_FOUND");
     if (
@@ -87,12 +89,14 @@ const summary = (a) => ({
   assignmentStatus: a.status,
   fulfilmentStatus: a.fulfilment.status,
   reference: a.fulfilment.order.reference,
-  pickup: a.fulfilment.pharmacy,
+  pickup: a.fulfilment.deliveryQuote?.pickup ? { id: a.fulfilment.deliveryQuote.pickup.id, name: a.fulfilment.deliveryQuote.pickup.name, address: a.fulfilment.deliveryQuote.pickup.address, contactPhone: a.fulfilment.deliveryQuote.pickup.contactPhone } : a.fulfilment.pharmacy,
   assignedAt: a.assignedAt,
+  offerExpiresAt: a.offerExpiresAt ?? null,
   respondedAt: a.respondedAt,
   pickedUpAt: a.pickedUpAt,
   outForDeliveryAt: a.outForDeliveryAt,
   deliveredAt: a.deliveredAt,
+  earningOfferMinor: a.earningOfferMinor ?? null,
 });
 export const queue = (userId, page) =>
   r.transaction(async (tx) => {
@@ -131,7 +135,7 @@ export const detail = (userId, id) =>
 export const respond = (userId, id, reason) =>
   r.transaction(async (tx) => {
     const a = await owned(tx, userId, id);
-    if (a.status !== "PENDING" || a.fulfilment.status !== "READY_FOR_PICKUP")
+    if (a.status !== "PENDING" || a.fulfilment.status !== "READY_FOR_PICKUP" || (a.offerExpiresAt && a.offerExpiresAt <= new Date()))
       throw fail("CONFLICT");
     const status = reason === undefined ? "ACCEPTED" : "REJECTED";
     changed(
@@ -205,6 +209,7 @@ export const transition = async (userId, id, { status, code }) => {
       }
     }
     changed(await r.changeFulfilment(tx, a.fulfilmentId, from, status));
+    if (status === 'DELIVERED') await earnDelivery(tx, a);
     changed(
       await r.changeAssignment(tx, id, "ACCEPTED", {
         [timestamp]: new Date(),
