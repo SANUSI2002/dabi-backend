@@ -90,15 +90,23 @@ describe('Kilometre-priced rider operations with real PostgreSQL', () => {
     const attempt = await prisma.riderTransferAttempt.findFirst({ where: { payoutId: payout.id } });
     await expect(money.approveRiderPayout(req(checker), payout.id, 'No retry before verification')).rejects.toMatchObject({ code: 'INVALID_STATE' });
     const result = { reference: attempt.reference, amount: payout.amountMinor, currency: 'NGN', recipient: { recipient_code: 'RCP_synthetic' }, status: 'success', transfer_code: 'TRF_synthetic' };
+    expect(await money.queueRiderTransferVerification({ event: 'transfer.success', data: { reference: attempt.reference } })).toEqual({ queued: true });
     await expect(money.reconcileRiderTransfer(attempt.reference, { gateway: { verifyTransfer: async () => ({ ...result, amount: 1 }) } })).rejects.toMatchObject({ code: 'PROVIDER_MISMATCH' });
     expect((await prisma.riderPayout.findUnique({ where: { id: payout.id } })).status).toBe('SUBMITTED');
     const confirmed = await money.reconcileRiderTransfer(attempt.reference, { gateway: { verifyTransfer: async () => result } });
     expect(confirmed.status).toBe('PAID');
+    await money.reconcileRiderTransfer(attempt.reference, { gateway: { verifyTransfer: async () => {
+      await money.queueRiderTransferVerification({ event: 'transfer.reversed', data: { reference: attempt.reference } });
+      return result;
+    } } });
+    expect((await prisma.riderTransferAttempt.findUnique({ where: { id: attempt.id } })).verificationRequested).toBe(true);
     const replay = await money.reconcileRiderTransfer(attempt.reference, { gateway: { verifyTransfer: async () => result } });
     expect(replay.paidAt).toEqual(confirmed.paidAt);
+    expect((await prisma.riderTransferAttempt.findUnique({ where: { id: attempt.id } })).verificationRequested).toBe(true); // Provider reads can lag the signed reversal callback.
     await money.queueRiderTransferVerification({ event: 'transfer.reversed', data: { reference: attempt.reference } });
     expect((await prisma.riderTransferAttempt.findUnique({ where: { id: attempt.id } })).verificationRequested).toBe(true);
     expect((await money.reconcileRiderTransfer(attempt.reference, { gateway: { verifyTransfer: async () => ({ ...result, status: 'reversed' }) } })).status).toBe('REVERSED');
+    await expect(money.reconcileRiderTransfer(attempt.reference, { gateway: { verifyTransfer: async () => result } })).rejects.toMatchObject({ code: 'PROVIDER_STATE_CONFLICT' });
     expect((await money.riderEarnings(rider.id)).availableMinor).toBe(0);
   });
   it('expires unanswered offers without changing stock or crediting an earning', async () => {

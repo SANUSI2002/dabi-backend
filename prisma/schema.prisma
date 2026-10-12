@@ -1764,6 +1764,7 @@ model RiderTransferAttempt {
   leaseUntil DateTime? @map("lease_until")
   nextCheckAt DateTime @default(now()) @map("next_check_at")
   verificationRequested Boolean @default(false) @map("verification_requested")
+  lastProviderEvent String? @map("last_provider_event") @db.VarChar(40)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   payout RiderPayout @relation(fields: [payoutId], references: [id], onDelete: Restrict)

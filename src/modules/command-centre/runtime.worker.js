@@ -13,15 +13,20 @@ export async function sendSubscriptionMail({ db = prisma, fetcher = globalThis.f
   const claim = await db.subscriptionEmailJob.updateMany({ where: { id: job.id, attempts: job.attempts, OR: [{ status: 'QUEUED' }, { status: 'SENDING', leaseUntil: { lt: now } }] }, data: { status: 'SENDING', attempts: { increment: 1 }, leaseToken: lease, leaseUntil: new Date(now.getTime() + 60000), firstAttemptAt: first } });
   if (!claim.count) return false;
   let errorCode;
+  const invoice = await db.subscriptionInvoice.findUnique({ where: { id: job.invoiceId }, select: { organizationId: true, status: true } });
+  const organization = invoice && await db.identityOrganization.findUnique({ where: { id: invoice.organizationId }, select: { organisation: { select: { owner: { select: { email: true, emailVerifiedAt: true, accountStatus: true } } } } } });
+  const owner = organization?.organisation?.owner;
+  if (invoice?.status === 'VOID') errorCode = 'INVOICE_VOID';
+  else if (!owner || owner.accountStatus !== 'ACTIVE' || !owner.emailVerifiedAt || owner.email?.toLowerCase() !== job.recipient.toLowerCase()) errorCode = 'RECIPIENT_CHANGED';
   // No retries after the provider's 24 h idempotency window: keep uncertain mail for review.
-  if (now - first > 23 * 3600000) errorCode = 'IDEMPOTENCY_WINDOW_EXPIRED';
+  else if (now - first > 23 * 3600000) errorCode = 'IDEMPOTENCY_WINDOW_EXPIRED';
   else if (!passwordResetEmailAllowedFor(job.recipient)) errorCode = 'RECIPIENT_NOT_ALLOWED';
   else try {
     const response = await fetcher('https://api.resend.com/emails', { method: 'POST', redirect: 'error', signal: globalThis.AbortSignal.timeout(10000), headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json', 'Idempotency-Key': `subscription-mail-${job.id}` }, body: JSON.stringify({ from: process.env.PASSWORD_RESET_EMAIL_FROM, to: [job.recipient], subject: job.subject, text: job.message }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.id) errorCode = 'EMAIL_PROVIDER_REJECTED';
   } catch { errorCode = 'EMAIL_PROVIDER_UNAVAILABLE'; }
-  await db.subscriptionEmailJob.updateMany({ where: { id: job.id, status: 'SENDING', leaseToken: lease }, data: { status: !errorCode ? 'SENT' : job.attempts >= 4 || ['IDEMPOTENCY_WINDOW_EXPIRED', 'RECIPIENT_NOT_ALLOWED'].includes(errorCode) ? 'FAILED' : 'QUEUED', leaseToken: null, leaseUntil: null, lastErrorCode: errorCode || null, ...(errorCode ? { nextAttemptAt: new Date(now.getTime() + 60000 * 2 ** job.attempts) } : { sentAt: now }) } });
+  await db.subscriptionEmailJob.updateMany({ where: { id: job.id, status: 'SENDING', leaseToken: lease }, data: { status: !errorCode ? 'SENT' : job.attempts >= 4 || ['IDEMPOTENCY_WINDOW_EXPIRED', 'RECIPIENT_NOT_ALLOWED', 'RECIPIENT_CHANGED', 'INVOICE_VOID'].includes(errorCode) ? 'FAILED' : 'QUEUED', leaseToken: null, leaseUntil: null, lastErrorCode: errorCode || null, ...(errorCode ? { nextAttemptAt: new Date(now.getTime() + 60000 * 2 ** job.attempts) } : { sentAt: now }) } });
   return true;
 }
 export async function pruneTracking(db = prisma, now = new Date()) {

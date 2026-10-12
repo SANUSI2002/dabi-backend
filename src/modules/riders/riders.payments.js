@@ -119,7 +119,11 @@ export async function reconcileRiderTransfer(reference, { db = prisma, gateway =
     await tx.$queryRaw`SELECT id FROM rider_payouts WHERE id = ${attempt.payoutId} FOR UPDATE`;
     const current = await tx.riderTransferAttempt.findUnique({ where: { reference } });
     if (current.status === 'PAID' && !['PAID', 'REVERSED'].includes(status)) throw ccError('PROVIDER_STATE_CONFLICT', 409, 'Provider state is inconsistent with an already verified payment.');
-    await tx.riderTransferAttempt.update({ where: { reference }, data: { status, providerTransferCode: result.transfer_code || current.providerTransferCode, errorCode: null, leaseToken: null, leaseUntil: null, verificationRequested: false, nextCheckAt: new Date(Date.now() + 300000) } });
+    if (current.status === 'REVERSED' && status !== 'REVERSED') throw ccError('PROVIDER_STATE_CONFLICT', 409, 'A reversed transfer cannot be changed by an older provider response.');
+    const newerCallback = current.verificationRequested && current.nextCheckAt.getTime() !== attempt.nextCheckAt.getTime();
+    const expected = { 'transfer.success': 'PAID', 'transfer.failed': 'FAILED', 'transfer.reversed': 'REVERSED' }[current.lastProviderEvent];
+    const awaitingProvider = Boolean(expected && status !== expected);
+    await tx.riderTransferAttempt.update({ where: { reference }, data: { status, providerTransferCode: result.transfer_code || current.providerTransferCode, errorCode: awaitingProvider ? 'AWAITING_PROVIDER_EVENT_CONFIRMATION' : null, leaseToken: null, leaseUntil: null, verificationRequested: newerCallback || awaitingProvider, nextCheckAt: newerCallback ? current.nextCheckAt : new Date(Date.now() + 300000) } });
     const latest = await tx.riderTransferAttempt.findFirst({ where: { payoutId: attempt.payoutId }, orderBy: { number: 'desc' } });
     const parent = await tx.riderPayout.findUnique({ where: { id: attempt.payoutId } });
     if (latest.id === current.id) await tx.riderPayout.update({ where: { id: attempt.payoutId }, data: { status, ...(status === 'PAID' && !parent.paidAt ? { paidAt: new Date() } : {}), providerErrorCode: null } });
@@ -142,8 +146,8 @@ export async function finalizeRiderPayout(req, id, otp, why, { db = prisma, gate
 }
 export async function queueRiderTransferVerification(event, db = prisma) {
   const reference = event?.data?.reference;
-  if (!event?.event?.startsWith('transfer.') || typeof reference !== 'string' || !reference.startsWith('srp-')) return { ignored: true };
-  const changed = await db.riderTransferAttempt.updateMany({ where: { reference }, data: { nextCheckAt: new Date(), verificationRequested: true } });
+  if (!['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(event?.event) || typeof reference !== 'string' || !reference.startsWith('srp-')) return { ignored: true };
+  const changed = await db.riderTransferAttempt.updateMany({ where: { reference, ...(event.event === 'transfer.reversed' ? {} : { OR: [{ lastProviderEvent: null }, { lastProviderEvent: { not: 'transfer.reversed' } }] }) }, data: { nextCheckAt: new Date(), verificationRequested: true, lastProviderEvent: event.event } });
   return changed.count ? { queued: true } : { ignored: true };
 }
 export function startRiderTransferReconciler() {

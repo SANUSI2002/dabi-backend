@@ -97,4 +97,16 @@ describe('Subscription invoices and independent payment verification', () => {
       expect(options.body).not.toMatch(/patientId|medicalRecord|password:/);
     } finally { delete process.env.RESEND_API_KEY; delete process.env.PASSWORD_RESET_EMAIL_FROM; }
   });
+  it('never sends a queued invoice email to a disabled or changed owner', async () => {
+    const issued = await invoice('2027-07-01');
+    await prisma.subscriptionEmailJob.updateMany({ where: { status: 'QUEUED', invoiceId: { not: issued.id } }, data: { status: 'FAILED' } });
+    await prisma.user.update({ where: { id: hospital.userId }, data: { accountStatus: 'DISABLED' } });
+    process.env.RESEND_API_KEY = 'synthetic'; process.env.PASSWORD_RESET_EMAIL_FROM = 'Sabi <no-reply@sabihealth.org>';
+    const fetcher = vi.fn();
+    try {
+      await sendSubscriptionMail({ fetcher });
+      expect(fetcher).not.toHaveBeenCalled();
+      expect((await prisma.subscriptionEmailJob.findUnique({ where: { invoiceId_kind: { invoiceId: issued.id, kind: 'ISSUED' } } })).lastErrorCode).toBe('RECIPIENT_CHANGED');
+    } finally { delete process.env.RESEND_API_KEY; delete process.env.PASSWORD_RESET_EMAIL_FROM; }
+  });
 });
