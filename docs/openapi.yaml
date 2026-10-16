@@ -1227,6 +1227,160 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
+  /api/v1/auth/social/providers:
+    get:
+      tags:
+        - Auth
+      summary: Which social sign-in options are switched on
+      description: Returns the public Google client id and the Apple Services ID and redirect URI when each provider is configured on the server, or `null`. Never returns secrets. Sign-in pages hide a provider that is `null`.
+      operationId: get__api_v1_auth_social_providers
+      security: []
+      responses:
+        "200":
+          description: "`data.google` is `{ clientId }` or null; `data.apple` is `{ clientId, redirectUri }` or null."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+  /api/v1/auth/social/nonce:
+    post:
+      tags:
+        - Auth
+      summary: Get a one-time nonce for Sign in with Apple
+      description: A signed, ten-minute value to pass to Apple as `nonce`. Apple copies it into the identity token, which `POST /api/v1/auth/social/apple` checks.
+      operationId: post__api_v1_auth_social_nonce
+      security: []
+      responses:
+        "200":
+          description: "`data.nonce`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "403":
+          description: Browser request from an origin that is not allowed.
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/auth/social/google:
+    post:
+      tags:
+        - Auth
+      summary: Sign in or sign up with Google
+      description: |
+        Send the one-time `code` from Google's popup code flow (`redirect_uri` is `postmessage`). The server exchanges it with its client secret and checks Google's ID token (signature, issuer, audience, expiry).
+        The Google account opens the Sabi account already connected to it; otherwise the account with the same email if Google verified that email (it is connected now, and an unverified sign-up with that email is activated and its typed password stops working); otherwise a new patient account is created when `consentGiven` is `true`, or the response is `status: "signup_required"` with a ten-minute `signupToken` for `POST /api/v1/auth/social/complete`.
+        Two-step verification still applies (`202 mfa_required`, then `POST /api/v1/auth/mfa/login/verify`). Success matches `POST /api/v1/auth/login`, plus `provider` and `accountCreated`.
+      operationId: post__api_v1_auth_social_google
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code: { type: string, minLength: 10, maxLength: 2048 }
+                consentGiven: { type: boolean, enum: [true] }
+      responses:
+        "200":
+          description: Signed in (`accessToken`, `user`), or `status` is `signup_required` with `signupToken` and `profile`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "202":
+          description: "`status: mfa_required` with `challengeToken`."
+        "400":
+          description: "`SOCIAL_EMAIL_UNVERIFIED` — the Google account has no verified email to connect by."
+        "401":
+          description: "`SOCIAL_TOKEN_INVALID` — Google did not confirm the sign-in."
+        "403":
+          description: "`ACCOUNT_UNAVAILABLE`, or a browser request from an origin that is not allowed."
+        "409":
+          description: "`SOCIAL_ACCOUNT_CONFLICT` — the Sabi account is connected to a different Google account."
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: "`SOCIAL_PROVIDER_NOT_CONFIGURED` or `SOCIAL_PROVIDER_UNAVAILABLE`."
+  /api/v1/auth/social/apple:
+    post:
+      tags:
+        - Auth
+      summary: Sign in or sign up with Apple
+      description: |
+        Send Apple's `id_token` as `idToken` and the `nonce` from `POST /api/v1/auth/social/nonce` that was passed to Apple. Apple gives the person's name only once, to the browser, on first sign-in; send it as `firstName` / `lastName` when present.
+        Account rules, two-step verification and responses are the same as `POST /api/v1/auth/social/google`.
+      operationId: post__api_v1_auth_social_apple
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [idToken, nonce]
+              properties:
+                idToken: { type: string, minLength: 20, maxLength: 8192 }
+                nonce: { type: string, minLength: 20, maxLength: 200 }
+                firstName: { type: string, maxLength: 100 }
+                lastName: { type: string, maxLength: 100 }
+                consentGiven: { type: boolean, enum: [true] }
+      responses:
+        "200":
+          description: Signed in, or `status` is `signup_required` with `signupToken`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "202":
+          description: "`status: mfa_required` with `challengeToken`."
+        "400":
+          description: "`SOCIAL_EMAIL_UNVERIFIED`"
+        "401":
+          description: "`SOCIAL_TOKEN_INVALID` — bad signature, wrong audience, expired, or nonce mismatch."
+        "403":
+          description: "`ACCOUNT_UNAVAILABLE`, or origin not allowed."
+        "409":
+          description: "`SOCIAL_ACCOUNT_CONFLICT`"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: "`SOCIAL_PROVIDER_NOT_CONFIGURED` or `SOCIAL_PROVIDER_UNAVAILABLE`."
+  /api/v1/auth/social/complete:
+    post:
+      tags:
+        - Auth
+      summary: Finish a Google / Apple sign-up after the person accepts the terms
+      description: 'Creates the patient account for a `signupToken` returned with `status: "signup_required"` (valid ten minutes) and signs in. Same responses as `POST /api/v1/auth/social/google`.'
+      operationId: post__api_v1_auth_social_complete
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [signupToken, consentGiven]
+              properties:
+                signupToken: { type: string, minLength: 20, maxLength: 4096 }
+                consentGiven: { type: boolean, enum: [true] }
+      responses:
+        "200":
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "202":
+          description: "`status: mfa_required`"
+        "401":
+          description: "`SOCIAL_SIGNUP_EXPIRED`"
+        "429":
+          $ref: "#/components/responses/RateLimited"
   /api/v1/auth/logout:
     post:
       tags:

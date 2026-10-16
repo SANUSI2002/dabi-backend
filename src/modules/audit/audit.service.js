@@ -23,6 +23,12 @@ const ACTIONS = {
   SIGNED_OUT_OTHERS: ['SIGN_IN', { actor: 'You signed out all your other devices' }],
   SIGNED_OUT_EVERYWHERE: ['SIGN_IN', { actor: 'You signed out on every device' }],
   PASSWORD_RESET: ['ACCOUNT', { actor: 'Your password was changed' }],
+  SIGNED_IN_GOOGLE: ['SIGN_IN', { actor: 'You signed in with Google' }],
+  SIGNED_IN_APPLE: ['SIGN_IN', { actor: 'You signed in with Apple' }],
+  SIGNED_UP_GOOGLE: ['ACCOUNT', { actor: 'You created your Sabi account with Google' }],
+  SIGNED_UP_APPLE: ['ACCOUNT', { actor: 'You created your Sabi account with Apple' }],
+  GOOGLE_CONNECTED: ['ACCOUNT', { actor: 'Google sign-in was connected to your account' }],
+  APPLE_CONNECTED: ['ACCOUNT', { actor: 'Apple sign-in was connected to your account' }],
 
   APPOINTMENT_VIEWED: ['RECORD_ACCESS', { actor: "You opened {subject}'s appointment", subject: '{actor} opened your appointment details' }],
   APPOINTMENT_CONFIRMED: ['RECORD_CHANGE', { actor: "You confirmed {subject}'s appointment", subject: '{actor} confirmed your appointment' }],

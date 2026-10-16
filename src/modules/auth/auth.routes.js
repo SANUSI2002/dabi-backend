@@ -2,9 +2,10 @@ import express from 'express';
 import { checkSession, protect } from '../../middleware/authMiddleware.js';
 import { validate } from '../../middleware/validateMiddleware.js';
 import { confirmEmailVerification, confirmPasswordReset, getCurrentUser, getSessions, login, logout, logoutEverywhere, logoutOtherDevices, refreshAccessToken, registerPatient, requestEmailVerification, requestPasswordReset, revokeDeviceSession } from './auth.controller.js';
-import { emailVerificationConfirmSchema, emailVerificationRequestSchema, loginSchema, mfaConfirmSchema, mfaEnrollSchema, mfaFactorSchema, mfaLoginSchema, passwordResetConfirmSchema, passwordResetRequestSchema, refreshTokenSchema, registerPatientSchema, sessionIdSchema } from './auth.validator.js';
+import { emailVerificationConfirmSchema, emailVerificationRequestSchema, loginSchema, mfaConfirmSchema, mfaEnrollSchema, mfaFactorSchema, mfaLoginSchema, passwordResetConfirmSchema, passwordResetRequestSchema, refreshTokenSchema, registerPatientSchema, sessionIdSchema, googleSignInSchema, appleSignInSchema, socialSignupSchema } from './auth.validator.js';
 import { requireTrustedOrigin } from './auth.cookie.js';
-import { invitationAcceptLimiter, invitationPreviewLimiter, loginLimiter, mfaLimiter, registrationLimiter, resetConfirmLimiter, resetRequestLimiter, refreshLimiter, sensitiveLimiter, verificationConfirmLimiter, verificationRequestLimiter } from '../../middleware/rateLimitMiddleware.js';
+import { appleSignIn, completeSocialSignup, googleSignIn, socialNonce, socialProviders } from './auth.social.controller.js';
+import { invitationAcceptLimiter, invitationPreviewLimiter, loginLimiter, mfaLimiter, registrationLimiter, resetConfirmLimiter, resetRequestLimiter, refreshLimiter, sensitiveLimiter, socialLimiter, verificationConfirmLimiter, verificationRequestLimiter } from '../../middleware/rateLimitMiddleware.js';
 import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
 import { confirmTotp, enrollTotp, mfaStatus, removeMfa, replaceRecoveryCodes, stepUp, verifyMfaLogin } from './auth.mfa.controller.js';
 import { requireOrganization, requirePermission, requirePlatform } from '../../middleware/accessMiddleware.js';
@@ -20,6 +21,12 @@ router.post('/email-verification/confirm', verificationConfirmLimiter, validate(
 router.post('/invitations/preview', invitationPreviewLimiter, validate(identityInvitationTokenSchema), previewIdentityInvitation);
 router.post('/invitations/accept', invitationAcceptLimiter, validate(identityInvitationAcceptSchema), acceptIdentityInvitation);
 router.post('/login', loginLimiter, requireTrustedOrigin, validate(loginSchema), login);
+// Google / Apple sign-in and sign-up (see auth.social.js).
+router.get('/social/providers', socialProviders);
+router.post('/social/nonce', socialLimiter, requireTrustedOrigin, socialNonce);
+router.post('/social/google', socialLimiter, requireTrustedOrigin, validate(googleSignInSchema), googleSignIn);
+router.post('/social/apple', socialLimiter, requireTrustedOrigin, validate(appleSignInSchema), appleSignIn);
+router.post('/social/complete', socialLimiter, requireTrustedOrigin, validate(socialSignupSchema), completeSocialSignup);
 router.post('/mfa/login/verify', mfaLimiter, requireTrustedOrigin, validate(mfaLoginSchema), verifyMfaLogin);
 router.get('/mfa/status', protect, mfaStatus);
 router.post('/mfa/totp/enroll', protect, sensitiveLimiter, validate(mfaEnrollSchema), enrollTotp);

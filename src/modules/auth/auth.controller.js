@@ -11,7 +11,7 @@ import { beginLoginChallenge, hasActiveMfa } from './auth.mfa.js';
 import prisma from '../../config/db.js';
 import { recordAudit } from '../audit/audit.service.js';
 
-const toUserResponse = (user) => ({
+export const toUserResponse = (user) => ({
   id: user.id,
   email: user.email,
   accountStatus: user.accountStatus,
@@ -62,21 +62,26 @@ export const login = async (req, res, next) => {
       return res.status(403).json({ status: 'error', error: { code: 'EMAIL_VERIFICATION_REQUIRED', message: 'Verify your email before signing in.' } });
     }
     if (user.accountStatus && user.accountStatus !== 'ACTIVE') return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
-    if (await hasActiveMfa(user.id)) {
-      const challengeToken = await beginLoginChallenge(user.id);
-      res.set('Cache-Control', 'no-store');
-      return res.status(202).json({ status: 'mfa_required', challengeToken, methods: ['totp', 'recovery_code'] });
-    }
-    const { session, refreshToken, replaced } = await createSession(user, req.get('user-agent') || '');
-    await recordAudit(prisma, { actorUserId: user.id, action: 'SIGNED_IN', resourceType: 'session', resourceId: session.id });
-    if (replaced) await recordAudit(prisma, { actorUserId: user.id, action: 'SIGNED_OUT_ELSEWHERE', resourceType: 'session', resourceId: session.id });
-    const accessToken = generateAccessToken(user, { sessionId: session.id });
-    if (browserRequest(req)) setRefreshCookie(res, refreshToken);
-    return res.status(200).json({ status: 'success', message: 'Login successful', accessToken, ...(!browserRequest(req) ? { refreshToken } : {}), user: toUserResponse(user) });
+    return completeSignIn(req, res, user);
   } catch (error) {
     return next(error);
   }
 };
+
+/** The last step of every sign-in (password, Google, Apple): two-step check if enabled, else a new session. */
+export async function completeSignIn(req, res, user, { action = 'SIGNED_IN', extra = {} } = {}) {
+  if (await hasActiveMfa(user.id)) {
+    const challengeToken = await beginLoginChallenge(user.id);
+    res.set('Cache-Control', 'no-store');
+    return res.status(202).json({ status: 'mfa_required', challengeToken, methods: ['totp', 'recovery_code'], ...extra });
+  }
+  const { session, refreshToken, replaced } = await createSession(user, req.get('user-agent') || '');
+  await recordAudit(prisma, { actorUserId: user.id, action, resourceType: 'session', resourceId: session.id });
+  if (replaced) await recordAudit(prisma, { actorUserId: user.id, action: 'SIGNED_OUT_ELSEWHERE', resourceType: 'session', resourceId: session.id });
+  const accessToken = generateAccessToken(user, { sessionId: session.id });
+  if (browserRequest(req)) setRefreshCookie(res, refreshToken);
+  return res.status(200).json({ status: 'success', message: 'Login successful', accessToken, ...(!browserRequest(req) ? { refreshToken } : {}), user: toUserResponse(user), ...extra });
+}
 
 export const refreshAccessToken = async (req, res, next) => {
   try {

@@ -1,10 +1,11 @@
 import { caregiverProfileSelect } from '../caregivers/caregivers.repository.js';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import prisma from '../../config/db.js';
 
 const SALT_ROUNDS = 12;
 const MAX_PATIENT_ID_ATTEMPTS = 5;
-const authUserInclude = { profile: true, caregiverProfile: { select: caregiverProfileSelect }, roles: { select: { role: true } } };
+export const authUserInclude = { profile: true, caregiverProfile: { select: caregiverProfileSelect }, roles: { select: { role: true } } };
 
 const generatePatientId = () => `#SHM${Math.floor(Math.random() * 100000).toString().padStart(5, '0')}`;
 
@@ -75,3 +76,31 @@ export const confirmEmailVerificationToken = async (userId, tokenHash) => {
     throw error;
   }
 };
+
+/** A patient account created through Google or Apple: the provider already proved the email, and the
+ *  password is random and never shown, so the only ways in are that provider or a password reset. */
+export const createSocialPatient = async ({ email, firstName, lastName, provider, subject }, db = prisma) => {
+  const unusable = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), SALT_ROUNDS);
+  const name = [firstName, lastName].filter(Boolean).join(' ').trim() || email.split('@')[0];
+  for (let attempt = 1; attempt <= MAX_PATIENT_ID_ATTEMPTS; attempt += 1) {
+    try {
+      return await db.user.create({
+        data: {
+          patientId: generatePatientId(), email, password: unusable, accountStatus: 'ACTIVE', emailVerifiedAt: new Date(), full_name: name.slice(0, 200),
+          profile: { create: { consentGiven: true, consentGivenAt: new Date() } },
+          roles: { create: { role: 'PATIENT' } },
+          healthMetrics: { create: { health_score: 0 } },
+          identityProviders: { create: { provider, subject, email } },
+        },
+        include: authUserInclude,
+      });
+    } catch (error) {
+      const target = error?.meta?.target;
+      const isPatientIdCollision = error?.code === 'P2002' && (Array.isArray(target) ? target.includes('patient_id') : String(target).includes('patient_id'));
+      if (isPatientIdCollision && attempt < MAX_PATIENT_ID_ATTEMPTS) continue;
+      throw error;
+    }
+  }
+  throw new Error('Could not generate a unique patient ID, please retry');
+};
+export const unusablePasswordHash = () => bcrypt.hash(crypto.randomBytes(32).toString('hex'), SALT_ROUNDS);

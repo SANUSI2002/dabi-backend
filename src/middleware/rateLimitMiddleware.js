@@ -58,6 +58,7 @@ export const resetConfirmLimiter = createLimiter({ kind: 'reset-confirm', field:
 export const refreshLimiter = createLimiter({ kind: 'refresh', field: 'refreshToken', max: 30 });
 export const mfaLimiter = createLimiter({ kind: 'mfa', field: 'challengeToken', max: 10 });
 export const sensitiveLimiter = createLimiter({ kind: 'sensitive', max: 20 });
+export const socialLimiter = createLimiter({ kind: 'social', max: 20 });
 
 export const rateLimitStoreMode = () => 'memory';
 export const warnRateLimitFallback = () => console.warn('[security] Rate limits are process-local: deploy one API instance. Counters reset when this process restarts.');

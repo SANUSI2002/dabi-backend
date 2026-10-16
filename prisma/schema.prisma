@@ -38,6 +38,7 @@ model User {
   mfaLoginChallenges MfaLoginChallenge[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  identityProviders UserIdentityProvider[]
   identityInvitationsSent IdentityInvitation[] @relation("IdentityInvitationInviter")
   careRelationshipsOwned CareRelationship[] @relation("PatientCareRelationships")
   careRelationshipsHeld CareRelationship[] @relation("CaregiverCareRelationships")
@@ -4067,4 +4068,19 @@ model EmergencyAccessGrant {
   @@index([actorUserId, subjectUserId, expiresAt(sort: Desc)], map: "emergency_access_grants_actor_subject_expires_idx")
   @@index([reviewedAt, startedAt(sort: Desc)], map: "emergency_access_grants_reviewed_at_started_at_idx")
   @@map("emergency_access_grants")
+}
+
+// Google / Apple accounts a person can sign in with. See migration 20261024090000_social_sign_in.
+model UserIdentityProvider {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider String @db.VarChar(20)
+  subject String @db.VarChar(255)
+  email String? @db.VarChar(320)
+  createdAt DateTime @default(now()) @map("created_at")
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+  @@unique([provider, subject])
+  @@unique([userId, provider])
+  @@map("user_identity_providers")
 }
