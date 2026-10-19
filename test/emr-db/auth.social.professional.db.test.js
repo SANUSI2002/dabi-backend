@@ -8,6 +8,7 @@ import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from './fixtures.js';
+const { Response, URLSearchParams } = globalThis;
 
 // No verification email may be needed (or sent) for a Google-proven address.
 const email = vi.hoisted(() => ({ send: vi.fn() }));

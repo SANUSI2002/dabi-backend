@@ -4,6 +4,8 @@
 // on comes from a token whose signature, issuer, audience and expiry this server checked against the
 // provider's published keys.
 import crypto from 'node:crypto';
+import { Buffer } from 'node:buffer';
+import { URLSearchParams } from 'node:url';
 import jwt from 'jsonwebtoken';
 
 export const GOOGLE = 'GOOGLE';
@@ -46,7 +48,7 @@ async function signingKey(url, kid) {
   let entry = keyCache.get(url);
   const fresh = entry && entry.expiresAt > now;
   if (!fresh || (!entry.keys.has(kid) && now - entry.fetchedAt > 60_000)) {
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const response = await globalThis.fetch(url, { signal: globalThis.AbortSignal.timeout(8000) });
     if (!response.ok) throw fail(503, 'SOCIAL_PROVIDER_UNAVAILABLE', 'Sign-in with this provider is temporarily unavailable. Please try again.');
     const body = await response.json();
     const maxAge = Number(/max-age=(\d+)/.exec(response.headers.get('cache-control') || '')?.[1]) || 3600;
@@ -96,11 +98,11 @@ const sha256Hex = (value) => crypto.createHash('sha256').update(value).digest('h
 export async function googleIdentity(code) {
   const config = googleConfig();
   if (!config) throw fail(503, 'SOCIAL_PROVIDER_NOT_CONFIGURED', 'Google sign-in is not available yet.');
-  const response = await fetch(GOOGLE_TOKEN_URL, {
+  const response = await globalThis.fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ code, client_id: config.clientId, client_secret: config.clientSecret, redirect_uri: 'postmessage', grant_type: 'authorization_code' }),
-    signal: AbortSignal.timeout(10_000),
+    signal: globalThis.AbortSignal.timeout(10_000),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || !body.id_token) {

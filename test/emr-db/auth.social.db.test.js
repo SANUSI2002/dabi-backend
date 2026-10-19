@@ -17,6 +17,7 @@ const stranger = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
 const jwk = { ...signer.publicKey.export({ format: 'jwk' }), kid: 'synthetic-key', alg: 'RS256', use: 'sig' };
 const codes = new Map();
 const realFetch = globalThis.fetch;
+const { Response, URLSearchParams } = globalThis;
 
 const idToken = (claims, { key = signer.privateKey, kid = 'synthetic-key' } = {}) => jwt.sign(claims, key, { algorithm: 'RS256', keyid: kid, expiresIn: '5m' });
 const googleCode = (claims, opts) => {

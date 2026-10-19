@@ -39,7 +39,8 @@ export async function register(data) {
   if (!enabled() || (!social && (!verificationEmailConfigured() || !verificationEmailAllowedFor(data.email)))) fail('Doctor registration is temporarily unavailable. Please try again later.', 503);
   if (!social) doctorPortal();
   await assertPrivateBucket(privateStorageClient(), PRIVATE_BUCKETS.hospitalEvidenceQuarantine);
-  const { password, socialSignupToken, ...rest } = data;
+  const { password, ...rest } = data;
+  delete rest.socialSignupToken;
   const email = social ? social.email : data.email;
   const details = { ...rest, email };
   const encoded = social ? await auth.unusablePasswordHash() : await bcrypt.hash(password, 12);
