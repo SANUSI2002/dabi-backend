@@ -1976,6 +1976,9 @@ model EmrPatient {
   appointments EmrAppointment[]
   imagingStudies EmrImagingStudy[]
   procedures EmrProcedure[]
+  surveillanceCases EmrSurveillanceCase[]
+  immunizations EmrImmunization[]
+  aefiReports EmrAefiReport[]
   pncVisits EmrPncVisit[]
   pregnancies EmrPregnancy[]
   deliveries EmrDelivery[]
@@ -4242,4 +4245,75 @@ model EmrPncVisit {
   @@index([organizationId, visitDate, id])
   @@index([organizationId, patientId, visitDate], map: "emr_pnc_visits_patient_idx")
   @@map("emr_pnc_visits")
+}
+
+// Immunization and AEFI (migration 20261028090000_emr_immunizations; see immunizations.service.js).
+model EmrImmunization {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  vaccineCode String @map("vaccine_code") @db.VarChar(12)
+  vaccineName String @map("vaccine_name") @db.VarChar(120)
+  givenAt DateTime @map("given_at")
+  batchNumber String @map("batch_number") @db.VarChar(60)
+  site String @db.VarChar(60)
+  givenByUserId String @map("given_by_user_id")
+  status String @default("ACTIVE") @db.VarChar(16)
+  errorReason String? @map("error_reason") @db.VarChar(300)
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  aefi EmrAefiReport?
+
+  @@unique([organizationId, id])
+  @@index([organizationId, givenAt], map: "emr_immunizations_organization_id_given_at_idx")
+  @@map("emr_immunizations")
+}
+
+model EmrAefiReport {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  immunizationId String @map("immunization_id")
+  patientId String @map("patient_id")
+  symptoms String @db.VarChar(500)
+  severity String @db.VarChar(12)
+  onsetHours Int @map("onset_hours")
+  actionTaken String @map("action_taken") @db.VarChar(500)
+  reportedByUserId String @map("reported_by_user_id")
+  reportedAt DateTime @default(now()) @map("reported_at")
+  surveillanceCaseId String? @map("surveillance_case_id")
+  immunization EmrImmunization @relation(fields: [organizationId, immunizationId], references: [organizationId, id], onDelete: Restrict)
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  surveillanceCase EmrSurveillanceCase? @relation(fields: [organizationId, surveillanceCaseId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, immunizationId], map: "emr_aefi_reports_immunization_key")
+  @@map("emr_aefi_reports")
+}
+
+// Disease surveillance (migration 20261029090000_emr_surveillance; see surveillance.service.js).
+model EmrSurveillanceCase {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  diseaseCode String @map("disease_code") @db.VarChar(10)
+  diseaseName String @map("disease_name") @db.VarChar(120)
+  immediate Boolean
+  onsetDate DateTime? @map("onset_date") @db.Date
+  notes String? @db.VarChar(1000)
+  source String @default("MANUAL") @db.VarChar(10)
+  status String @default("SUSPECTED") @db.VarChar(10)
+  reportedByUserId String @map("reported_by_user_id")
+  reportedAt DateTime @default(now()) @map("reported_at")
+  classifiedByUserId String? @map("classified_by_user_id")
+  classifiedAt DateTime? @map("classified_at")
+  classificationNote String? @map("classification_note") @db.VarChar(300)
+  version Int @default(1)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  aefiReports EmrAefiReport[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, reportedAt], map: "emr_surveillance_cases_organization_id_reported_at_idx")
+  @@map("emr_surveillance_cases")
 }

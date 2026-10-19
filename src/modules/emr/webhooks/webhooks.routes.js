@@ -25,6 +25,7 @@ export const EVENT_TYPES = [
   'pregnancy.enrolled', 'anc.visit.recorded', 'pregnancy.visit_entered_in_error', 'pregnancy.closed',
   'delivery.recorded', 'delivery.entered_in_error', 'birth.notified', 'birth.registered', 'birth.certificate_issued',
   'pnc.recorded', 'pnc.entered_in_error',
+  'immunization.given', 'immunization.aefi_reported', 'immunization.entered_in_error', 'surveillance.notified', 'surveillance.classified',
 ];
 const MAX_SUBSCRIPTIONS = 10;
 
