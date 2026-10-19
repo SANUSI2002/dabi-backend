@@ -172,6 +172,17 @@ export async function labOrdersForPatient(tx, context, patientId, take) {
   return (await withStaffNames(tx, rows)).map(toOrder);
 }
 
+/** Orders placed in a period (every status), with results and staff names — the report builder's lab source. */
+export async function withStaffNamesForReports(tx, context, createdAt, take) {
+  const rows = await tx.emrLabOrder.findMany({
+    where: { organizationId: context.organizationId, createdAt },
+    include: { patient: labPatient, items: { include: { results: currentResults }, orderBy: { testCode: 'asc' } } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take,
+  });
+  return (await withStaffNames(tx, rows)).map(toOrder);
+}
+
 export async function getOrder(context, orderId) {
   return withTenant(context, async (tx) => {
     const order = await tx.emrLabOrder.findFirst({

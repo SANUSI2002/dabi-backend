@@ -18,9 +18,9 @@ export async function recordAudit(tx, context, { action, resourceType, resourceI
 export const changedFieldNames = (before, changes) =>
   Object.keys(changes).filter((key) => changes[key] !== undefined && JSON.stringify(before[key] ?? null) !== JSON.stringify(changes[key] ?? null));
 
-export async function listAudit(tx, { resourceType, resourceId, cursor, limit = 50 }) {
+export async function listAudit(tx, { resourceType, resourceId, action, cursor, limit = 50 }) {
   const rows = await tx.emrAuditEvent.findMany({
-    where: { ...(resourceType ? { resourceType } : {}), ...(resourceId ? { resourceId } : {}) },
+    where: { ...(resourceType ? { resourceType } : {}), ...(resourceId ? { resourceId } : {}), ...(action ? { action } : {}) },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     take: limit + 1,

@@ -4528,3 +4528,21 @@ model EmrOutreachActivity {
   @@index([organizationId, activityDate])
   @@map("emr_outreach_activities")
 }
+
+// Monthly Summary Form returns (migration 20261105090000_emr_reports; see reports.service.js).
+model EmrMsfReturn {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  period String @db.VarChar(7)
+  values Json @default("{}")
+  status String @default("DRAFT") @db.VarChar(8)
+  updatedByUserId String @map("updated_by_user_id")
+  compiledByUserId String? @map("compiled_by_user_id")
+  compiledAt DateTime? @map("compiled_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@unique([organizationId, period])
+  @@map("emr_msf_returns")
+}
