@@ -1976,6 +1976,7 @@ model EmrPatient {
   appointments EmrAppointment[]
   imagingStudies EmrImagingStudy[]
   procedures EmrProcedure[]
+  fpClients EmrFpClient[]
   surveillanceCases EmrSurveillanceCase[]
   immunizations EmrImmunization[]
   aefiReports EmrAefiReport[]
@@ -4316,4 +4317,48 @@ model EmrSurveillanceCase {
   @@unique([organizationId, id])
   @@index([organizationId, reportedAt], map: "emr_surveillance_cases_organization_id_reported_at_idx")
   @@map("emr_surveillance_cases")
+}
+
+// Family planning (migration 20261030090000_emr_family_planning; see family-planning.service.js).
+model EmrFpClient {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  method String @db.VarChar(40)
+  firstTime Boolean @default(false) @map("first_time")
+  startDate DateTime @map("start_date") @db.Date
+  nextVisitDate DateTime? @map("next_visit_date") @db.Date
+  counselled Boolean @default(true)
+  notes String? @db.VarChar(1000)
+  status String @default("ACTIVE") @db.VarChar(14)
+  discontinueReason String? @map("discontinue_reason") @db.VarChar(60)
+  discontinuedAt DateTime? @map("discontinued_at")
+  discontinuedByUserId String? @map("discontinued_by_user_id")
+  registeredByUserId String @map("registered_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  visits EmrFpVisit[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, createdAt], map: "emr_fp_clients_organization_id_created_at_idx")
+  @@map("emr_fp_clients")
+}
+
+model EmrFpVisit {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  clientId String @map("client_id")
+  visitDate DateTime @map("visit_date") @db.Date
+  visitType String @map("visit_type") @db.VarChar(14)
+  method String @db.VarChar(40)
+  nextVisitDate DateTime? @map("next_visit_date") @db.Date
+  notes String? @db.VarChar(1000)
+  recordedByUserId String @map("recorded_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  client EmrFpClient @relation(fields: [organizationId, clientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, clientId, visitDate], map: "emr_fp_visits_client_idx")
+  @@map("emr_fp_visits")
 }
