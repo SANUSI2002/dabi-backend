@@ -1976,6 +1976,7 @@ model EmrPatient {
   appointments EmrAppointment[]
   imagingStudies EmrImagingStudy[]
   procedures EmrProcedure[]
+  ncdClients EmrNcdClient[]
   cmamScreenings EmrCmamScreening[]
   growthVisits EmrGrowthVisit[]
   fpClients EmrFpClient[]
@@ -4417,4 +4418,24 @@ model EmrCmamScreening {
 
   @@index([organizationId, screeningDate], map: "emr_cmam_screenings_organization_id_screening_date_idx")
   @@map("emr_cmam_screenings")
+}
+
+// NCD register (migration 20261101090000_emr_programmes; see programmes.service.js).
+model EmrNcdClient {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  condition String @db.VarChar(40)
+  systolic Int?
+  diastolic Int?
+  fastingGlucoseMmol Decimal? @map("fasting_glucose_mmol") @db.Decimal(4, 1)
+  control String @db.VarChar(12)
+  nextVisitDate DateTime @map("next_visit_date") @db.Date
+  status String @default("ACTIVE") @db.VarChar(10)
+  enrolledByUserId String @map("enrolled_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, nextVisitDate], map: "emr_ncd_clients_organization_id_next_visit_idx")
+  @@map("emr_ncd_clients")
 }

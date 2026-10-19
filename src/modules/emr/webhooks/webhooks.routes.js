@@ -28,6 +28,7 @@ export const EVENT_TYPES = [
   'immunization.given', 'immunization.aefi_reported', 'immunization.entered_in_error', 'surveillance.notified', 'surveillance.classified',
   'fp.registered', 'fp.visit_recorded', 'fp.discontinued',
   'growth.recorded', 'growth.entered_in_error', 'cmam.screened', 'cmam.discharged',
+  'ncd.enrolled',
 ];
 const MAX_SUBSCRIPTIONS = 10;
 
