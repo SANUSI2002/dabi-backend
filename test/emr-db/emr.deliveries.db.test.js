@@ -68,6 +68,10 @@ describe('deliveries', () => {
     expect((await deliver(nurse, birth(mother.id, { gestationalWeeks: 36, nhmisIndicators: ['Made-up indicator'] }))).status).toBe(400);
     expect((await deliver(nurse, birth(mother.id, { gestationalWeeks: 36, deliveredAt: new Date(Date.now() + 86_400_000).toISOString() }))).status).toBe(400);
     expect((await deliver(nurse, birth(mother.id, { gestationalWeeks: 36, conductedByUserId: desk.userId }))).status).toBe(400);
+    // The "conducted by" picker lists colleagues who may record deliveries, not the front desk.
+    const picker = (await as(nurse).get('/staff?permission=delivery.record')).body.data.items.map((p) => p.userId);
+    expect(picker).toEqual(expect.arrayContaining([nurse.userId, doctor.userId]));
+    expect(picker).not.toContain(desk.userId);
     // Only a live birth can be notified.
     expect((await as(nurse).post(`/deliveries/${stillbirth.body.data.id}/birth-notification`, { informantName: 'Mother', informantRelation: 'MOTHER' }, key())).status).toBe(409);
   });

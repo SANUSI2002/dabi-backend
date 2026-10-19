@@ -24036,7 +24036,7 @@ paths:
       description: |-
         Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
 
-        Requires any of the permissions `encounter.read`, `lab.order.read`, `queue.read`.
+        Requires any of the permissions `encounter.read`, `lab.order.read`, `queue.read`, `delivery.record`.
       operationId: get_api_v1_emr_organizations_organizationId_staff
       security:
         - bearerAuth: []
@@ -24061,6 +24061,7 @@ paths:
               - medication.administer
               - vitals.record
               - procedure.perform
+              - delivery.record
       responses:
         "200":
           description: Success.
