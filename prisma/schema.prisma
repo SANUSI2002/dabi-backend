@@ -1976,6 +1976,8 @@ model EmrPatient {
   appointments EmrAppointment[]
   imagingStudies EmrImagingStudy[]
   procedures EmrProcedure[]
+  cmamScreenings EmrCmamScreening[]
+  growthVisits EmrGrowthVisit[]
   fpClients EmrFpClient[]
   surveillanceCases EmrSurveillanceCase[]
   immunizations EmrImmunization[]
@@ -4361,4 +4363,58 @@ model EmrFpVisit {
 
   @@index([organizationId, clientId, visitDate], map: "emr_fp_visits_client_idx")
   @@map("emr_fp_visits")
+}
+
+// Growth monitoring and CMAM (migration 20261031090000_emr_nutrition; see nutrition.service.js).
+model EmrGrowthVisit {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  visitDate DateTime @map("visit_date") @db.Date
+  weightKg Decimal @map("weight_kg") @db.Decimal(4, 1)
+  heightCm Decimal @map("height_cm") @db.Decimal(4, 1)
+  muacCm Decimal @map("muac_cm") @db.Decimal(3, 1)
+  waz Decimal? @db.Decimal(3, 1)
+  feeding String @db.VarChar(30)
+  classification String @db.VarChar(8)
+  recordedByUserId String @map("recorded_by_user_id")
+  status String @default("ACTIVE") @db.VarChar(16)
+  errorReason String? @map("error_reason") @db.VarChar(300)
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  cmamScreenings EmrCmamScreening[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, visitDate], map: "emr_growth_visits_organization_id_visit_date_idx")
+  @@map("emr_growth_visits")
+}
+
+model EmrCmamScreening {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  screeningDate DateTime @map("screening_date") @db.Date
+  muacCm Decimal @map("muac_cm") @db.Decimal(3, 1)
+  oedema String @db.VarChar(10)
+  appetite String @db.VarChar(4)
+  growthMonitoringDone Boolean? @map("growth_monitoring_done")
+  notes String? @db.VarChar(1000)
+  classification String @db.VarChar(8)
+  programme String? @db.VarChar(4)
+  source String @db.VarChar(14)
+  growthVisitId String? @map("growth_visit_id")
+  outcome String? @db.VarChar(14)
+  dischargedAt DateTime? @map("discharged_at")
+  dischargedByUserId String? @map("discharged_by_user_id")
+  recordedByUserId String @map("recorded_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  growthVisit EmrGrowthVisit? @relation(fields: [organizationId, growthVisitId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, screeningDate], map: "emr_cmam_screenings_organization_id_screening_date_idx")
+  @@map("emr_cmam_screenings")
 }
