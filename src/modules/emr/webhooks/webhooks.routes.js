@@ -29,6 +29,7 @@ export const EVENT_TYPES = [
   'fp.registered', 'fp.visit_recorded', 'fp.discontinued',
   'growth.recorded', 'growth.entered_in_error', 'cmam.screened', 'cmam.discharged',
   'ncd.enrolled',
+  'referral.created', 'referral.accepted', 'referral.declined', 'referral.scheduled', 'referral.attended', 'referral.cancelled', 'referral.completed',
 ];
 const MAX_SUBSCRIPTIONS = 10;
 

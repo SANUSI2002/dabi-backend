@@ -1976,6 +1976,7 @@ model EmrPatient {
   appointments EmrAppointment[]
   imagingStudies EmrImagingStudy[]
   procedures EmrProcedure[]
+  referrals EmrReferral[]
   ncdClients EmrNcdClient[]
   cmamScreenings EmrCmamScreening[]
   growthVisits EmrGrowthVisit[]
@@ -4438,4 +4439,43 @@ model EmrNcdClient {
 
   @@index([organizationId, nextVisitDate], map: "emr_ncd_clients_organization_id_next_visit_idx")
   @@map("emr_ncd_clients")
+}
+
+// Referrals (migration 20261102090000_emr_referrals; see referrals.service.js).
+model EmrReferral {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  direction String @db.VarChar(8)
+  destination String @db.VarChar(200)
+  diagnosis String @db.VarChar(300)
+  reason String @db.VarChar(60)
+  urgency String @db.VarChar(9)
+  status String @default("REQUESTED") @db.VarChar(9)
+  clinicalSummary String? @map("clinical_summary") @db.VarChar(4000)
+  attachedLabItemIds String[] @default([]) @map("attached_lab_item_ids")
+  referredByUserId String? @map("referred_by_user_id")
+  referredByName String? @map("referred_by_name") @db.VarChar(160)
+  sourceReferralId String? @map("source_referral_id")
+  receivingClinician String? @map("receiving_clinician") @db.VarChar(160)
+  declineReason String? @map("decline_reason") @db.VarChar(500)
+  appointmentDate DateTime? @map("appointment_date") @db.Date
+  attendedAt DateTime? @map("attended_at")
+  outcome String? @db.VarChar(30)
+  outcomeNote String? @map("outcome_note") @db.VarChar(2000)
+  outcomeBy String? @map("outcome_by") @db.VarChar(160)
+  outcomeAt DateTime? @map("outcome_at")
+  backReferral Boolean @default(false) @map("back_referral")
+  updatedByUserId String? @map("updated_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  source EmrReferral? @relation("EmrBackReferral", fields: [organizationId, sourceReferralId], references: [organizationId, id], onDelete: Restrict)
+  backReferrals EmrReferral[] @relation("EmrBackReferral")
+
+  @@unique([organizationId, id], map: "emr_referrals_org_id_key")
+  @@index([organizationId, createdAt])
+  @@index([organizationId, patientId])
+  @@map("emr_referrals")
 }
