@@ -94,14 +94,16 @@ export function nonceIsValid(nonce, now = Date.now()) {
 const sha256Hex = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
 // ---- providers ------------------------------------------------------------------------------------
-/** Exchanges a Google one-time code (popup flow, redirect_uri "postmessage") for a verified identity. */
-export async function googleIdentity(code) {
+/** GIS popup codes are bound to the calling page's origin, not the legacy "postmessage" URI. */
+export async function googleIdentity(code, origin) {
+  const allowed = (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:5173').split(',').map((value) => value.trim()).filter(Boolean);
+  if (!origin || !allowed.includes(origin)) throw fail(403, 'SOCIAL_ORIGIN_DENIED', 'Google sign-in must start from an approved Sabi website.');
   const config = googleConfig();
   if (!config) throw fail(503, 'SOCIAL_PROVIDER_NOT_CONFIGURED', 'Google sign-in is not available yet.');
   const response = await globalThis.fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ code, client_id: config.clientId, client_secret: config.clientSecret, redirect_uri: 'postmessage', grant_type: 'authorization_code' }),
+    body: new URLSearchParams({ code, client_id: config.clientId, client_secret: config.clientSecret, redirect_uri: origin, grant_type: 'authorization_code' }),
     signal: globalThis.AbortSignal.timeout(10_000),
   });
   const body = await response.json().catch(() => ({}));

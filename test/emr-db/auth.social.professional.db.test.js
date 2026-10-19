@@ -62,7 +62,7 @@ describe('professional registration with Google', () => {
   it('never makes a patient from the professional portal; registers, signs in and allows uploads at once; review still required', async () => {
     const address = `dr-${tag()}@social.test`;
     const sub = `google-${tag()}`;
-    const first = await request(app).post('/api/v1/auth/social/google').send({ code: googleCode({ sub, email: address, given_name: 'Ifeoma' }), intent: 'professional', consentGiven: true });
+    const first = await request(app).post('/api/v1/auth/social/google').set('Origin', 'http://localhost:5173').send({ code: googleCode({ sub, email: address, given_name: 'Ifeoma' }), intent: 'professional', consentGiven: true });
     expect(first.body).toMatchObject({ status: 'signup_required', profile: { email: address, firstName: 'Ifeoma' } });
     expect(await prisma.user.count({ where: { email: address } })).toBe(0);
 
@@ -86,14 +86,14 @@ describe('professional registration with Google', () => {
     expect((await request(app).get('/api/v1/doctors/me').set('Authorization', auth)).body.data).toMatchObject({ status: 'PENDING' });
 
     // Later, Google signs the same professional back in (approval is still up to staff).
-    const again = await request(app).post('/api/v1/auth/social/google').send({ code: googleCode({ sub, email: address }), intent: 'professional' });
+    const again = await request(app).post('/api/v1/auth/social/google').set('Origin', 'http://localhost:5173').send({ code: googleCode({ sub, email: address }), intent: 'professional' });
     expect(again.status).toBe(200);
     expect(again.body.user).toMatchObject({ id: user.id, roles: ['PROFESSIONAL'] });
   });
 
   it('takes the email from Google only, and refuses mixed or tampered requests', async () => {
     const address = `dr-${tag()}@social.test`;
-    const { signupToken } = (await request(app).post('/api/v1/auth/social/google').send({ code: googleCode({ sub: `google-${tag()}`, email: address }), intent: 'professional' })).body;
+    const { signupToken } = (await request(app).post('/api/v1/auth/social/google').set('Origin', 'http://localhost:5173').send({ code: googleCode({ sub: `google-${tag()}`, email: address }), intent: 'professional' })).body;
     expect((await request(app).post('/api/v1/doctors/register').send(doctor({ socialSignupToken: signupToken, email: 'someone-else@social.test' }))).status).toBe(400);
     expect((await request(app).post('/api/v1/doctors/register').send(doctor({ socialSignupToken: signupToken, password: 'a-long-synthetic-passphrase' }))).status).toBe(400);
     expect((await request(app).post('/api/v1/doctors/register').send(doctor({}))).status).toBe(400);
