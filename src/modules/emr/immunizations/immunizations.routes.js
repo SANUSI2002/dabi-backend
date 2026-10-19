@@ -19,7 +19,7 @@ const text = (max) => z.string().trim().min(1).max(max).regex(/^[^\p{Cc}]+$/u, '
 const v = {
   list: z.object({
     params: z.object(org).strict(),
-    query: z.object({ patientId: z.uuid().optional(), aefi: z.enum(['true']).optional(), limit: z.coerce.number().int().min(1).max(500).default(200) }).strict(),
+    query: z.object({ patientId: z.uuid().optional(), aefi: z.enum(['true']).optional(), from: z.iso.date().optional(), to: z.iso.date().optional(), limit: z.coerce.number().int().min(1).max(2000).default(200) }).strict(),
   }),
   defaulters: z.object({ params: z.object(org).strict(), query: noQuery }),
   give: z.object({
@@ -41,7 +41,7 @@ const v = {
 
 export const immunizationRoutes = express.Router({ mergeParams: true });
 immunizationRoutes.get('/', check(v.list), allow('immunization.read'),
-  handle(async (req, res) => res.json({ status: 'success', data: await immunizations.listDoses(req.emr, { patientId: req.query.patientId, aefiOnly: req.query.aefi === 'true', limit: req.query.limit }) })));
+  handle(async (req, res) => res.json({ status: 'success', data: await immunizations.listDoses(req.emr, { patientId: req.query.patientId, aefiOnly: req.query.aefi === 'true', from: req.query.from, to: req.query.to, limit: req.query.limit }) })));
 immunizationRoutes.get('/defaulters', check(v.defaulters), allow('immunization.read'),
   handle(async (req, res) => res.json({ status: 'success', data: await immunizations.defaulters(req.emr) })));
 immunizationRoutes.post('/', check(v.give), allow('immunization.give'),

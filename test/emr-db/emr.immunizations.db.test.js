@@ -47,7 +47,12 @@ describe('immunization', () => {
     expect((await give(nurse, baby.id, 'NOT_A_VACCINE')).status).toBe(400);
     // A wrong dose is marked in error, and can then be given again.
     expect((await as(nurse).post(`/immunizations/${dose.body.data.id}/entered-in-error`, { reason: 'Recorded on the twin' })).body.data.status).toBe('ENTERED_IN_ERROR');
-    expect((await give(nurse, baby.id, 'PENTA1')).status).toBe(201);
+    const redo = await give(nurse, baby.id, 'PENTA1');
+    expect(redo.status).toBe(201);
+    // The period list (reports) holds doses given within the dates asked for.
+    const day = new Date().toISOString().slice(0, 10);
+    expect((await as(nurse).get(`/immunizations?from=${day}&to=${day}&limit=2000`)).body.data.items.map((d) => d.id)).toContain(redo.body.data.id);
+    expect((await as(nurse).get('/immunizations?from=2000-01-01&to=2000-01-31')).body.data.items).toEqual([]);
   });
 
   it('lists defaulters 4+ weeks past a dose they have not had', async () => {

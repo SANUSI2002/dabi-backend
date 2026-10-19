@@ -29,10 +29,14 @@ async function present(tx, rows) {
 const include = { patient: patientSummary, aefi: true };
 const fullDose = async (tx, context, id) => (await present(tx, [await tx.emrImmunization.findFirst({ where: { organizationId: context.organizationId, id }, include })]))[0];
 
-export async function listDoses(context, { patientId, aefiOnly, limit }) {
+export async function listDoses(context, { patientId, aefiOnly, from, to, limit }) {
+  const givenAt = {
+    ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+    ...(to ? { lt: new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 86_400_000) } : {}),
+  };
   return withTenant(context, async (tx) => {
     const rows = await tx.emrImmunization.findMany({
-      where: { organizationId: context.organizationId, ...(patientId ? { patientId } : {}), ...(aefiOnly ? { aefi: { isNot: null } } : {}) },
+      where: { organizationId: context.organizationId, ...(patientId ? { patientId } : {}), ...(aefiOnly ? { aefi: { isNot: null } } : {}), ...(from || to ? { givenAt } : {}) },
       include, orderBy: [{ givenAt: 'desc' }, { id: 'desc' }], take: limit,
     });
     await recordAudit(tx, context, { action: 'immunization.listed', resourceType: 'immunization' });
