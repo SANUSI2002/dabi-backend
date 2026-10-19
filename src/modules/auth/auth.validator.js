@@ -39,6 +39,7 @@ export const emailVerificationConfirmSchema = z.object({ body: z.object({ uid: z
 export const passwordResetConfirmSchema = z.object({ body: z.object({ uid: z.string().uuid(), token: z.string().min(32).max(256), password: passwordSchema.regex(/\d/, 'Password must include a number').regex(/[^A-Za-z0-9]/, 'Password must include a symbol'), confirmPassword: z.string() }).strict().refine((data) => data.password === data.confirmPassword, { message: 'Passwords do not match', path: ['confirmPassword'] }) });
 
 const personName = z.string().trim().min(1).max(100).optional();
-export const googleSignInSchema = z.object({ body: z.object({ code: z.string().min(10).max(2048), consentGiven: z.literal(true).optional() }).strict() });
-export const appleSignInSchema = z.object({ body: z.object({ idToken: z.string().min(20).max(8192), nonce: z.string().min(20).max(200), firstName: personName, lastName: personName, consentGiven: z.literal(true).optional() }).strict() });
+const intent = z.enum(['patient', 'professional']).optional();
+export const googleSignInSchema = z.object({ body: z.object({ code: z.string().min(10).max(2048), consentGiven: z.literal(true).optional(), intent }).strict() });
+export const appleSignInSchema = z.object({ body: z.object({ idToken: z.string().min(20).max(8192), nonce: z.string().min(20).max(200), firstName: personName, lastName: personName, consentGiven: z.literal(true).optional(), intent }).strict() });
 export const socialSignupSchema = z.object({ body: z.object({ signupToken: z.string().min(20).max(4096), consentGiven: z.literal(true, { message: 'You must accept the Terms and Conditions to register' }) }).strict() });

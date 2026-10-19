@@ -9,6 +9,7 @@ import * as auth from '../auth/auth.model.js';
 import { sendEmailVerificationEmail, verificationEmailConfigured, verificationEmailAllowedFor } from '../auth/auth.email.js';
 import { approvalBlockers, latestCredentials } from './onboarding.policy.js';
 import { PORTAL_PROFESSIONS, credentialRequirements, needsCurrentLicence } from '../professionals/professionCatalog.js';
+import { identityFromSignupToken } from '../auth/auth.social.js';
 
 export const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 export const fail = (message, status = 409) => { throw Object.assign(new Error(message), { status }); };
@@ -29,27 +30,39 @@ export async function sendVerification(user) {
   else await auth.revokeEmailVerificationToken(token.id);
   return result.delivered;
 }
+// Registration with Google / Apple: the person proved their email to the provider moments ago, so the
+// account starts verified and signed in (no verification email, no password), and goes straight to the
+// same credential upload, screening and staff review as everyone else. Nothing about review changes.
 export async function register(data) {
-  if (!enabled() || !verificationEmailConfigured() || !verificationEmailAllowedFor(data.email)) fail('Doctor registration is temporarily unavailable. Please try again later.', 503);
-  doctorPortal();
+  const social = data.socialSignupToken ? identityFromSignupToken(data.socialSignupToken) : null;
+  if (social && (!social.email || !social.emailVerified)) fail('Your Google or Apple account must share a verified email address.', 400);
+  if (!enabled() || (!social && (!verificationEmailConfigured() || !verificationEmailAllowedFor(data.email)))) fail('Doctor registration is temporarily unavailable. Please try again later.', 503);
+  if (!social) doctorPortal();
   await assertPrivateBucket(privateStorageClient(), PRIVATE_BUCKETS.hospitalEvidenceQuarantine);
-  const { password, ...details } = data;
-  const encoded = await bcrypt.hash(password, 12);
+  const { password, socialSignupToken, ...rest } = data;
+  const email = social ? social.email : data.email;
+  const details = { ...rest, email };
+  const encoded = social ? await auth.unusablePasswordHash() : await bcrypt.hash(password, 12);
   let created;
   try {
     created = await prisma.$transaction(async (tx) => {
       // Professionals are not patients: give them a collision-free internal identifier (as caregiver and
       // organization accounts do) instead of drawing from the 100,000-value patient number space.
-      const user = await tx.user.create({ data: { email: data.email, full_name: `${data.firstName} ${data.lastName}`, phone_number: data.phone,
-        password: encoded, accountStatus: 'PENDING', patientId: `PRO-${crypto.randomUUID()}`, roles: { create: { role: 'PROFESSIONAL' } } } });
+      const user = await tx.user.create({ data: { email, full_name: `${data.firstName} ${data.lastName}`, phone_number: data.phone,
+        password: encoded, accountStatus: social ? 'ACTIVE' : 'PENDING', ...(social ? { emailVerifiedAt: new Date(), identityProviders: { create: { provider: social.provider, subject: social.subject, email } } } : {}),
+        patientId: `PRO-${crypto.randomUUID()}`, roles: { create: { role: 'PROFESSIONAL' } } } });
       const profile = await tx.professionalProfile.create({ data: { userId: user.id, professionType: data.professionType || 'DOCTOR', registrationNumber: data.registrationNumber, specialty: data.specialty, practiceName: data.hospital || null, yearsOfExperience: data.yearsOfExperience,
         doctorApplication: { create: { details, consentVersion: data.consentVersion } } }, include: { doctorApplication: true } });
       await audit(tx, user.id, 'DOCTOR_APPLICATION_CREATED', { professionalId: profile.id, applicationId: profile.doctorApplication.id });
       return { user, application: profile.doctorApplication };
     });
   } catch (error) {
-    if (error.code === 'P2002') fail('An account with these details already exists. Sign in or reset your password.', 409);
+    if (error.code === 'P2002') fail(social ? `This ${social.provider === 'APPLE' ? 'Apple' : 'Google'} account or email already has a Sabi account. Sign in instead.` : 'An account with these details already exists. Sign in or reset your password.', 409);
     throw error;
+  }
+  if (social) {
+    return { signIn: { user: await auth.findUserById(created.user.id), provider: social.provider },
+      applicationId: created.application.id, userId: created.user.id, email, emailSent: false, status: 'documents_pending', maxUploadBytes: Math.min(evidenceUploadMaxBytes(), 5 * 1024 * 1024) };
   }
   const emailSent = await sendVerification(created.user).catch(() => false);
   return { applicationId: created.application.id, userId: created.user.id, email: created.user.email, emailSent, status: 'email_pending', maxUploadBytes: Math.min(evidenceUploadMaxBytes(), 5 * 1024 * 1024) };

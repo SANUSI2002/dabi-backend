@@ -1282,6 +1282,7 @@ paths:
               required: [code]
               properties:
                 code: { type: string, minLength: 10, maxLength: 2048 }
+                intent: { type: string, enum: [patient, professional], description: "professional (from the professional portal) never creates a patient account; a new person gets signup_required with a signupToken for POST /api/v1/doctors/register or /register-professional." }
                 consentGiven: { type: boolean, enum: [true] }
       responses:
         "200":
@@ -1328,6 +1329,7 @@ paths:
                 firstName: { type: string, maxLength: 100 }
                 lastName: { type: string, maxLength: 100 }
                 consentGiven: { type: boolean, enum: [true] }
+                intent: { type: string, enum: [patient, professional], description: "professional (from the professional portal) never creates a patient account; a new person gets signup_required with a signupToken for POST /api/v1/doctors/register or /register-professional." }
       responses:
         "200":
           description: Signed in, or `status` is `signup_required` with `signupToken`.
@@ -11718,6 +11720,8 @@ paths:
       tags:
         - Doctor onboarding
       summary: Register doctor
+      description: |
+        Either `email` + `password` (a verification email is sent; the person verifies, signs in, then uploads credentials), or `socialSignupToken` from a Google / Apple sign-in with `intent: "professional"` that returned `signup_required` (no `email` or `password`; the provider's verified email is used). With a `socialSignupToken` the account starts verified, the response signs the person in like `POST /api/v1/auth/login` (with `data` holding the application), and credentials can be uploaded at once. Credential screening and staff review are the same either way.
       operationId: post_api_v1_doctors_register
       security: []
       requestBody:
@@ -11803,12 +11807,13 @@ paths:
                 consentVersion:
                   type: string
                   const: doctor-registration-v1
+                socialSignupToken:
+                  type: string
+                  description: From a Google / Apple sign-in with intent professional; send instead of email and password.
               required:
                 - firstName
                 - lastName
-                - email
                 - phone
-                - password
                 - specialty
                 - qualification
                 - university
@@ -11844,6 +11849,8 @@ paths:
       tags:
         - Doctor onboarding
       summary: Register professional doctor
+      description: |
+        Either `email` + `password` (a verification email is sent; the person verifies, signs in, then uploads credentials), or `socialSignupToken` from a Google / Apple sign-in with `intent: "professional"` that returned `signup_required` (no `email` or `password`; the provider's verified email is used). With a `socialSignupToken` the account starts verified, the response signs the person in like `POST /api/v1/auth/login` (with `data` holding the application), and credentials can be uploaded at once. Credential screening and staff review are the same either way.
       operationId: post_api_v1_doctors_register_professional
       security: []
       requestBody:
@@ -11944,12 +11951,13 @@ paths:
                 consentVersion:
                   type: string
                   const: professional-registration-v1
+                socialSignupToken:
+                  type: string
+                  description: From a Google / Apple sign-in with intent professional; send instead of email and password.
               required:
                 - firstName
                 - lastName
-                - email
                 - phone
-                - password
                 - professionType
                 - discipline
                 - specialty

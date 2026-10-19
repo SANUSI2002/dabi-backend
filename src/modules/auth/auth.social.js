@@ -14,7 +14,7 @@ const GOOGLE_KEYS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 const APPLE_KEYS_URL = 'https://appleid.apple.com/auth/keys';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const NONCE_TTL_MS = 10 * 60_000;
-const SIGNUP_TTL_SECONDS = 10 * 60;
+const SIGNUP_TTL_SECONDS = 30 * 60; // long enough to finish the four-step professional registration
 
 const fail = (status, code, message) => Object.assign(new Error(message), { status, code });
 

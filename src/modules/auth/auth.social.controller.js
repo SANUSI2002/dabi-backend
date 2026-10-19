@@ -1,7 +1,9 @@
 // Sign in or sign up with Google / Apple. Which Sabi account a provider identity opens:
 //   1. one already connected to that provider account (by its stable subject id), else
 //   2. the account with the same email, if the provider says it verified that email (connected now), else
-//   3. a new patient account — but only once the person has accepted the terms.
+//   3. a new patient account — but only once the person has accepted the terms. From the professional
+//      portal (intent "professional") no patient is ever created: the person gets a sign-up hand-off for
+//      the professional registration form instead (see doctors/onboarding.service.js).
 // Two-step verification still applies, and only ACTIVE accounts (or unverified sign-ups, which the
 // provider's verified email now proves) can sign in.
 import prisma from '../../config/db.js';
@@ -58,8 +60,8 @@ async function resolveAccount(identity, { consentGiven }) {
   }
 }
 
-async function finish(req, res, identity, consentGiven) {
-  const result = await resolveAccount(identity, { consentGiven });
+async function finish(req, res, identity, consentGiven, intent = 'patient') {
+  const result = await resolveAccount(identity, { consentGiven: consentGiven && intent === 'patient' });
   if (result.signupRequired) {
     return res.status(200).json({
       status: 'signup_required', signupToken: signupToken(identity),
@@ -80,8 +82,8 @@ const handle = (work) => async (req, res, next) => {
 
 export const socialProviders = (req, res) => res.set('Cache-Control', 'no-store').json({ status: 'success', data: publicProviders() });
 export const socialNonce = (req, res) => res.set('Cache-Control', 'no-store').json({ status: 'success', data: { nonce: issueNonce() } });
-export const googleSignIn = handle(async (req, res) => finish(req, res, await googleIdentity(req.body.code), req.body.consentGiven === true));
-export const appleSignIn = handle(async (req, res) => finish(req, res, await appleIdentity(req.body.idToken, req.body.nonce, req.body), req.body.consentGiven === true));
+export const googleSignIn = handle(async (req, res) => finish(req, res, await googleIdentity(req.body.code), req.body.consentGiven === true, req.body.intent));
+export const appleSignIn = handle(async (req, res) => finish(req, res, await appleIdentity(req.body.idToken, req.body.nonce, req.body), req.body.consentGiven === true, req.body.intent));
 export const completeSocialSignup = handle(async (req, res) => {
   const identity = identityFromSignupToken(req.body.signupToken);
   if (![GOOGLE, APPLE].includes(identity.provider)) throw fail(401, 'SOCIAL_SIGNUP_EXPIRED', 'Please choose Google or Apple again.');

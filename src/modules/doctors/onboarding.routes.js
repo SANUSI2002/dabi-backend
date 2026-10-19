@@ -9,6 +9,9 @@ import { validate } from '../../middleware/validateMiddleware.js';
 import { assertPrivateBucket, privateStorageClient } from '../../config/privateStorage.js';
 import { evidenceUploadMaxBytes } from '../../config/evidenceScanner.js';
 import * as auth from '../auth/auth.model.js';
+import { completeSignIn } from '../auth/auth.controller.js';
+import { requireTrustedOrigin } from '../auth/auth.cookie.js';
+import { recordAudit } from '../audit/audit.service.js';
 import * as V from './onboarding.validator.js';
 import * as S from './onboarding.service.js';
 import * as professionals from '../professionals/professionals.model.js';
@@ -22,7 +25,7 @@ const wrap = (handler) => async (req, res, next) => {
   res.set('Cache-Control', 'no-store');
   try { await handler(req, res); }
   catch (e) {
-    if ([400, 403, 404, 409, 413, 415, 503].includes(e.status)) return res.status(e.status).json({ status: 'error', message: e.message });
+    if ([400, 401, 403, 404, 409, 413, 415, 503].includes(e.status)) return res.status(e.status).json({ status: 'error', message: e.message, ...(e.code ? { code: e.code } : {}) });
     if (e.code === 'SELF') return res.status(403).json({ status: 'error', message: 'You cannot review your own doctor application.' });
     if (['NOT_FOUND', 'INVALID'].includes(e.code)) return res.status(409).json({ status: 'error', message: 'This doctor application cannot receive that decision.' });
     if (e.code === 'PRIVATE_STORAGE_UPLOAD_INVALID') return res.status(400).json({ status: 'error', message: 'The document content does not match the selected file type.' });
@@ -33,8 +36,15 @@ const wrap = (handler) => async (req, res, next) => {
 const uuidParams = z.object({ params: z.object({ id: z.uuid(), credentialId: z.uuid().optional() }) });
 const principal = (req) => ({ userId: req.user?.id });
 doctorOnboardingRoutes.get('/registration-config', wrap(async (req, res) => res.json({ data: { enabled: S.enabled(), professions: PROFESSION_CATALOG, maxUploadBytes: Math.min(evidenceUploadMaxBytes(), 5 * 1024 * 1024) } })));
-doctorOnboardingRoutes.post('/register', registrationLimiter, validate(V.registrationSchema), wrap(async (req, res) => res.status(201).json({ data: await S.register(req.body) })));
-doctorOnboardingRoutes.post('/register-professional', registrationLimiter, validate(V.professionalRegistrationSchema), wrap(async (req, res) => res.status(201).json({ data: await S.register(req.body) })));
+// A Google / Apple registration signs the new professional in, so they can upload credentials at once.
+const registered = async (req, res) => {
+  const { signIn, ...data } = await S.register(req.body);
+  if (!signIn) return res.status(201).json({ data });
+  await recordAudit(prisma, { actorUserId: signIn.user.id, action: `SIGNED_UP_${signIn.provider}` });
+  return completeSignIn(req, res, signIn.user, { action: `SIGNED_IN_${signIn.provider}`, extra: { data } });
+};
+doctorOnboardingRoutes.post('/register', registrationLimiter, requireTrustedOrigin, validate(V.registrationSchema), wrap(registered));
+doctorOnboardingRoutes.post('/register-professional', registrationLimiter, requireTrustedOrigin, validate(V.professionalRegistrationSchema), wrap(registered));
 doctorOnboardingRoutes.post('/resend-verification', verificationRequestLimiter, validate(V.resendSchema), wrap(async (req, res) => {
   const user = await auth.findUserByEmail(req.body.email);
   const profile = user && await prisma.professionalProfile.findUnique({ where: { userId: user.id }, select: { professionType: true } });
