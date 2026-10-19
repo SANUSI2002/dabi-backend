@@ -4506,3 +4506,25 @@ model EmrPatientTransfer {
   @@index([organizationId, createdAt])
   @@map("emr_patient_transfers")
 }
+
+// Community outreach activities (migration 20261104090000_emr_outreach; see outreach.service.js).
+model EmrOutreachActivity {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  chwUserId String @map("chw_user_id")
+  activityType String @map("activity_type") @db.VarChar(30)
+  ward String @db.VarChar(120)
+  households Int
+  referrals Int
+  activityDate DateTime @map("activity_date") @db.Date
+  notes String? @db.VarChar(2000)
+  status String @default("ACTIVE") @db.VarChar(16)
+  recordedByUserId String @map("recorded_by_user_id")
+  enteredInErrorReason String? @map("entered_in_error_reason") @db.VarChar(500)
+  enteredInErrorByUserId String? @map("entered_in_error_by_user_id")
+  enteredInErrorAt DateTime? @map("entered_in_error_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, activityDate])
+  @@map("emr_outreach_activities")
+}

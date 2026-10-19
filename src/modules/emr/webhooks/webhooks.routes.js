@@ -31,6 +31,7 @@ export const EVENT_TYPES = [
   'ncd.enrolled',
   'referral.created', 'referral.accepted', 'referral.declined', 'referral.scheduled', 'referral.attended', 'referral.cancelled', 'referral.completed',
   'transfer.initiated', 'transfer.completed', 'transfer.cancelled',
+  'outreach.logged',
 ];
 const MAX_SUBSCRIPTIONS = 10;
 
