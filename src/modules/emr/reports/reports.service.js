@@ -27,7 +27,7 @@ export async function reportSource(context, period) {
     const ids = encounters.map((e) => e.id);
     const [diagnoses, prescriptions, labOrders, registry] = await Promise.all([
       ids.length ? tx.emrDiagnosis.findMany({ where: { organizationId: context.organizationId, encounterId: { in: ids }, status: 'ACTIVE' }, select: { encounterId: true, code: true, description: true } }) : [],
-      ids.length ? tx.emrPrescription.findMany({ where: { organizationId: context.organizationId, encounterId: { in: ids } }, select: { encounterId: true, items: { select: { drugName: true } } } }) : [],
+      ids.length ? tx.emrPrescription.findMany({ where: { organizationId: context.organizationId, encounterId: { in: ids } }, select: { encounterId: true, items: { select: { id: true, drugName: true, drugCode: true, dose: true, doseUnit: true, frequency: true, route: true, durationDays: true, quantityPrescribed: true, quantityDispensed: true, status: true } } } }) : [],
       withStaffNamesForReports(tx, context, when, MAX),
       tx.emrPatient.groupBy({ by: ['consentToContact'], where: { organizationId: context.organizationId, status: 'ACTIVE' }, _count: { _all: true } }),
     ]);
@@ -42,7 +42,10 @@ export async function reportSource(context, period) {
         id: e.id, patientId: e.patientId, date: e.arrivedAt, complaint: e.reason ?? '', status: e.status, visitType: e.visitType,
         provider: e.attendingUserId ? names.get(e.attendingUserId) ?? null : null,
         diagnoses: diagnoses.filter((d) => d.encounterId === e.id).map((d) => ({ code: d.code, name: d.description })),
-        prescriptions: prescriptions.filter((p) => p.encounterId === e.id).flatMap((p) => p.items.map((i) => ({ drug: i.drugName }))),
+        prescriptions: prescriptions.filter((p) => p.encounterId === e.id).flatMap((p) => p.items.map((i) => ({
+          id: i.id, drug: i.drugName, drugCode: i.drugCode, dose: Number(i.dose), doseUnit: i.doseUnit, frequency: i.frequency, route: i.route,
+          durationDays: i.durationDays, quantity: i.quantityPrescribed, dispensed: i.quantityDispensed, status: i.status,
+        }))),
       })),
       labOrders,
       patients: patients.map((p) => ({ ...p, dateOfBirth: isoDay(p.dateOfBirth) })),
