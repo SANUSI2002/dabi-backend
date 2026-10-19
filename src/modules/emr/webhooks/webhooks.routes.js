@@ -23,6 +23,7 @@ export const EVENT_TYPES = [
   'admission.created', 'admission.transferred', 'admission.discharged', 'admission.cancelled', 'medication.administered',
   'invoice.issued', 'invoice.voided', 'payment.recorded', 'payment.reversed',
   'pregnancy.enrolled', 'anc.visit.recorded', 'pregnancy.visit_entered_in_error', 'pregnancy.closed',
+  'delivery.recorded', 'delivery.entered_in_error', 'birth.notified', 'birth.registered', 'birth.certificate_issued',
 ];
 const MAX_SUBSCRIPTIONS = 10;
 

@@ -1977,6 +1977,8 @@ model EmrPatient {
   imagingStudies EmrImagingStudy[]
   procedures EmrProcedure[]
   pregnancies EmrPregnancy[]
+  deliveries EmrDelivery[]
+  birthRegistrations EmrBirthRegistration[]
 
   @@unique([organizationId, medicalRecordNumber])
   @@unique([organizationId, id])
@@ -4108,6 +4110,7 @@ model EmrPregnancy {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
   visits EmrAncVisit[]
+  deliveries EmrDelivery[]
 
   @@unique([organizationId, id, patientId])
   @@index([organizationId, createdAt, id])
@@ -4138,4 +4141,70 @@ model EmrAncVisit {
 
   @@index([organizationId, pregnancyId, visitDate], map: "emr_anc_visits_pregnancy_idx")
   @@map("emr_anc_visits")
+}
+
+// Labour & delivery and the birth register (migration 20261026090000_emr_deliveries; see deliveries.service.js).
+model EmrDelivery {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  pregnancyId String? @map("pregnancy_id")
+  bookingStatus String @map("booking_status") @db.VarChar(12)
+  deliveredAt DateTime @map("delivered_at")
+  gestationalWeeks Int @map("gestational_weeks")
+  mode String @db.VarChar(20)
+  motherStatus String @map("mother_status") @db.VarChar(10)
+  bloodLossMl Int @map("blood_loss_ml")
+  complications String? @db.VarChar(500)
+  notes String? @db.VarChar(1000)
+  nhmisIndicators String[] @default([]) @map("nhmis_indicators")
+  babySex String @map("baby_sex") @db.VarChar(6)
+  babyStatus String @map("baby_status") @db.VarChar(20)
+  birthWeightKg Decimal @map("birth_weight_kg") @db.Decimal(3, 2)
+  apgar1 Int? @map("apgar_1")
+  apgar5 Int? @map("apgar_5")
+  breastfedWithinHour Boolean @default(false) @map("breastfed_within_hour")
+  conductedByUserId String @map("conducted_by_user_id")
+  recordedByUserId String @map("recorded_by_user_id")
+  status String @default("ACTIVE") @db.VarChar(16)
+  errorReason String? @map("error_reason") @db.VarChar(300)
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  pregnancy EmrPregnancy? @relation(fields: [organizationId, pregnancyId, patientId], references: [organizationId, id, patientId], onDelete: Restrict)
+  registration EmrBirthRegistration?
+
+  @@unique([organizationId, id])
+  @@index([organizationId, deliveredAt, id])
+  @@index([organizationId, patientId, deliveredAt], map: "emr_deliveries_patient_idx")
+  @@map("emr_deliveries")
+}
+
+model EmrBirthRegistration {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  deliveryId String @map("delivery_id")
+  patientId String @map("patient_id")
+  babyName String? @map("baby_name") @db.VarChar(160)
+  fatherName String? @map("father_name") @db.VarChar(160)
+  informantName String @map("informant_name") @db.VarChar(160)
+  informantRelation String @map("informant_relation") @db.VarChar(20)
+  notificationNumber String @map("notification_number") @db.VarChar(32)
+  status String @default("NOTIFIED") @db.VarChar(20)
+  notifiedByUserId String @map("notified_by_user_id")
+  notifiedAt DateTime @default(now()) @map("notified_at")
+  registrationNumber String? @map("registration_number") @db.VarChar(60)
+  registeredByUserId String? @map("registered_by_user_id")
+  registeredAt DateTime? @map("registered_at")
+  certificateIssuedByUserId String? @map("certificate_issued_by_user_id")
+  certificateIssuedAt DateTime? @map("certificate_issued_at")
+  version Int @default(1)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  delivery EmrDelivery @relation(fields: [organizationId, deliveryId], references: [organizationId, id], onDelete: Restrict)
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, deliveryId], map: "emr_birth_registrations_delivery_key")
+  @@unique([organizationId, notificationNumber], map: "emr_birth_registrations_number_key")
+  @@map("emr_birth_registrations")
 }

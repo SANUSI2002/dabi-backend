@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../../src/app.js';
-import { addMember, createTenant, newPatient, prisma } from './fixtures.js';
+import { withTenant } from '../../src/modules/emr/core/db.js';
+import { addMember, createTenant, newPatient } from './fixtures.js';
 
 const key = () => ({ 'Idempotency-Key': `test-${randomUUID()}` });
 const ifMatch = (version) => ({ 'If-Match': `W/"${version}"` });
@@ -117,6 +118,9 @@ describe('antenatal enrolment and visits', () => {
     expect((await enrol(admin, { patientId: patient.id, lmp: daysAgo(70), gravida: 1, parity: 0 })).status).toBe(403);
     expect((await as(bNurse).get('/antenatal')).body.data.items.find((row) => row.id === p.id)).toBeUndefined();
     expect((await as(bNurse).post(`/antenatal/${p.id}/visits`, { visitDate: daysAgo(1) }, key())).status).toBe(404);
-    await expect(prisma.$executeRawUnsafe(`UPDATE emr_pregnancies SET edd = edd + 1 WHERE id = '${p.id}'`)).rejects.toThrow();
+    // The enrolment facts never change, and nothing is deleted (column grants on the request role).
+    const ctx = { organizationId: A.organizationId, userId: nurse.userId };
+    await expect(withTenant(ctx, (tx) => tx.emrPregnancy.updateMany({ where: { id: p.id }, data: { gravida: 5 } }))).rejects.toThrow();
+    await expect(withTenant(ctx, (tx) => tx.emrPregnancy.deleteMany({ where: { id: p.id } }))).rejects.toThrow();
   });
 });

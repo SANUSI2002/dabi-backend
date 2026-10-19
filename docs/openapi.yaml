@@ -15261,6 +15261,211 @@ paths:
         "500":
           $ref: "#/components/responses/EmrServerError"
       x-generated: true
+  /api/v1/emr/organizations/{organizationId}/births:
+    get:
+      tags:
+        - EMR
+      summary: List births
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `delivery.read`.
+      operationId: get_api_v1_emr_organizations_organizationId_births
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 100
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/births/{registrationId}/certificate:
+    post:
+      tags:
+        - EMR
+      summary: Record certificate for birth
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `birth.register`.
+
+        Optimistic concurrency: send the record’s current version in `If-Match` (e.g. `W/"3"`). A stale version returns 412 with the current version in `ETag`.
+      operationId: post_api_v1_emr_organizations_organizationId_births_registrationId_certificate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: registrationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: If-Match
+          in: header
+          required: true
+          description: The record version from your last read, e.g. W/"3".
+          schema:
+            type: string
+            examples:
+              - W/"3"
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "412":
+          $ref: "#/components/responses/EmrPreconditionFailed"
+        "428":
+          $ref: "#/components/responses/EmrPreconditionRequired"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/births/{registrationId}/register:
+    post:
+      tags:
+        - EMR
+      summary: Record register for birth
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `birth.register`.
+
+        Optimistic concurrency: send the record’s current version in `If-Match` (e.g. `W/"3"`). A stale version returns 412 with the current version in `ETag`.
+      operationId: post_api_v1_emr_organizations_organizationId_births_registrationId_register
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: registrationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: If-Match
+          in: header
+          required: true
+          description: The record version from your last read, e.g. W/"3".
+          schema:
+            type: string
+            examples:
+              - W/"3"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                registrationNumber:
+                  type: string
+                  minLength: 3
+                  maxLength: 60
+                  pattern: ^[A-Za-z0-9/ -]+$
+                babyName:
+                  type: string
+                  minLength: 1
+                  maxLength: 160
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - registrationNumber
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "412":
+          $ref: "#/components/responses/EmrPreconditionFailed"
+        "428":
+          $ref: "#/components/responses/EmrPreconditionRequired"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
   /api/v1/emr/organizations/{organizationId}/dashboard:
     get:
       tags:
@@ -15310,6 +15515,385 @@ paths:
           $ref: "#/components/responses/EmrForbidden"
         "404":
           $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/deliveries:
+    get:
+      tags:
+        - EMR
+      summary: List deliveries
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `delivery.read`.
+      operationId: get_api_v1_emr_organizations_organizationId_deliveries
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: patientId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 100
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+    post:
+      tags:
+        - EMR
+      summary: Create delivery
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `delivery.record`.
+
+        Send an `Idempotency-Key` to make retries safe: the same key returns the first result (`Idempotent-Replayed: true`).
+      operationId: post_api_v1_emr_organizations_organizationId_deliveries
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Client-chosen unique key (e.g. a UUID) that makes retries return the first result.
+          schema:
+            type: string
+            maxLength: 200
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                patientId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                bookingStatus:
+                  type: string
+                  enum:
+                    - BOOKED
+                    - UNBOOKED
+                    - REFERRED_IN
+                deliveredAt:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                gestationalWeeks:
+                  type: integer
+                  minimum: 20
+                  maximum: 45
+                mode:
+                  type: string
+                  enum:
+                    - SVD
+                    - ASSISTED_VACUUM
+                    - BREECH
+                    - CAESAREAN_REFERRED
+                motherStatus:
+                  type: string
+                  enum:
+                    - ALIVE
+                    - DIED
+                    - REFERRED
+                bloodLossMl:
+                  type: integer
+                  minimum: 0
+                  maximum: 6000
+                complications:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+                notes:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                nhmisIndicators:
+                  default: []
+                  maxItems: 10
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - Decision-to-seek-care ≤ 24 hours
+                      - Arrived by ambulance / referral
+                      - Labour monitored with partograph
+                      - Delivery by Skilled Birth Attendant (SBA)
+                      - Uterotonic given in 3rd stage
+                      - Cord clamped / cut after 1 minute
+                      - Chlorhexidine applied to cord
+                      - Skin-to-skin within 1 hour
+                      - Early initiation of breastfeeding (< 1 hr)
+                      - Newborn temperature taken at 1 hour
+                babySex:
+                  type: string
+                  enum:
+                    - FEMALE
+                    - MALE
+                babyStatus:
+                  type: string
+                  enum:
+                    - ALIVE
+                    - FRESH_STILLBIRTH
+                    - MACERATED_STILLBIRTH
+                birthWeightKg:
+                  type: number
+                  minimum: 0.3
+                  maximum: 7
+                  multipleOf: 0.01
+                apgar1:
+                  type: integer
+                  minimum: 0
+                  maximum: 10
+                apgar5:
+                  type: integer
+                  minimum: 0
+                  maximum: 10
+                breastfedWithinHour:
+                  default: false
+                  type: boolean
+                conductedByUserId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - patientId
+                - bookingStatus
+                - deliveredAt
+                - mode
+                - motherStatus
+                - bloodLossMl
+                - babySex
+                - babyStatus
+                - birthWeightKg
+                - conductedByUserId
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created (200 with `Idempotent-Replayed: true` when a key is repeated)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/deliveries/{deliveryId}/birth-notification:
+    post:
+      tags:
+        - EMR
+      summary: Record birth notification for delivery
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `birth.register`.
+
+        Send an `Idempotency-Key` to make retries safe: the same key returns the first result (`Idempotent-Replayed: true`).
+      operationId: post_api_v1_emr_organizations_organizationId_deliveries_deliveryId_birth_notification
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: deliveryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Client-chosen unique key (e.g. a UUID) that makes retries return the first result.
+          schema:
+            type: string
+            maxLength: 200
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                babyName:
+                  type: string
+                  minLength: 1
+                  maxLength: 160
+                  pattern: ^[^\p{Cc}]+$
+                fatherName:
+                  type: string
+                  minLength: 1
+                  maxLength: 160
+                  pattern: ^[^\p{Cc}]+$
+                informantName:
+                  type: string
+                  minLength: 1
+                  maxLength: 160
+                  pattern: ^[^\p{Cc}]+$
+                informantRelation:
+                  type: string
+                  enum:
+                    - MOTHER
+                    - FATHER
+                    - GRANDPARENT
+                    - GUARDIAN
+                    - HEALTH_WORKER
+              required:
+                - informantName
+                - informantRelation
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created (200 with `Idempotent-Replayed: true` when a key is repeated)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/deliveries/{deliveryId}/entered-in-error:
+    post:
+      tags:
+        - EMR
+      summary: Mark delivery entered in error
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `delivery.record`.
+      operationId: post_api_v1_emr_organizations_organizationId_deliveries_deliveryId_entered_in_error
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: deliveryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 300
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
         "429":
           $ref: "#/components/responses/EmrRateLimited"
         "500":
@@ -24024,7 +24608,7 @@ paths:
                   maxLength: 2048
                 eventTypes:
                   minItems: 1
-                  maxItems: 40
+                  maxItems: 45
                   type: array
                   items:
                     type: string
@@ -24069,6 +24653,11 @@ paths:
                       - anc.visit.recorded
                       - pregnancy.visit_entered_in_error
                       - pregnancy.closed
+                      - delivery.recorded
+                      - delivery.entered_in_error
+                      - birth.notified
+                      - birth.registered
+                      - birth.certificate_issued
               required:
                 - url
                 - eventTypes
@@ -24144,7 +24733,7 @@ paths:
                   maxLength: 2048
                 eventTypes:
                   minItems: 1
-                  maxItems: 40
+                  maxItems: 45
                   type: array
                   items:
                     type: string
@@ -24189,6 +24778,11 @@ paths:
                       - anc.visit.recorded
                       - pregnancy.visit_entered_in_error
                       - pregnancy.closed
+                      - delivery.recorded
+                      - delivery.entered_in_error
+                      - birth.notified
+                      - birth.registered
+                      - birth.certificate_issued
                 active:
                   type: boolean
               additionalProperties: false
