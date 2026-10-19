@@ -1976,6 +1976,7 @@ model EmrPatient {
   appointments EmrAppointment[]
   imagingStudies EmrImagingStudy[]
   procedures EmrProcedure[]
+  pncVisits EmrPncVisit[]
   pregnancies EmrPregnancy[]
   deliveries EmrDelivery[]
   birthRegistrations EmrBirthRegistration[]
@@ -4175,6 +4176,7 @@ model EmrDelivery {
   pregnancy EmrPregnancy? @relation(fields: [organizationId, pregnancyId, patientId], references: [organizationId, id, patientId], onDelete: Restrict)
   registration EmrBirthRegistration?
 
+  pncVisits EmrPncVisit[]
   @@unique([organizationId, id])
   @@index([organizationId, deliveredAt, id])
   @@index([organizationId, patientId, deliveredAt], map: "emr_deliveries_patient_idx")
@@ -4207,4 +4209,37 @@ model EmrBirthRegistration {
   @@unique([organizationId, deliveryId], map: "emr_birth_registrations_delivery_key")
   @@unique([organizationId, notificationNumber], map: "emr_birth_registrations_number_key")
   @@map("emr_birth_registrations")
+}
+
+// Postnatal care (migration 20261027090000_emr_postnatal; see postnatal.service.js).
+model EmrPncVisit {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  deliveryId String? @map("delivery_id")
+  visitDate DateTime @map("visit_date") @db.Date
+  daysPostpartum Int @map("days_postpartum")
+  contact Int
+  systolic Int?
+  diastolic Int?
+  uterus String @db.VarChar(20)
+  lochia String @db.VarChar(12)
+  breast String @db.VarChar(16)
+  breastfeeding String @db.VarChar(20)
+  dangerSigns String[] @default([]) @map("danger_signs")
+  fpCounselled Boolean @default(false) @map("fp_counselled")
+  notes String? @db.VarChar(1000)
+  escalatedEncounterId String? @map("escalated_encounter_id")
+  recordedByUserId String @map("recorded_by_user_id")
+  status String @default("ACTIVE") @db.VarChar(16)
+  errorReason String? @map("error_reason") @db.VarChar(300)
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  delivery EmrDelivery? @relation(fields: [organizationId, deliveryId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, visitDate, id])
+  @@index([organizationId, patientId, visitDate], map: "emr_pnc_visits_patient_idx")
+  @@map("emr_pnc_visits")
 }
