@@ -30,6 +30,7 @@ import { dashboardRoutes } from './dashboard/dashboard.routes.js';
 import { appointmentRoutes } from './appointments/appointments.routes.js';
 import { imagingRoutes } from './radiology/radiology.routes.js';
 import { procedureRoutes } from './procedures/procedures.routes.js';
+import { antenatalRoutes } from './antenatal/antenatal.routes.js';
 import { tenantRuntimeRoutes } from '../command-centre/runtime.routes.js';
 
 const router = express.Router();
@@ -60,6 +61,7 @@ tenant.use('/dashboard', dashboardRoutes);
 tenant.use('/appointments', appointmentRoutes);
 tenant.use('/imaging', imagingRoutes);
 tenant.use('/procedures', procedureRoutes);
+tenant.use('/antenatal', antenatalRoutes);
 tenant.use('/staff', staffRoutes);
 tenant.use('/webhooks', webhookRoutes);
 tenant.use('/audit-events', auditRoutes);

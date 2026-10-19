@@ -1227,162 +1227,6 @@ paths:
           $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/ServerError"
-  /api/v1/auth/social/providers:
-    get:
-      tags:
-        - Auth
-      summary: Which social sign-in options are switched on
-      description: Returns the public Google client id and the Apple Services ID and redirect URI when each provider is configured on the server, or `null`. Never returns secrets. Sign-in pages hide a provider that is `null`.
-      operationId: get__api_v1_auth_social_providers
-      security: []
-      responses:
-        "200":
-          description: "`data.google` is `{ clientId }` or null; `data.apple` is `{ clientId, redirectUri }` or null."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Success"
-  /api/v1/auth/social/nonce:
-    post:
-      tags:
-        - Auth
-      summary: Get a one-time nonce for Sign in with Apple
-      description: A signed, ten-minute value to pass to Apple as `nonce`. Apple copies it into the identity token, which `POST /api/v1/auth/social/apple` checks.
-      operationId: post__api_v1_auth_social_nonce
-      security: []
-      responses:
-        "200":
-          description: "`data.nonce`"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Success"
-        "403":
-          description: Browser request from an origin that is not allowed.
-        "429":
-          $ref: "#/components/responses/RateLimited"
-  /api/v1/auth/social/google:
-    post:
-      tags:
-        - Auth
-      summary: Sign in or sign up with Google
-      description: |
-        Send the one-time `code` from Google's popup code flow (`redirect_uri` is `postmessage`). The server exchanges it with its client secret and checks Google's ID token (signature, issuer, audience, expiry).
-        The Google account opens the Sabi account already connected to it; otherwise the account with the same email if Google verified that email (it is connected now, and an unverified sign-up with that email is activated and its typed password stops working); otherwise a new patient account is created when `consentGiven` is `true`, or the response is `status: "signup_required"` with a ten-minute `signupToken` for `POST /api/v1/auth/social/complete`.
-        Two-step verification still applies (`202 mfa_required`, then `POST /api/v1/auth/mfa/login/verify`). Success matches `POST /api/v1/auth/login`, plus `provider` and `accountCreated`.
-      operationId: post__api_v1_auth_social_google
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [code]
-              properties:
-                code: { type: string, minLength: 10, maxLength: 2048 }
-                intent: { type: string, enum: [patient, professional], description: "professional (from the professional portal) never creates a patient account; a new person gets signup_required with a signupToken for POST /api/v1/doctors/register or /register-professional." }
-                consentGiven: { type: boolean, enum: [true] }
-      responses:
-        "200":
-          description: Signed in (`accessToken`, `user`), or `status` is `signup_required` with `signupToken` and `profile`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Success"
-        "202":
-          description: "`status: mfa_required` with `challengeToken`."
-        "400":
-          description: "`SOCIAL_EMAIL_UNVERIFIED` — the Google account has no verified email to connect by."
-        "401":
-          description: "`SOCIAL_TOKEN_INVALID` — Google did not confirm the sign-in."
-        "403":
-          description: "`ACCOUNT_UNAVAILABLE`, or a browser request from an origin that is not allowed."
-        "409":
-          description: "`SOCIAL_ACCOUNT_CONFLICT` — the Sabi account is connected to a different Google account."
-        "429":
-          $ref: "#/components/responses/RateLimited"
-        "503":
-          description: "`SOCIAL_PROVIDER_NOT_CONFIGURED` or `SOCIAL_PROVIDER_UNAVAILABLE`."
-  /api/v1/auth/social/apple:
-    post:
-      tags:
-        - Auth
-      summary: Sign in or sign up with Apple
-      description: |
-        Send Apple's `id_token` as `idToken` and the `nonce` from `POST /api/v1/auth/social/nonce` that was passed to Apple. Apple gives the person's name only once, to the browser, on first sign-in; send it as `firstName` / `lastName` when present.
-        Account rules, two-step verification and responses are the same as `POST /api/v1/auth/social/google`.
-      operationId: post__api_v1_auth_social_apple
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [idToken, nonce]
-              properties:
-                idToken: { type: string, minLength: 20, maxLength: 8192 }
-                nonce: { type: string, minLength: 20, maxLength: 200 }
-                firstName: { type: string, maxLength: 100 }
-                lastName: { type: string, maxLength: 100 }
-                consentGiven: { type: boolean, enum: [true] }
-                intent: { type: string, enum: [patient, professional], description: "professional (from the professional portal) never creates a patient account; a new person gets signup_required with a signupToken for POST /api/v1/doctors/register or /register-professional." }
-      responses:
-        "200":
-          description: Signed in, or `status` is `signup_required` with `signupToken`.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Success"
-        "202":
-          description: "`status: mfa_required` with `challengeToken`."
-        "400":
-          description: "`SOCIAL_EMAIL_UNVERIFIED`"
-        "401":
-          description: "`SOCIAL_TOKEN_INVALID` — bad signature, wrong audience, expired, or nonce mismatch."
-        "403":
-          description: "`ACCOUNT_UNAVAILABLE`, or origin not allowed."
-        "409":
-          description: "`SOCIAL_ACCOUNT_CONFLICT`"
-        "429":
-          $ref: "#/components/responses/RateLimited"
-        "503":
-          description: "`SOCIAL_PROVIDER_NOT_CONFIGURED` or `SOCIAL_PROVIDER_UNAVAILABLE`."
-  /api/v1/auth/social/complete:
-    post:
-      tags:
-        - Auth
-      summary: Finish a Google / Apple sign-up after the person accepts the terms
-      description: 'Creates the patient account for a `signupToken` returned with `status: "signup_required"` (valid ten minutes) and signs in. Same responses as `POST /api/v1/auth/social/google`.'
-      operationId: post__api_v1_auth_social_complete
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [signupToken, consentGiven]
-              properties:
-                signupToken: { type: string, minLength: 20, maxLength: 4096 }
-                consentGiven: { type: boolean, enum: [true] }
-      responses:
-        "200":
-          description: Signed in.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Success"
-        "202":
-          description: "`status: mfa_required`"
-        "401":
-          description: "`SOCIAL_SIGNUP_EXPIRED`"
-        "429":
-          $ref: "#/components/responses/RateLimited"
   /api/v1/auth/logout:
     post:
       tags:
@@ -2709,6 +2553,202 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
       x-generated: true
+  /api/v1/auth/social/apple:
+    post:
+      tags:
+        - Auth
+      summary: Sign in or sign up with Apple
+      description: |
+        Send Apple's `id_token` as `idToken` and the `nonce` from `POST /api/v1/auth/social/nonce` that was passed to Apple. Apple gives the person's name only once, to the browser, on first sign-in; send it as `firstName` / `lastName` when present.
+        Account rules, two-step verification and responses are the same as `POST /api/v1/auth/social/google`.
+      operationId: post__api_v1_auth_social_apple
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - idToken
+                - nonce
+              properties:
+                idToken:
+                  type: string
+                  minLength: 20
+                  maxLength: 8192
+                nonce:
+                  type: string
+                  minLength: 20
+                  maxLength: 200
+                firstName:
+                  type: string
+                  maxLength: 100
+                lastName:
+                  type: string
+                  maxLength: 100
+                consentGiven:
+                  type: boolean
+                  enum:
+                    - true
+                intent:
+                  type: string
+                  enum:
+                    - patient
+                    - professional
+                  description: professional (from the professional portal) never creates a patient account; a new person gets signup_required with a signupToken for POST /api/v1/doctors/register or /register-professional.
+      responses:
+        "200":
+          description: Signed in, or `status` is `signup_required` with `signupToken`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "202":
+          description: "`status: mfa_required` with `challengeToken`."
+        "400":
+          description: "`SOCIAL_EMAIL_UNVERIFIED`"
+        "401":
+          description: "`SOCIAL_TOKEN_INVALID` — bad signature, wrong audience, expired, or nonce mismatch."
+        "403":
+          description: "`ACCOUNT_UNAVAILABLE`, or origin not allowed."
+        "409":
+          description: "`SOCIAL_ACCOUNT_CONFLICT`"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: "`SOCIAL_PROVIDER_NOT_CONFIGURED` or `SOCIAL_PROVIDER_UNAVAILABLE`."
+  /api/v1/auth/social/complete:
+    post:
+      tags:
+        - Auth
+      summary: Finish a Google / Apple sign-up after the person accepts the terms
+      description: 'Creates the patient account for a `signupToken` returned with `status: "signup_required"` (valid ten minutes) and signs in. Same responses as `POST /api/v1/auth/social/google`.'
+      operationId: post__api_v1_auth_social_complete
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - signupToken
+                - consentGiven
+              properties:
+                signupToken:
+                  type: string
+                  minLength: 20
+                  maxLength: 4096
+                consentGiven:
+                  type: boolean
+                  enum:
+                    - true
+      responses:
+        "200":
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "202":
+          description: "`status: mfa_required`"
+        "401":
+          description: "`SOCIAL_SIGNUP_EXPIRED`"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/auth/social/google:
+    post:
+      tags:
+        - Auth
+      summary: Sign in or sign up with Google
+      description: |
+        Send the one-time `code` from Google's popup code flow (`redirect_uri` is `postmessage`). The server exchanges it with its client secret and checks Google's ID token (signature, issuer, audience, expiry).
+        The Google account opens the Sabi account already connected to it; otherwise the account with the same email if Google verified that email (it is connected now, and an unverified sign-up with that email is activated and its typed password stops working); otherwise a new patient account is created when `consentGiven` is `true`, or the response is `status: "signup_required"` with a ten-minute `signupToken` for `POST /api/v1/auth/social/complete`.
+        Two-step verification still applies (`202 mfa_required`, then `POST /api/v1/auth/mfa/login/verify`). Success matches `POST /api/v1/auth/login`, plus `provider` and `accountCreated`.
+      operationId: post__api_v1_auth_social_google
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+                  minLength: 10
+                  maxLength: 2048
+                intent:
+                  type: string
+                  enum:
+                    - patient
+                    - professional
+                  description: professional (from the professional portal) never creates a patient account; a new person gets signup_required with a signupToken for POST /api/v1/doctors/register or /register-professional.
+                consentGiven:
+                  type: boolean
+                  enum:
+                    - true
+      responses:
+        "200":
+          description: Signed in (`accessToken`, `user`), or `status` is `signup_required` with `signupToken` and `profile`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "202":
+          description: "`status: mfa_required` with `challengeToken`."
+        "400":
+          description: "`SOCIAL_EMAIL_UNVERIFIED` — the Google account has no verified email to connect by."
+        "401":
+          description: "`SOCIAL_TOKEN_INVALID` — Google did not confirm the sign-in."
+        "403":
+          description: "`ACCOUNT_UNAVAILABLE`, or a browser request from an origin that is not allowed."
+        "409":
+          description: "`SOCIAL_ACCOUNT_CONFLICT` — the Sabi account is connected to a different Google account."
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: "`SOCIAL_PROVIDER_NOT_CONFIGURED` or `SOCIAL_PROVIDER_UNAVAILABLE`."
+  /api/v1/auth/social/nonce:
+    post:
+      tags:
+        - Auth
+      summary: Get a one-time nonce for Sign in with Apple
+      description: A signed, ten-minute value to pass to Apple as `nonce`. Apple copies it into the identity token, which `POST /api/v1/auth/social/apple` checks.
+      operationId: post__api_v1_auth_social_nonce
+      security: []
+      responses:
+        "200":
+          description: "`data.nonce`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "403":
+          description: Browser request from an origin that is not allowed.
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/v1/auth/social/providers:
+    get:
+      tags:
+        - Auth
+      summary: Which social sign-in options are switched on
+      description: Returns the public Google client id and the Apple Services ID and redirect URI when each provider is configured on the server, or `null`. Never returns secrets. Sign-in pages hide a provider that is `null`.
+      operationId: get__api_v1_auth_social_providers
+      security: []
+      responses:
+        "200":
+          description: "`data.google` is `{ clientId }` or null; `data.apple` is `{ clientId, redirectUri }` or null."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
   /api/v1/caregivers/me:
     get:
       tags:
@@ -11720,8 +11760,6 @@ paths:
       tags:
         - Doctor onboarding
       summary: Register doctor
-      description: |
-        Either `email` + `password` (a verification email is sent; the person verifies, signs in, then uploads credentials), or `socialSignupToken` from a Google / Apple sign-in with `intent: "professional"` that returned `signup_required` (no `email` or `password`; the provider's verified email is used). With a `socialSignupToken` the account starts verified, the response signs the person in like `POST /api/v1/auth/login` (with `data` holding the application), and credentials can be uploaded at once. Credential screening and staff review are the same either way.
       operationId: post_api_v1_doctors_register
       security: []
       requestBody:
@@ -11751,6 +11789,10 @@ paths:
                   type: string
                   minLength: 15
                   maxLength: 128
+                socialSignupToken:
+                  type: string
+                  minLength: 20
+                  maxLength: 4096
                 specialty:
                   type: string
                   minLength: 1
@@ -11807,9 +11849,6 @@ paths:
                 consentVersion:
                   type: string
                   const: doctor-registration-v1
-                socialSignupToken:
-                  type: string
-                  description: From a Google / Apple sign-in with intent professional; send instead of email and password.
               required:
                 - firstName
                 - lastName
@@ -11849,8 +11888,6 @@ paths:
       tags:
         - Doctor onboarding
       summary: Register professional doctor
-      description: |
-        Either `email` + `password` (a verification email is sent; the person verifies, signs in, then uploads credentials), or `socialSignupToken` from a Google / Apple sign-in with `intent: "professional"` that returned `signup_required` (no `email` or `password`; the provider's verified email is used). With a `socialSignupToken` the account starts verified, the response signs the person in like `POST /api/v1/auth/login` (with `data` holding the application), and credentials can be uploaded at once. Credential screening and staff review are the same either way.
       operationId: post_api_v1_doctors_register_professional
       security: []
       requestBody:
@@ -11880,6 +11917,10 @@ paths:
                   type: string
                   minLength: 15
                   maxLength: 128
+                socialSignupToken:
+                  type: string
+                  minLength: 20
+                  maxLength: 4096
                 professionType:
                   type: string
                   enum:
@@ -11951,9 +11992,6 @@ paths:
                 consentVersion:
                   type: string
                   const: professional-registration-v1
-                socialSignupToken:
-                  type: string
-                  description: From a Google / Apple sign-in with intent professional; send instead of email and password.
               required:
                 - firstName
                 - lastName
@@ -12969,6 +13007,430 @@ paths:
           $ref: "#/components/responses/EmrPreconditionFailed"
         "428":
           $ref: "#/components/responses/EmrPreconditionRequired"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/antenatal:
+    get:
+      tags:
+        - EMR
+      summary: Get antenatal
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `anc.read`.
+      operationId: get_api_v1_emr_organizations_organizationId_antenatal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: patientId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 100
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+    post:
+      tags:
+        - EMR
+      summary: Antenatal
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `anc.manage`.
+
+        Send an `Idempotency-Key` to make retries safe: the same key returns the first result (`Idempotent-Replayed: true`).
+      operationId: post_api_v1_emr_organizations_organizationId_antenatal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Client-chosen unique key (e.g. a UUID) that makes retries return the first result.
+          schema:
+            type: string
+            maxLength: 200
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                patientId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                lmp:
+                  type: string
+                  format: date
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                gravida:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+                parity:
+                  type: integer
+                  minimum: 0
+                  maximum: 19
+                bloodGroup:
+                  type: string
+                  enum:
+                    - O+
+                    - O-
+                    - A+
+                    - A-
+                    - B+
+                    - B-
+                    - AB+
+                    - AB-
+                bookingHb:
+                  type: number
+                  minimum: 2
+                  maximum: 25
+                  multipleOf: 0.1
+                ttDoses:
+                  default: 0
+                  type: integer
+                  minimum: 0
+                  maximum: 5
+              required:
+                - patientId
+                - lmp
+                - gravida
+                - parity
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created (200 with `Idempotent-Replayed: true` when a key is repeated)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/antenatal/{pregnancyId}/close:
+    post:
+      tags:
+        - EMR
+      summary: Close antenatal
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `anc.manage`.
+
+        Optimistic concurrency: send the record’s current version in `If-Match` (e.g. `W/"3"`). A stale version returns 412 with the current version in `ETag`.
+      operationId: post_api_v1_emr_organizations_organizationId_antenatal_pregnancyId_close
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: pregnancyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: If-Match
+          in: header
+          required: true
+          description: The record version from your last read, e.g. W/"3".
+          schema:
+            type: string
+            examples:
+              - W/"3"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - DELIVERED
+                    - TRANSFERRED_OUT
+                    - ENDED
+                note:
+                  type: string
+                  minLength: 3
+                  maxLength: 300
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - status
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "412":
+          $ref: "#/components/responses/EmrPreconditionFailed"
+        "428":
+          $ref: "#/components/responses/EmrPreconditionRequired"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/antenatal/{pregnancyId}/visits:
+    post:
+      tags:
+        - EMR
+      summary: Create visit for antenatal
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `anc.manage`.
+
+        Send an `Idempotency-Key` to make retries safe: the same key returns the first result (`Idempotent-Replayed: true`).
+      operationId: post_api_v1_emr_organizations_organizationId_antenatal_pregnancyId_visits
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: pregnancyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Client-chosen unique key (e.g. a UUID) that makes retries return the first result.
+          schema:
+            type: string
+            maxLength: 200
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                visitDate:
+                  type: string
+                  format: date
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                weightKg:
+                  type: number
+                  minimum: 25
+                  maximum: 250
+                  multipleOf: 0.1
+                systolic:
+                  type: integer
+                  minimum: 50
+                  maximum: 260
+                diastolic:
+                  type: integer
+                  minimum: 30
+                  maximum: 180
+                hb:
+                  type: number
+                  minimum: 2
+                  maximum: 25
+                  multipleOf: 0.1
+                fetalHeartRate:
+                  type: integer
+                  minimum: 60
+                  maximum: 240
+                nextVisitDate:
+                  type: string
+                  format: date
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                notes:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+              required:
+                - visitDate
+              additionalProperties: false
+      responses:
+        "201":
+          description: "Created (200 with `Idempotent-Replayed: true` when a key is repeated)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/antenatal/{pregnancyId}/visits/{visitId}/entered-in-error:
+    post:
+      tags:
+        - EMR
+      summary: Mark visit entered in error
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `anc.manage`.
+      operationId: post_api_v1_emr_organizations_organizationId_antenatal_pregnancyId_visits_visitId_entered_in_error
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: pregnancyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: visitId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 300
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
         "429":
           $ref: "#/components/responses/EmrRateLimited"
         "500":
@@ -23562,7 +24024,7 @@ paths:
                   maxLength: 2048
                 eventTypes:
                   minItems: 1
-                  maxItems: 36
+                  maxItems: 40
                   type: array
                   items:
                     type: string
@@ -23603,6 +24065,10 @@ paths:
                       - invoice.voided
                       - payment.recorded
                       - payment.reversed
+                      - pregnancy.enrolled
+                      - anc.visit.recorded
+                      - pregnancy.visit_entered_in_error
+                      - pregnancy.closed
               required:
                 - url
                 - eventTypes
@@ -23678,7 +24144,7 @@ paths:
                   maxLength: 2048
                 eventTypes:
                   minItems: 1
-                  maxItems: 36
+                  maxItems: 40
                   type: array
                   items:
                     type: string
@@ -23719,6 +24185,10 @@ paths:
                       - invoice.voided
                       - payment.recorded
                       - payment.reversed
+                      - pregnancy.enrolled
+                      - anc.visit.recorded
+                      - pregnancy.visit_entered_in_error
+                      - pregnancy.closed
                 active:
                   type: boolean
               additionalProperties: false

@@ -1976,6 +1976,7 @@ model EmrPatient {
   appointments EmrAppointment[]
   imagingStudies EmrImagingStudy[]
   procedures EmrProcedure[]
+  pregnancies EmrPregnancy[]
 
   @@unique([organizationId, medicalRecordNumber])
   @@unique([organizationId, id])
@@ -4083,4 +4084,58 @@ model UserIdentityProvider {
   @@unique([provider, subject])
   @@unique([userId, provider])
   @@map("user_identity_providers")
+}
+
+// Antenatal care (migration 20261025090000_emr_antenatal; see antenatal.service.js).
+model EmrPregnancy {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  lmp DateTime @db.Date
+  edd DateTime @db.Date
+  gravida Int
+  parity Int
+  bloodGroup String? @map("blood_group") @db.VarChar(3)
+  bookingHb Decimal? @map("booking_hb") @db.Decimal(4, 1)
+  ttDoses Int @default(0) @map("tt_doses")
+  status String @default("ACTIVE") @db.VarChar(16)
+  enrolledByUserId String @map("enrolled_by_user_id")
+  closedAt DateTime? @map("closed_at")
+  closedByUserId String? @map("closed_by_user_id")
+  closureNote String? @map("closure_note") @db.VarChar(300)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  visits EmrAncVisit[]
+
+  @@unique([organizationId, id, patientId])
+  @@index([organizationId, createdAt, id])
+  @@map("emr_pregnancies")
+}
+
+model EmrAncVisit {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  pregnancyId String @map("pregnancy_id")
+  patientId String @map("patient_id")
+  visitDate DateTime @map("visit_date") @db.Date
+  gestationalWeeks Int @map("gestational_weeks")
+  weightKg Decimal? @map("weight_kg") @db.Decimal(5, 1)
+  systolic Int?
+  diastolic Int?
+  hb Decimal? @db.Decimal(4, 1)
+  fetalHeartRate Int? @map("fetal_heart_rate")
+  nextVisitDate DateTime? @map("next_visit_date") @db.Date
+  notes String? @db.VarChar(1000)
+  recordedByUserId String @map("recorded_by_user_id")
+  status String @default("ACTIVE") @db.VarChar(16)
+  errorReason String? @map("error_reason") @db.VarChar(300)
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  pregnancy EmrPregnancy @relation(fields: [organizationId, pregnancyId, patientId], references: [organizationId, id, patientId], onDelete: Restrict)
+
+  @@index([organizationId, pregnancyId, visitDate], map: "emr_anc_visits_pregnancy_idx")
+  @@map("emr_anc_visits")
 }
