@@ -1976,6 +1976,7 @@ model EmrPatient {
   appointments EmrAppointment[]
   imagingStudies EmrImagingStudy[]
   procedures EmrProcedure[]
+  transfers EmrPatientTransfer[]
   referrals EmrReferral[]
   ncdClients EmrNcdClient[]
   cmamScreenings EmrCmamScreening[]
@@ -4478,4 +4479,30 @@ model EmrReferral {
   @@index([organizationId, createdAt])
   @@index([organizationId, patientId])
   @@map("emr_referrals")
+}
+
+// Patient transfers of care (migration 20261103090000_emr_transfers; see transfers.service.js).
+model EmrPatientTransfer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  direction String @db.VarChar(3)
+  patientId String? @map("patient_id")
+  patientName String @map("patient_name") @db.VarChar(160)
+  facility String @db.VarChar(200)
+  reason String @db.VarChar(40)
+  summary String? @db.VarChar(4000)
+  status String @default("PENDING") @db.VarChar(9)
+  recordsSent Boolean @default(false) @map("records_sent")
+  initiatedByUserId String @map("initiated_by_user_id")
+  completedByUserId String? @map("completed_by_user_id")
+  completedAt DateTime? @map("completed_at")
+  cancelledByUserId String? @map("cancelled_by_user_id")
+  cancelledAt DateTime? @map("cancelled_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  patient EmrPatient? @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@map("emr_patient_transfers")
 }
