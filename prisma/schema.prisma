@@ -4737,3 +4737,47 @@ model EmrStoreMovement {
   @@index([organizationId, itemId, createdAt], map: "emr_store_movements_item_idx")
   @@map("emr_store_movements")
 }
+
+// Equipment & maintenance (migration 20261108090000_emr_assets; see assets.service.js).
+model EmrAsset {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  tag String @db.VarChar(30)
+  name String @db.VarChar(120)
+  category String @db.VarChar(12)
+  location String @db.VarChar(120)
+  status String @default("IN_SERVICE") @db.VarChar(14)
+  serialNumber String? @map("serial_number") @db.VarChar(60)
+  costMinor BigInt? @map("cost_minor")
+  commissionedOn DateTime @map("commissioned_on") @db.Date
+  serviceIntervalDays Int @map("service_interval_days")
+  lastServicedOn DateTime @map("last_serviced_on") @db.Date
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  jobs EmrMaintenanceJob[]
+
+  @@unique([organizationId, id], map: "emr_assets_org_id_key")
+  @@unique([organizationId, tag])
+  @@map("emr_assets")
+}
+
+model EmrMaintenanceJob {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  assetId String @map("asset_id")
+  type String @db.VarChar(10)
+  summary String @db.VarChar(1000)
+  priority String @db.VarChar(6)
+  status String @default("OPEN") @db.VarChar(11)
+  reportedByUserId String @map("reported_by_user_id")
+  openedAt DateTime @default(now()) @map("opened_at")
+  startedAt DateTime? @map("started_at")
+  closedAt DateTime? @map("closed_at")
+  resolution String? @db.VarChar(1000)
+  resolvedByUserId String? @map("resolved_by_user_id")
+  version Int @default(1)
+  asset EmrAsset @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, assetId, status], map: "emr_maintenance_jobs_asset_idx")
+  @@map("emr_maintenance_jobs")
+}
