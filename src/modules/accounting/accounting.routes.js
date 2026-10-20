@@ -17,6 +17,7 @@ import { ledgerRoutes } from './ledger/ledger.routes.js';
 import { receivableRoutes, settingsRoutes } from './receivables/receivables.routes.js';
 import { approvalRuleRoutes, payableRoutes } from './payables/payables.routes.js';
 import { bankingRoutes, expenseRoutes } from './banking/banking.routes.js';
+import { assetRoutes, planningRoutes } from './assets/assets.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -29,6 +30,8 @@ tenant.use('/payables', payableRoutes);
 tenant.use('/approval-rules', approvalRuleRoutes);
 tenant.use('/banking', bankingRoutes);
 tenant.use('/expenses', expenseRoutes);
+tenant.use('/fixed-assets', assetRoutes);
+tenant.use('/planning', planningRoutes);
 
 router.use('/organizations/:organizationId', protect, validateEmr(z.object({ params: z.object({ organizationId: z.uuid() }) })), requireOrganization, accountingTenant, tenantRateLimit, tenant);
 router.use((req, res, next) => next(new EmrError('NOT_FOUND')));
