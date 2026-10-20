@@ -14,12 +14,14 @@ import { tenantRateLimit } from '../emr/core/rateLimit.js';
 import { EmrError, emrErrorHandler } from '../emr/core/errors.js';
 import { validateEmr } from '../emr/core/validate.js';
 import { peopleRoutes } from './people/people.routes.js';
+import { timeRoutes } from './time/time.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
 
 const tenant = express.Router({ mergeParams: true });
 tenant.use('/people', peopleRoutes);
+tenant.use('/time', timeRoutes);
 
 router.use(
   '/organizations/:organizationId',

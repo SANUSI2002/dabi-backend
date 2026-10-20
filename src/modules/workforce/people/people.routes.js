@@ -4,6 +4,7 @@
 // Who can do what (migration 20261110090000_workforce_people):
 //   HR officer, owner:   everything below, including bank and personal details
 //   hospital admin:      everything except bank and personal details
+//   every staff role:    the directory (names, roles, departments) for rosters
 import express from 'express';
 import { z } from 'zod';
 import { requireEmrPermission as allow } from '../../emr/core/context.js';
@@ -70,6 +71,7 @@ export const peopleRoutes = express.Router({ mergeParams: true });
 const R = 'hr.read';
 const M = 'hr.manage';
 peopleRoutes.get('/', check(v.overview), allow(R), handle(async (req, res) => send(res, await people.overview(req.emr))));
+peopleRoutes.get('/directory', check(v.overview), allow('workforce.directory', R), handle(async (req, res) => send(res, await people.directory(req.emr))));
 peopleRoutes.post('/employees', check(v.createEmployee), allow(M), handle(async (req, res) => send(res, await people.createEmployee(req.emr, req.body), 201)));
 peopleRoutes.patch('/employees/:employeeId', check(v.updateEmployee), allow(M), handle(async (req, res) => send(res, await people.updateEmployee(req.emr, req.params.employeeId, requireVersion(req), req.body))));
 peopleRoutes.post('/employees/import-members', check(v.empty), allow(M), handle(async (req, res) => send(res, await people.importMembers(req.emr))));

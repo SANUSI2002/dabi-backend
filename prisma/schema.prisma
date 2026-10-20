@@ -5064,3 +5064,316 @@ model WfPolicy {
 
   @@map("wf_policies")
 }
+
+// Workforce: time & attendance and work (migration 20261111090000_workforce_time).
+model WfTimeBlock {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  code String @db.VarChar(12)
+  startTime String @map("start_time") @db.VarChar(5)
+  endTime String @map("end_time") @db.VarChar(5)
+  overnight Boolean @default(false)
+  paidHours Decimal @map("paid_hours") @db.Decimal(5, 2)
+  breakMins Int @default(0) @map("break_mins")
+  lateGraceMins Int @default(0) @map("late_grace_mins")
+  classification String @db.VarChar(10)
+  colour String @db.VarChar(20)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_time_blocks_org_id_key")
+  @@unique([organizationId, code])
+  @@map("wf_time_blocks")
+}
+
+model WfSchedule {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  description String? @db.VarChar(500)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime? @map("end_date") @db.Date
+  days Json
+  rotation String[] @default([])
+  rotationAnchor DateTime? @map("rotation_anchor") @db.Date
+  holidayRule String @map("holiday_rule") @db.VarChar(30)
+  expectedCycleHours Decimal @map("expected_cycle_hours") @db.Decimal(6, 2)
+  status String @default("Draft") @db.VarChar(7)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_schedules_org_id_key")
+  @@map("wf_schedules")
+}
+
+model WfScheduleAssignment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  scheduleId String @map("schedule_id")
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  effectiveTo DateTime? @map("effective_to") @db.Date
+  captureMode String @map("capture_mode") @db.VarChar(10)
+  assignedByUserId String @map("assigned_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_schedule_assignments")
+}
+
+model WfAttendance {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  clockInAt DateTime @map("clock_in_at")
+  clockOutAt DateTime? @map("clock_out_at")
+  source String @db.VarChar(6)
+  breakMins Int @default(0) @map("break_mins")
+  onBreakSince DateTime? @map("on_break_since")
+  flags String[] @default([])
+  location String? @db.VarChar(120)
+  workLocation String @default("WFO") @map("work_location") @db.VarChar(12)
+  consentAt DateTime? @map("consent_at")
+  resolutionAction String? @map("resolution_action") @db.VarChar(12)
+  resolutionByUserId String? @map("resolution_by_user_id")
+  resolutionAt DateTime? @map("resolution_at")
+  resolutionNote String? @map("resolution_note") @db.VarChar(500)
+  recordedByUserId String @map("recorded_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, clockInAt], map: "wf_attendance_clock_in_idx")
+  @@map("wf_attendance")
+}
+
+model WfOvertimeRequest {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  workDate DateTime @map("work_date") @db.Date
+  hours Decimal @db.Decimal(5, 2)
+  reason String @db.VarChar(500)
+  status String @default("Pending") @db.VarChar(8)
+  requestedByUserId String @map("requested_by_user_id")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  decisionNote String? @map("decision_note") @db.VarChar(500)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_overtime_requests")
+}
+
+model WfPeriod {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  label String @db.VarChar(40)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime @map("end_date") @db.Date
+  locked Boolean @default(false)
+  lockedByUserId String? @map("locked_by_user_id")
+  lockedAt DateTime? @map("locked_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_periods_org_id_key")
+  @@unique([organizationId, startDate], map: "wf_periods_organization_id_start_key")
+  @@map("wf_periods")
+}
+
+model WfTimesheet {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  periodId String @map("period_id")
+  status String @default("Open") @db.VarChar(9)
+  captureMode String @default("Attendance") @map("capture_mode") @db.VarChar(10)
+  submission Int @default(0)
+  submittedAt DateTime? @map("submitted_at")
+  approvedAt DateTime? @map("approved_at")
+  approverUserId String? @map("approver_user_id")
+  returnNote String? @map("return_note") @db.VarChar(500)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  lines WfTimesheetLine[]
+  events WfTimesheetEvent[]
+
+  @@unique([organizationId, id], map: "wf_timesheets_org_id_key")
+  @@unique([organizationId, employeeId, periodId], map: "wf_timesheets_employee_period_key")
+  @@map("wf_timesheets")
+}
+
+model WfTimesheetLine {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  timesheetId String @map("timesheet_id")
+  workDate DateTime @map("work_date") @db.Date
+  source String @db.VarChar(10)
+  expectedHours Decimal @default(0) @map("expected_hours") @db.Decimal(5, 2)
+  workedHours Decimal @default(0) @map("worked_hours") @db.Decimal(5, 2)
+  breakHours Decimal @default(0) @map("break_hours") @db.Decimal(5, 2)
+  overtimeHours Decimal @default(0) @map("overtime_hours") @db.Decimal(5, 2)
+  container String? @db.VarChar(120)
+  task String? @db.VarChar(120)
+  note String? @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  timesheet WfTimesheet @relation(fields: [organizationId, timesheetId], references: [organizationId, id], onDelete: Restrict)
+  @@map("wf_timesheet_lines")
+}
+
+model WfTimesheetEvent {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  timesheetId String @map("timesheet_id")
+  submission Int
+  status String @db.VarChar(9)
+  byUserId String @map("by_user_id")
+  note String? @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  timesheet WfTimesheet @relation(fields: [organizationId, timesheetId], references: [organizationId, id], onDelete: Restrict)
+  @@map("wf_timesheet_events")
+}
+
+model WfAmendment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  timesheetId String @map("timesheet_id")
+  reason String @db.VarChar(500)
+  change String @db.VarChar(1000)
+  status String @default("Pending") @db.VarChar(8)
+  requestedByUserId String @map("requested_by_user_id")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  decisionNote String? @map("decision_note") @db.VarChar(500)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_amendments")
+}
+
+model WfTimePolicy {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  scope String @db.VarChar(120)
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  effectiveTo DateTime? @map("effective_to") @db.Date
+  periodType String @map("period_type") @db.VarChar(9)
+  captureDefault String @map("capture_default") @db.VarChar(10)
+  incrementMins Int @map("increment_mins")
+  rounding String @db.VarChar(10)
+  submissionDeadlineDays Int @map("submission_deadline_days")
+  approvalDeadlineDays Int @map("approval_deadline_days")
+  lateGraceMins Int @map("late_grace_mins")
+  earlyLeaveGraceMins Int @map("early_leave_grace_mins")
+  absenceThresholdMins Int @map("absence_threshold_mins")
+  maxDailyHours Int @map("max_daily_hours")
+  allowEditDerived Boolean @map("allow_edit_derived")
+  overtimeEnabled Boolean @map("overtime_enabled")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_time_policies")
+}
+
+model WfSettings {
+  organizationId String @id @map("organization_id")
+  capabilities Json
+  breakRules Json @map("break_rules")
+  attendanceRules Json @map("attendance_rules")
+  enrolments Json
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@map("wf_settings")
+}
+
+model WfHoliday {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  holidayDate DateTime @map("holiday_date") @db.Date
+  scope String @db.VarChar(12)
+  scopeValue String @map("scope_value") @db.VarChar(120)
+  paid Boolean @default(true)
+  workRequiresApproval Boolean @default(true) @map("work_requires_approval")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_holidays_org_id_key")
+  @@map("wf_holidays")
+}
+
+model WfLeaveRequest {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  leaveType String @map("leave_type") @db.VarChar(60)
+  fromDate DateTime @map("from_date") @db.Date
+  toDate DateTime @map("to_date") @db.Date
+  days Decimal @db.Decimal(5, 1)
+  paid Boolean @default(true)
+  note String? @db.VarChar(500)
+  status String @default("Pending") @db.VarChar(8)
+  requestedByUserId String @map("requested_by_user_id")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_leave_requests")
+}
+
+model WfHolidayWorkRequest {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  holidayId String @map("holiday_id")
+  reason String @db.VarChar(500)
+  hours Decimal @db.Decimal(5, 2)
+  status String @default("Pending") @db.VarChar(8)
+  requestedByUserId String @map("requested_by_user_id")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_holiday_work_requests")
+}
+
+model WfWorkContainer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  label String @db.VarChar(40)
+  name String @db.VarChar(120)
+  code String @db.VarChar(20)
+  owner String @db.VarChar(120)
+  status String @default("Active") @db.VarChar(6)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_work_containers_org_id_key")
+  @@unique([organizationId, code])
+  @@map("wf_work_containers")
+}
+
+model WfWorkTask {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  containerId String @map("container_id")
+  name String @db.VarChar(160)
+  parentId String? @map("parent_id")
+  assignedTo String @map("assigned_to") @db.VarChar(120)
+  status String @default("Not started") @db.VarChar(11)
+  estimateHours Decimal @default(0) @map("estimate_hours") @db.Decimal(7, 2)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_work_tasks_org_id_key")
+  @@map("wf_work_tasks")
+}
+
+model WfWorkActivity {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  taskId String @map("task_id")
+  staff String @db.VarChar(120)
+  workDate DateTime @map("work_date") @db.Date
+  hours Decimal @db.Decimal(5, 2)
+  note String @default("") @db.VarChar(500)
+  loggedByUserId String @map("logged_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_work_activities")
+}
