@@ -75,6 +75,35 @@ describe('patient email verification', () => {
     expect(mail.sendEmailVerificationEmail).not.toHaveBeenCalled();
   });
 
+  it('lets an active legacy patient request proof of email ownership without changing their status', async () => {
+    model.findUserByEmail.mockResolvedValue({ ...patient('hash'), accountStatus: 'ACTIVE' });
+    model.latestEmailVerificationToken.mockResolvedValue(null);
+    const res = response();
+    await requestEmailVerification({ body: { email: 'patient@example.test' } }, res, vi.fn());
+    expect(res.statusCode).toBe(202);
+    expect(mail.sendEmailVerificationEmail).toHaveBeenCalledWith(expect.objectContaining({ email: 'patient@example.test' }));
+    expect(model.confirmEmailVerificationToken).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { accountStatus: 'SUSPENDED' }, { accountStatus: 'DISABLED' }, { accountStatus: 'BANNED' },
+    { accountStatus: 'ACTIVE', roles: [{ role: 'PROFESSIONAL' }] },
+    { accountStatus: 'ACTIVE', emailVerifiedAt: new Date() },
+  ])('does not send a patient recovery link for an ineligible account: %j', async (extra) => {
+    model.findUserByEmail.mockResolvedValue({ ...patient('hash'), ...extra });
+    const res = response();
+    await requestEmailVerification({ body: { email: 'patient@example.test' } }, res, vi.fn());
+    expect(res.statusCode).toBe(202);
+    expect(mail.sendEmailVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it('retains the resend cooldown for an active legacy patient', async () => {
+    model.findUserByEmail.mockResolvedValue({ ...patient('hash'), accountStatus: 'ACTIVE' });
+    model.latestEmailVerificationToken.mockResolvedValue({ createdAt: new Date() });
+    await requestEmailVerification({ body: { email: 'patient@example.test' } }, response(), vi.fn());
+    expect(mail.sendEmailVerificationEmail).not.toHaveBeenCalled();
+  });
+
   it('accepts only a valid unused verification token', async () => {
     const req = { body: { uid: patient('hash').id, token: 'a'.repeat(64) } };
     model.confirmEmailVerificationToken.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
