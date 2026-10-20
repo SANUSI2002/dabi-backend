@@ -6344,3 +6344,102 @@ model AcctCustomerNotice {
   sentAt DateTime @default(now()) @map("sent_at")
   @@map("acct_customer_notices")
 }
+
+model AcctVendor {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(160)
+  email String? @db.VarChar(160)
+  phone String? @db.VarChar(30)
+  address String? @db.VarChar(300)
+  taxId String? @map("tax_id") @db.VarChar(40)
+  category String @db.VarChar(16)
+  currency String @default("NGN") @db.VarChar(3)
+  paymentTermsDays Int @default(30) @map("payment_terms_days")
+  paymentTermId String? @map("payment_term_id") @db.VarChar(60)
+  apAccountNumber Int @default(2000) @map("ap_account_number")
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_vendors")
+}
+
+model AcctPurchaseDoc {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  kind String @db.VarChar(13)
+  number String @db.VarChar(40)
+  vendorId String? @map("vendor_id")
+  vendorInvoiceNumber String? @map("vendor_invoice_number") @db.VarChar(60)
+  docDate DateTime @map("doc_date")
+  dueDate DateTime? @map("due_date")
+  needBy DateTime? @map("need_by")
+  expectedDate DateTime? @map("expected_date")
+  lines Json
+  notes String? @db.VarChar(2000)
+  justification String? @db.VarChar(2000)
+  reason String? @db.VarChar(500)
+  department String? @db.VarChar(120)
+  status String @db.VarChar(20)
+  approval Json?
+  currency String @default("NGN") @db.VarChar(3)
+  exchangeRate Decimal @default(1) @map("exchange_rate") @db.Decimal(16, 6)
+  amountPaid Decimal @default(0) @map("amount_paid") @db.Decimal(16, 2)
+  sourceDocId String? @map("source_doc_id")
+  convertedToId String? @map("converted_to_id")
+  journalEntryId String? @map("journal_entry_id")
+  projectId String? @map("project_id")
+  recurEveryMonths Int? @map("recur_every_months")
+  recurNextDate DateTime? @map("recur_next_date")
+  recurEndDate DateTime? @map("recur_end_date")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  postedAt DateTime? @map("posted_at")
+  version Int @default(1)
+  @@map("acct_purchase_docs")
+}
+
+model AcctGoodsReceipt {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(40)
+  purchaseOrderId String @map("purchase_order_id")
+  vendorId String @map("vendor_id")
+  receiptDate DateTime @map("receipt_date")
+  receivedByUserId String @map("received_by_user_id")
+  lines Json
+  notes String? @db.VarChar(2000)
+  stockedLineIds String[] @default([]) @map("stocked_line_ids")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_goods_receipts")
+}
+
+model AcctVendorPayment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(40)
+  vendorId String @map("vendor_id")
+  paymentDate DateTime @map("payment_date")
+  method String @db.VarChar(13)
+  fromAccountNumber Int @map("from_account_number")
+  amount Decimal @db.Decimal(16, 2)
+  allocations Json
+  settlementRate Decimal? @map("settlement_rate") @db.Decimal(16, 6)
+  reference String? @db.VarChar(100)
+  withheldTax Decimal @default(0) @map("withheld_tax") @db.Decimal(16, 2)
+  journalEntryId String @map("journal_entry_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_vendor_payments")
+}
+
+model AcctVendorCreditApplication {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  vendorCreditId String @map("vendor_credit_id")
+  billId String @map("bill_id")
+  amount Decimal @db.Decimal(16, 2)
+  appliedByUserId String @map("applied_by_user_id")
+  appliedAt DateTime @default(now()) @map("applied_at")
+  @@map("acct_vendor_credit_applications")
+}
