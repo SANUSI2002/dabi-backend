@@ -6642,3 +6642,51 @@ model AcctTaxReturn {
   @@index([organizationId, returnType, periodEnd], map: "acct_tax_returns_period_idx")
   @@map("acct_tax_returns")
 }
+
+model AcctProject {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(20)
+  name String @db.VarChar(160)
+  customerId String? @map("customer_id")
+  status String @default("Active") @db.VarChar(10)
+  startDate DateTime @map("start_date")
+  endDate DateTime? @map("end_date")
+  budgetAmount Decimal? @map("budget_amount") @db.Decimal(16, 2)
+  billable Boolean @default(false)
+  description String? @db.VarChar(2000)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, code], map: "acct_projects_code_key")
+  @@map("acct_projects")
+}
+
+model AcctTimeEntry {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  projectId String @map("project_id")
+  staffEmployeeId String @map("staff_employee_id")
+  entryDate DateTime @map("entry_date")
+  hours Decimal @db.Decimal(6, 2)
+  description String @db.VarChar(300)
+  billable Boolean
+  rate Decimal? @db.Decimal(16, 2)
+  revenueAccount Int @map("revenue_account")
+  status String @db.VarChar(12)
+  invoiceId String? @map("invoice_id")
+  removedAt DateTime? @map("removed_at")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, projectId, status], map: "acct_time_entries_project_idx")
+  @@map("acct_time_entries")
+}
+
+model AcctNotificationPrefs {
+  organizationId String @map("organization_id")
+  userId String @map("user_id")
+  prefs Json
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@id([organizationId, userId])
+  @@map("acct_notification_prefs")
+}

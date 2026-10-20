@@ -14,7 +14,7 @@ const MODULE = {
   vendor: 'bills', purchase_requisition: 'bills', purchase_order: 'bills', bill: 'bills', vendor_credit: 'bills', vendor_payment: 'vendor-payments',
   expense_claim: 'expenses', bank_account: 'banking', bank_reconciliation: 'banking', bank_rule: 'banking', statement_line: 'banking',
   fixed_asset: 'fixed-assets', tax_rate: 'tax', tax_return: 'tax', budget: 'budgets', cost_centre: 'budgets',
-  account: 'coa', branch: 'coa', consolidation_group: 'coa', accounting_settings: 'settings', approval_rule: 'approvals',
+  project: 'projects', account: 'coa', branch: 'coa', consolidation_group: 'coa', accounting_settings: 'settings', approval_rule: 'approvals',
 };
 
 export async function accountingAuditEvents(context, { limit = 200 } = {}) {

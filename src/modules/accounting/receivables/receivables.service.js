@@ -18,6 +18,7 @@ import { EmrError, uniqueViolation } from '../../emr/core/errors.js';
 import { userNameMap } from '../../emr/core/people.js';
 import { postEntry, requireAcct, reverseInTx, round2 } from '../ledger/ledger.service.js';
 import { docSubtotal, docTax, docTaxBreakdown, docTotal, dueDateFor, ensureSettings, lineAmount, nextDocNumber, taxRates } from '../settings/settings.service.js';
+import { timeLinesForInvoice } from '../projects/projects.service.js';
 
 const org = (context) => ({ organizationId: context.organizationId });
 const can = (context, p) => context.permissions.includes(p) || context.permissions.includes('acct.control');
@@ -234,12 +235,12 @@ async function createInvoiceInTx(tx, context, input) {
   const settings = await ensureSettings(tx, context);
   const rates = await taxRates(tx, context);
   const cust = await customerOf(tx, context, input.customerId);
-  if (input.timeEntryIds?.length) throw new EmrError('INVALID_STATE', { message: 'Billing project time is not connected to the live books yet.' });
   const charges = input.delayedChargeIds?.length ? await tx.acctDelayedCharge.findMany({ where: { ...org(context), id: { in: input.delayedChargeIds }, customerId: cust.id, status: 'Unbilled', removedAt: null } }) : [];
   if (charges.length !== (input.delayedChargeIds?.length ?? 0)) throw new EmrError('INVALID_STATE', { message: 'Some of those charges are already billed or belong to another customer.' });
   const lines = await cleanLines(tx, context, [
     ...input.lines,
     ...charges.map((c) => ({ accountNumber: c.accountNumber, description: c.description, qty: Number(c.qty), unitPrice: Number(c.unitPrice), ...(c.taxRateId ? { taxRateId: c.taxRateId } : {}) })),
+    ...(input.timeEntryIds?.length ? await timeLinesForInvoice(tx, context, { customerId: cust.id, timeEntryIds: input.timeEntryIds }) : []),
   ], rates);
   const currency = input.currency ?? cust.currency ?? 'NGN';
   const ledger = await tx.acctLedgerSettings.findUnique({ where: { organizationId: context.organizationId } });
@@ -253,6 +254,7 @@ async function createInvoiceInTx(tx, context, input) {
     ...(input.recurEveryMonths ? { recurEveryMonths: input.recurEveryMonths, recurNextDate: monthsAdd(date, input.recurEveryMonths), recurEndDate: input.recurEndDate ? new Date(input.recurEndDate) : null } : {}),
   });
   if (charges.length) await tx.acctDelayedCharge.updateMany({ where: { ...org(context), id: { in: charges.map((c) => c.id) } }, data: { status: 'Invoiced', invoiceId: inv.id } });
+  if (input.timeEntryIds?.length) await tx.acctTimeEntry.updateMany({ where: { ...org(context), id: { in: input.timeEntryIds } }, data: { status: 'Invoiced', invoiceId: inv.id } });
   // Revenue recognised over several months: the invoice credits Deferred Revenue, released month by month.
   const months = input.deferOverMonths ?? 0;
   if (months > 1) {
@@ -344,6 +346,7 @@ export async function voidDoc(context, kind, id) {
     if (d.journalEntryId) await reverseInTx(tx, context, d.journalEntryId, { memo: `Void ${kind.replace('-', ' ')} ${d.number}` });
     await changeDoc(tx, context, d, { status: 'Void' }, `${kind.replace('-', '_')}.voided`);
     if (kind === 'invoice') await tx.acctDelayedCharge.updateMany({ where: { ...org(context), invoiceId: id }, data: { status: 'Unbilled', invoiceId: null } });
+    if (kind === 'invoice') await tx.acctTimeEntry.updateMany({ where: { ...org(context), invoiceId: id }, data: { status: 'Unbilled', invoiceId: null } }); // the time can be billed again
     return { id, status: 'Void' };
   });
 }

@@ -66,7 +66,7 @@ const v = {
     currency: currency.optional(), exchangeRate: z.number().positive().max(1e7).optional(), deferOverMonths: z.number().int().min(0).max(120).optional(),
     recurEveryMonths: z.number().int().min(1).max(24).optional(), recurEndDate: when.optional(), delayedChargeIds: z.array(z.uuid()).max(100).optional(), projectId: z.string().max(64).optional(),
     timeEntryIds: z.array(z.string().max(64)).max(200).optional(),
-  }).refine((r) => r.body.lines.length || r.body.delayedChargeIds?.length, 'Add at least one line or charge'),
+  }).refine((r) => r.body.lines.length || r.body.delayedChargeIds?.length || r.body.timeEntryIds?.length, 'Add at least one line, charge or time entry'),
   issue: body({ overrideCredit: z.boolean().optional() }, withId),
   void: body({}, { ...org, kind: z.enum(['invoice', 'sales-receipt', 'refund-receipt']), id: z.uuid() }),
   receipt: body({
