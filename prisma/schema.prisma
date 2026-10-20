@@ -5609,3 +5609,128 @@ model WfOffboarding {
   version Int @default(1)
   @@map("wf_offboarding")
 }
+
+model WfReviewPeriod {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime @map("end_date") @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_review_periods")
+}
+
+model WfKeyResult {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  title String @db.VarChar(160)
+  type String @db.VarChar(10)
+  targetValue Decimal @map("target_value") @db.Decimal(14, 2)
+  @@map("wf_key_results")
+}
+
+model WfObjective {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  title String @db.VarChar(160)
+  description String @default("") @db.VarChar(2000)
+  managerIds String[] @default([]) @map("manager_ids")
+  assigneeIds String[] @map("assignee_ids")
+  keyResultIds String[] @map("key_result_ids")
+  durationUnit String @map("duration_unit") @db.VarChar(6)
+  duration Int
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_objectives")
+}
+
+model WfEmployeeObjective {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  objectiveId String @map("objective_id")
+  employeeId String @map("employee_id")
+  startDate DateTime @map("start_date")
+  endDate DateTime @map("end_date")
+  status String @default("Not Started") @db.VarChar(11)
+  progress Int @default(0)
+  keyResults Json @map("key_results")
+  version Int @default(1)
+  @@map("wf_employee_objectives")
+}
+
+model WfFeedback {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  reviewCycle String @map("review_cycle") @db.VarChar(80)
+  employeeId String @map("employee_id")
+  managerId String? @map("manager_id")
+  colleagueIds String[] @default([]) @map("colleague_ids")
+  status String @default("In Progress") @db.VarChar(11)
+  startDate DateTime @default(now()) @map("start_date")
+  endDate DateTime? @map("end_date")
+  selfAnswers Json? @map("self_answers")
+  managerAnswers Json? @map("manager_answers")
+  startedByUserId String @map("started_by_user_id")
+  version Int @default(1)
+  @@map("wf_feedback")
+}
+
+model WfMeeting {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  title String @db.VarChar(120)
+  employeeId String @map("employee_id")
+  managerId String @map("manager_id")
+  scheduledAt DateTime @map("scheduled_at")
+  status String @default("Scheduled") @db.VarChar(9)
+  notes String? @db.VarChar(4000)
+  actionItems String? @map("action_items") @db.VarChar(4000)
+  createdByUserId String @map("created_by_user_id")
+  version Int @default(1)
+  @@map("wf_meetings")
+}
+
+model WfPromotion {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  fromJobPositionId String? @map("from_job_position_id")
+  fromJobRoleId String? @map("from_job_role_id")
+  fromCadre String? @map("from_cadre") @db.VarChar(80)
+  toJobPositionId String? @map("to_job_position_id")
+  toJobRoleId String? @map("to_job_role_id")
+  toCadre String? @map("to_cadre") @db.VarChar(80)
+  newSalary Decimal? @map("new_salary") @db.Decimal(14, 2)
+  effectiveDate DateTime @map("effective_date") @db.Date
+  reason String @db.VarChar(2000)
+  status String @default("Proposed") @db.VarChar(9)
+  appliedAt DateTime? @map("applied_at")
+  successorId String? @map("successor_id")
+  handoverNotes String? @map("handover_notes") @db.VarChar(4000)
+  handoverStatus String @default("Not started") @map("handover_status") @db.VarChar(11)
+  handoverCompletedAt DateTime? @map("handover_completed_at")
+  requestedByUserId String @map("requested_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("wf_promotions")
+}
+
+model WfBranchTransfer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  fromCompanyId String? @map("from_company_id")
+  toCompanyId String @map("to_company_id")
+  effectiveDate DateTime @map("effective_date") @db.Date
+  reason String @db.VarChar(2000)
+  status String @default("Proposed") @db.VarChar(9)
+  appliedAt DateTime? @map("applied_at")
+  successorId String? @map("successor_id")
+  handoverNotes String? @map("handover_notes") @db.VarChar(4000)
+  handoverStatus String @default("Not started") @map("handover_status") @db.VarChar(11)
+  handoverCompletedAt DateTime? @map("handover_completed_at")
+  requestedByUserId String @map("requested_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("wf_branch_transfers")
+}

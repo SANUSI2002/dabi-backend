@@ -17,6 +17,7 @@ import { peopleRoutes } from './people/people.routes.js';
 import { timeRoutes } from './time/time.routes.js';
 import { workflowRoutes } from './workflows/workflows.routes.js';
 import { hiringRoutes } from './hiring/hiring.routes.js';
+import { careerRoutes } from './careers/careers.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -26,6 +27,7 @@ tenant.use('/people', peopleRoutes);
 tenant.use('/time', timeRoutes);
 tenant.use('/workflows', workflowRoutes);
 tenant.use('/hiring', hiringRoutes);
+tenant.use('/careers', careerRoutes);
 
 router.use(
   '/organizations/:organizationId',
