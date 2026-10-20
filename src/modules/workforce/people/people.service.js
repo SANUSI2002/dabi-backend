@@ -367,10 +367,11 @@ export async function publishPolicy(context, input) {
 /** Colleagues for rosters and schedules: names, roles and where they sit — no contact, personal or bank data. */
 export async function directory(context) {
   return withTenant(context, async (tx) => {
-    const [employees, departments] = await Promise.all([
+    const [employees, departments, jobPositions] = await Promise.all([
       tx.wfEmployee.findMany({ where: org(context), select: { id: true, userId: true, name: true, role: true, cadre: true, status: true, departmentId: true, reportingManagerId: true, hireDate: true }, orderBy: { name: 'asc' } }),
-      tx.wfDepartment.findMany({ where: org(context), select: { id: true, name: true, code: true } }),
+      tx.wfDepartment.findMany({ where: org(context), select: { id: true, name: true, code: true, status: true, hodEmployeeId: true, deputyHodEmployeeId: true } }),
+      tx.wfJobPosition.findMany({ where: org(context), select: { id: true, name: true, departmentId: true } }),
     ]);
-    return { employees: employees.map((e) => ({ ...e, hireDate: isoDay(e.hireDate) })), departments };
+    return { employees: employees.map((e) => ({ ...e, hireDate: isoDay(e.hireDate) })), departments, jobPositions };
   });
 }
