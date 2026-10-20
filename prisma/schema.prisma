@@ -5734,3 +5734,132 @@ model WfBranchTransfer {
   version Int @default(1)
   @@map("wf_branch_transfers")
 }
+
+model WfSalaryStructure {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  basicSalary Decimal @map("basic_salary") @db.Decimal(14, 2)
+  allowances Json @default("[]")
+  deductions Json @default("[]")
+  effectiveFrom DateTime @default(now()) @map("effective_from")
+  updatedByUserId String @map("updated_by_user_id")
+  version Int @default(1)
+  @@map("wf_salary_structures")
+}
+
+model WfPayslip {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  batch String @db.VarChar(80)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime @map("end_date") @db.Date
+  basicSalary Decimal @map("basic_salary") @db.Decimal(14, 2)
+  allowances Json
+  deductions Json
+  grossPay Decimal @map("gross_pay") @db.Decimal(14, 2)
+  totalDeductions Decimal @map("total_deductions") @db.Decimal(14, 2)
+  netPay Decimal @map("net_pay") @db.Decimal(14, 2)
+  loanId String? @map("loan_id")
+  loanDeduction Decimal? @map("loan_deduction") @db.Decimal(14, 2)
+  status String @default("Draft") @db.VarChar(14)
+  generatedByUserId String @map("generated_by_user_id")
+  generatedAt DateTime @default(now()) @map("generated_at")
+  confirmedByUserId String? @map("confirmed_by_user_id")
+  confirmedAt DateTime? @map("confirmed_at")
+  paidByUserId String? @map("paid_by_user_id")
+  paidAt DateTime? @map("paid_at")
+  version Int @default(1)
+  @@map("wf_payslips")
+}
+
+model WfContract {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  title String @db.VarChar(160)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime? @map("end_date") @db.Date
+  basicSalary Decimal @map("basic_salary") @db.Decimal(14, 2)
+  status String @default("Active") @db.VarChar(10)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_contracts")
+}
+
+model WfLoan {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  type String @db.VarChar(60)
+  amount Decimal @db.Decimal(14, 2)
+  installments Int
+  installmentAmount Decimal @map("installment_amount") @db.Decimal(14, 2)
+  installmentsPaid Int @default(0) @map("installments_paid")
+  reason String @db.VarChar(1000)
+  repaymentMethod String @map("repayment_method") @db.VarChar(17)
+  status String @default("Requested") @db.VarChar(9)
+  currentPeriodDue Decimal @map("current_period_due") @db.Decimal(14, 2)
+  currentPeriodPaid Decimal @default(0) @map("current_period_paid") @db.Decimal(14, 2)
+  periodStartDate DateTime? @map("period_start_date")
+  missedPeriods Int @default(0) @map("missed_periods")
+  totalPaid Decimal @default(0) @map("total_paid") @db.Decimal(14, 2)
+  requestedByUserId String @map("requested_by_user_id")
+  requestedAt DateTime @default(now()) @map("requested_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  version Int @default(1)
+  @@map("wf_loans")
+}
+
+model WfLoanPayment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  loanId String @map("loan_id")
+  amount Decimal @db.Decimal(14, 2)
+  paidOn DateTime @map("paid_on") @db.Date
+  payslipId String? @map("payslip_id")
+  recordedByUserId String @map("recorded_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_loan_payments")
+}
+
+model WfLoanLetter {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  loanId String @map("loan_id")
+  level Int
+  amountOwed Decimal @map("amount_owed") @db.Decimal(14, 2)
+  issuedAt DateTime @default(now()) @map("issued_at")
+  sent Boolean @default(false)
+  sentAt DateTime? @map("sent_at")
+  sentByUserId String? @map("sent_by_user_id")
+  @@map("wf_loan_letters")
+}
+
+model WfLoanTier {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  minMonthlySalary Decimal @map("min_monthly_salary") @db.Decimal(14, 2)
+  maxMonthlySalary Decimal? @map("max_monthly_salary") @db.Decimal(14, 2)
+  maxLoanAmount Decimal @map("max_loan_amount") @db.Decimal(14, 2)
+  @@map("wf_loan_tiers")
+}
+
+model WfReimbursement {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  type String @db.VarChar(20)
+  title String @db.VarChar(200)
+  amount Decimal @db.Decimal(14, 2)
+  status String @default("Requested") @db.VarChar(9)
+  requestedByUserId String @map("requested_by_user_id")
+  requestedAt DateTime @default(now()) @map("requested_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  paidAt DateTime? @map("paid_at")
+  version Int @default(1)
+  @@map("wf_reimbursements")
+}
