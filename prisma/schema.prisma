@@ -4567,3 +4567,173 @@ model EmrLabItemPhase {
   @@unique([organizationId, itemId, position], map: "emr_lab_item_phases_item_position_key")
   @@map("emr_lab_item_phases")
 }
+
+// Hospital stores (migration 20261107090000_emr_stores; see stores.service.js).
+model EmrStoreLocation {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(12)
+  name String @db.VarChar(80)
+  type String @db.VarChar(10)
+  status String @default("ACTIVE") @db.VarChar(8)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  batches EmrStoreBatch[]
+
+  @@unique([organizationId, id], map: "emr_store_locations_org_id_key")
+  @@unique([organizationId, code])
+  @@map("emr_store_locations")
+}
+
+model EmrStoreItem {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  sku String @db.VarChar(30)
+  name String @db.VarChar(120)
+  category String @db.VarChar(20)
+  unit String @db.VarChar(20)
+  minLevel Int? @map("min_level")
+  reorderLevel Int @default(0) @map("reorder_level")
+  reorderQty Int? @map("reorder_qty")
+  active Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  batches EmrStoreBatch[]
+
+  @@unique([organizationId, id], map: "emr_store_items_org_id_key")
+  @@unique([organizationId, sku])
+  @@map("emr_store_items")
+}
+
+model EmrStoreBatch {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  itemId String @map("item_id")
+  locationId String @map("location_id")
+  batchNumber String? @map("batch_number") @db.VarChar(60)
+  expiryDate DateTime? @map("expiry_date") @db.Date
+  qtyReceived Int @map("qty_received")
+  qtyRemaining Int @map("qty_remaining")
+  unitCostMinor BigInt @map("unit_cost_minor")
+  status String @default("ACTIVE") @db.VarChar(11)
+  quarantineReason String? @map("quarantine_reason") @db.VarChar(300)
+  quarantinedByUserId String? @map("quarantined_by_user_id")
+  quarantinedAt DateTime? @map("quarantined_at")
+  source String @db.VarChar(10)
+  reference String? @db.VarChar(80)
+  receivedAt DateTime @default(now()) @map("received_at")
+  item EmrStoreItem @relation(fields: [organizationId, itemId], references: [organizationId, id], onDelete: Restrict)
+  location EmrStoreLocation @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "emr_store_batches_org_id_key")
+  @@index([organizationId, itemId, locationId], map: "emr_store_batches_item_idx")
+  @@map("emr_store_batches")
+}
+
+model EmrStoreRequisition {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(20)
+  requestingLocationId String @map("requesting_location_id")
+  fulfillingLocationId String? @map("fulfilling_location_id")
+  neededBy DateTime? @map("needed_by") @db.Date
+  justification String? @db.VarChar(500)
+  status String @default("DRAFT") @db.VarChar(20)
+  requestedByUserId String @map("requested_by_user_id")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  rejectionReason String? @map("rejection_reason") @db.VarChar(500)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  lines EmrStoreRequisitionLine[]
+
+  @@unique([organizationId, id], map: "emr_store_requisitions_org_id_key")
+  @@unique([organizationId, number])
+  @@map("emr_store_requisitions")
+}
+
+model EmrStoreRequisitionLine {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  requisitionId String @map("requisition_id")
+  itemId String @map("item_id")
+  qtyRequested Int @map("qty_requested")
+  qtyIssued Int @default(0) @map("qty_issued")
+  requisition EmrStoreRequisition @relation(fields: [organizationId, requisitionId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, requisitionId, itemId], map: "emr_store_requisition_lines_item_key")
+  @@map("emr_store_requisition_lines")
+}
+
+model EmrStoreTransfer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  itemId String @map("item_id")
+  qty Int
+  valueMinor BigInt @map("value_minor")
+  fromLocationId String @map("from_location_id")
+  toLocationId String @map("to_location_id")
+  reference String? @db.VarChar(80)
+  requisitionId String? @map("requisition_id")
+  userId String @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("emr_store_transfers")
+}
+
+model EmrStoreCount {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(20)
+  locationId String @map("location_id")
+  status String @default("DRAFT") @db.VarChar(6)
+  note String? @db.VarChar(500)
+  createdByUserId String @map("created_by_user_id")
+  postedByUserId String? @map("posted_by_user_id")
+  postedAt DateTime? @map("posted_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  lines EmrStoreCountLine[]
+
+  @@unique([organizationId, id], map: "emr_store_counts_org_id_key")
+  @@unique([organizationId, number])
+  @@map("emr_store_counts")
+}
+
+model EmrStoreCountLine {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  countId String @map("count_id")
+  itemId String @map("item_id")
+  systemQty Int @map("system_qty")
+  countedQty Int? @map("counted_qty")
+  count EmrStoreCount @relation(fields: [organizationId, countId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, countId, itemId], map: "emr_store_count_lines_item_key")
+  @@map("emr_store_count_lines")
+}
+
+model EmrStoreMovement {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  itemId String @map("item_id")
+  batchId String @map("batch_id")
+  locationId String @map("location_id")
+  kind String @db.VarChar(12)
+  qtyDelta Int @map("qty_delta")
+  unitCostMinor BigInt @map("unit_cost_minor")
+  reference String? @db.VarChar(80)
+  note String? @db.VarChar(500)
+  department String? @db.VarChar(80)
+  purpose String? @db.VarChar(200)
+  requisitionId String? @map("requisition_id")
+  transferId String? @map("transfer_id")
+  countId String? @map("count_id")
+  userId String @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, itemId, createdAt], map: "emr_store_movements_item_idx")
+  @@map("emr_store_movements")
+}
