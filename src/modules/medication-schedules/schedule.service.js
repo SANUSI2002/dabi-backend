@@ -195,8 +195,8 @@ async function lockSchedule(tx, userId, id) {
   return tx.medicationSchedule.findUnique({ where: { id } });
 }
 
-export async function updateSchedule(userId, id, input, now = new Date()) {
-  const schedule = await prisma.$transaction(async (tx) => {
+// Existing domain operation, reusable in a caller's atomic confirmation/receipt transaction.
+export async function updateScheduleInTransaction(tx, userId, id, input, now = new Date()) {
     const current = await lockSchedule(tx, userId, id);
     if (!LIVE.includes(current.status)) fail(409, 'NOT_LIVE', 'This medicine has been stopped. Add it again to restart reminders.');
     const data = {};
@@ -223,7 +223,9 @@ export async function updateSchedule(userId, id, input, now = new Date()) {
       : `You changed ${updated.name}${updated.asNeeded ? '' : ` to ${updated.times.map(T.clockLabel).join(', ')}`}`);
     await materializeSchedule(tx, updated, now);
     return updated;
-  });
+}
+export async function updateSchedule(userId, id, input, now = new Date()) {
+  const schedule = await prisma.$transaction((tx) => updateScheduleInTransaction(tx, userId, id, input, now));
   return scheduleView(await prisma.medicationSchedule.findUnique({ where: { id: schedule.id } }));
 }
 

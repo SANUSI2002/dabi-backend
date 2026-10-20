@@ -13,6 +13,9 @@ export const AUDIT_CATEGORIES = ['SIGN_IN', 'RECORD_ACCESS', 'RECORD_CHANGE', 'P
 
 // category + wording per side. {actor} {subject} {related} are names; {other} is whoever is not the reader.
 const ACTIONS = {
+  AI_ACTION_PROPOSED: ['ACTIVITY', { actor: 'You prepared a reminder setting change for confirmation' }],
+  AI_ACTION_APPLIED: ['ACCOUNT', { actor: 'You confirmed a reminder change and received its completion receipt' }],
+  AI_ACTION_CANCELLED: ['ACTIVITY', { actor: 'You cancelled an unconfirmed reminder change' }],
   AI_SOURCE_REQUESTED: ['RECORD_ACCESS', { actor: 'You asked Sabi AI to extract your screened document' }],
   AI_SOURCE_EXTRACTED: ['ACTIVITY', { actor: 'Sabi AI prepared your document extraction for review' }],
   AI_SOURCE_VIEWED: ['RECORD_ACCESS', { actor: 'You opened a Sabi AI document extraction' }],

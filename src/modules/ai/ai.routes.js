@@ -8,6 +8,7 @@ import { generationAvailable } from './ai.policy.js';
 import * as service from './ai.service.js';
 import * as memory from './ai.memory.js';
 import * as sources from './ai.sources.js';
+import * as actions from './ai.actions.js';
 const routes = Router();
 routes.use(protect, (req, res, next) => { req.aiRequestId = randomUUID(); res.set('Cache-Control', 'no-store'); next(); });
 const handle = (fn) => async (req, res) => {
@@ -21,7 +22,24 @@ const parse = (schema, value) => { const result = schema.safeParse(value); if (!
 const id = z.string().uuid();
 const send = (req, res, data, status = 200) => res.status(status).json({ status: 'success', requestId: req.aiRequestId, data });
 const limiter = createLimiter({ kind: 'ai-messages', max: 30, keyGenerator: (req) => `ai:${req.user.id}` });
-routes.get('/config', handle(async (req, res) => send(req, res, { enabled: await generationAvailable(), consentVersion: AI_CONSENT_VERSION, documentConsentVersion: AI_DOCUMENT_CONSENT_VERSION, documents: aiDocumentsAvailable(), modes: ['GENERAL'], personalRecords: false, tools: false, billing: false })));
+routes.get('/config', handle(async (req, res) => {
+  const enabled = await generationAvailable();
+  send(req, res, { enabled, consentVersion: AI_CONSENT_VERSION, documentConsentVersion: AI_DOCUMENT_CONSENT_VERSION, documents: enabled && aiDocumentsAvailable(), actions: ['REMINDER_TOGGLE'], modes: ['GENERAL'], personalRecords: false, tools: false, billing: false });
+}));
+routes.get('/action-targets/reminders', handle(async (req, res) => send(req, res, { items: await actions.reminderActionTargets(req.user.id) })));
+routes.get('/sessions/:id/actions', handle(async (req, res) => send(req, res, { items: await actions.listAiActions(req.user.id, parse(id, req.params.id)) })));
+routes.post('/sessions/:id/actions/reminders', limiter, handle(async (req, res) => {
+  const input = parse(z.object({ clientRequestId: id, scheduleId: id, expectedVersion: z.number().int().min(1), enableReminders: z.boolean() }).strict(), req.body);
+  send(req, res, await actions.proposeReminderAction(req.user.id, parse(id, req.params.id), input), 201);
+}));
+routes.post('/actions/:id/confirm', limiter, handle(async (req, res) => {
+  parse(z.object({ confirm: z.literal(true) }).strict(), req.body);
+  send(req, res, await actions.confirmAiAction(req.user.id, parse(id, req.params.id)));
+}));
+routes.post('/actions/:id/cancel', limiter, handle(async (req, res) => {
+  parse(z.object({}).strict(), req.body);
+  send(req, res, await actions.cancelAiAction(req.user.id, parse(id, req.params.id)));
+}));
 routes.get('/source-documents', handle(async (req, res) => send(req, res, { items: await sources.listAiSourceDocuments(req.user.id) })));
 routes.get('/sources', handle(async (req, res) => send(req, res, { items: await sources.listAiSources(req.user.id) })));
 routes.post('/sources', limiter, handle(async (req, res) => {

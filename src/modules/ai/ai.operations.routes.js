@@ -16,6 +16,7 @@ aiOperationsRoutes.get('/overview', allow('platform.ops.read', 'platform.setting
     prisma.aiRun.count({ where: { feedback: 'UNSAFE' } }),
     prisma.aiRun.findFirst({ where: { status: 'QUEUED' }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } }),
   ]);
+  if (!policy) throw ccError('AI_CONTROLS_UNAVAILABLE', 503, 'AI operational controls are unavailable. Generation remains disabled.');
   const config = aiConfig();
   return { generatedAt: new Date(), policy, providerConfigured: aiAvailable(), provider: config.provider, model: config.model || null,
     generationEnabled: aiAvailable() && policy?.generationPaused === false, counts: Object.fromEntries(counts.map((row) => [row.status, row._count._all])),

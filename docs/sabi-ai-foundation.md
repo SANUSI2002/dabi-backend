@@ -38,6 +38,11 @@ Responses carry `requestId`; sensitive responses use `Cache-Control: no-store`.
 | GET / DELETE | `/sources/:id` | Inspect or erase a personal derivative, not the original |
 | POST | `/sources/:id/review` | Review every page and confirm patient match |
 | POST | `/sources/:id/preview` | Authorise a short-lived original page preview |
+| GET | `/action-targets/reminders` | Own existing active scheduled-medicine reminder settings |
+| GET | `/sessions/:id/actions` | Own previews and immutable completion receipts |
+| POST | `/sessions/:id/actions/reminders` | Prepare an exact notification-only change; no mutation yet |
+| POST | `/actions/:id/confirm` | Explicitly apply the unchanged preview through the reminder domain |
+| POST | `/actions/:id/cancel` | Cancel an own pending preview without changing reminders |
 
 Session creation body: `{ "consentGiven": true, "consentVersion": "sabi-ai-conversation-v1", "mode": "GENERAL" }`.
 Message body: `{ "clientMessageId": "<new UUID>", "message": "<text>", "sourceIds": ["<optional reviewed own source UUID>"] }`.
@@ -75,7 +80,7 @@ selected model still require review before activating real conversations.
 
 ## Deployment and verification
 
-Apply the four additive `2026102410*` AI migrations and regenerate Prisma. The existing medical-document
+Apply the five additive `2026102410*` AI migrations and regenerate Prisma. The existing medical-document
 table gains a composite owner key; existing auth and clinical facts are unchanged. Starting the API starts
 a lightweight queue poller; it makes no provider
 calls unless AI is enabled and credentials/model/processing approval are configured. Reads of existing
@@ -94,7 +99,7 @@ official-project Vertex URLs. No actual Gemini request or live database mutation
 - Licensed global reference registry, source rights/publication review, embeddings and book viewer.
 - Delegated/page-aware patient and EMR encounter modes; personal owner-selected documents exist now.
 - JEV deferred by the user. Reviewed urgency/escalation rules remain separate; no staffed response is implied.
-- Domain tool proposals/confirmations/receipts, EMR drafts/signatures and event integrations.
+- Further domain tool adapters, EMR drafts/signatures and event integrations. The reminder-only adapter below exists now.
 - Time-based conversation retention, versioned clinical evaluations and release review. Owner deletion,
   revoked-document derivative purge, metadata-only Command Centre traces and generation pause exist now.
 - WhatsApp, Care Circle, reminders, licensed reference collections, speech/languages and avatar.
@@ -135,8 +140,20 @@ audited traces and a version-checked pause switch. Policy writes/trace reads req
 permissions and recent MFA. Administrators do not receive raw private conversations through these routes.
 The shared user interface uses existing Sabi auth in standalone, patient and professional workspaces.
 
-20 October verification: 902 backend unit/route tests (92 files), 32 embedded PostgreSQL AI tests,
+20 October foundation verification before the reminder adapter: 902 backend unit/route tests (92 files), 32 embedded PostgreSQL AI tests,
 17 focused frontend tests, TypeScript, backend lint, 716/716 API route coverage and OpenAPI validation
 passed. API validation retains one unrelated existing social-provider 4xx warning. npm audit reports
 zero known vulnerabilities after compatible Prisma 7.10.1 updates; no RC/major upgrade was installed.
 All model/file test inputs are synthetic; no live model request or clinical-data transfer has occurred.
+
+## First confirmed domain action: reminder notifications
+
+The user explicitly opens Reminder controls, selects an existing medicine notification setting,
+reviews an exact ten-minute preview and confirms it. No LLM output executes a tool. The proposal
+binds owner, conversation, schedule version and desired setting; injected dose or patient fields fail.
+Confirmation rechecks all of these under database locks, invokes the existing medication-schedule
+domain service and stores a receipt in the same transaction. Retries return the same receipt. A database
+trigger forbids receipt updates/deletion. This adapter changes notifications only, not doses,
+prescriptions or evidence of taking medicine. Existing schedule audit and materialisation still run.
+Conversation export includes receipts; conversation deletion cancels pending previews but does not
+undo a confirmed domain change or erase its receipt. Booking and other clinical actions remain pending.

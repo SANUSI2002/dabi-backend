@@ -347,6 +347,101 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
       x-generated: true
+  /api/v1/ai/action-targets/reminders:
+    get:
+      operationId: aiReminderTargets
+      tags: [Ai]
+      summary: List own active scheduled medicines eligible for reminder controls
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 'Own reminder names, setting, timezone and concurrency version only' }
+        '401': { description: Authentication required }
+        '403': { description: Verified active account required }
+  /api/v1/ai/sessions/{id}/actions:
+    get:
+      operationId: aiSessionActions
+      tags: [Ai]
+      summary: List own conversation action previews and immutable completion receipts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Latest fifty proposals and their completion receipts }
+        '401': { description: Authentication required }
+        '404': { description: Own active conversation not found }
+  /api/v1/ai/sessions/{id}/actions/reminders:
+    post:
+      operationId: aiProposeReminderAction
+      tags: [Ai]
+      summary: Prepare an expiring reminder-only change without applying it
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [clientRequestId, scheduleId, expectedVersion, enableReminders]
+              properties:
+                clientRequestId: { type: string, format: uuid }
+                scheduleId: { type: string, format: uuid }
+                expectedVersion: { type: integer, minimum: 1 }
+                enableReminders: { type: boolean }
+      responses:
+        '201': { description: Ten-minute confirmation preview; no treatment or notification setting changed }
+        '401': { description: Authentication required }
+        '404': { description: Own active conversation or reminder not found }
+        '409': { description: Version changed or idempotency conflict }
+        '422': { description: Invalid or unknown fields }
+        '429': { description: Too many pending previews or requests }
+  /api/v1/ai/actions/{id}/confirm:
+    post:
+      operationId: aiConfirmAction
+      tags: [Ai]
+      summary: Confirm the exact reminder preview and return an immutable completion receipt
+      description: 'Rechecks ownership, current schedule version and expiry. Uses the existing reminder domain service transactionally. Repeating confirmation returns the same receipt without applying twice. Doses and treatment instructions cannot be changed here.'
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirm]
+              properties:
+                confirm: { type: boolean, const: true }
+      responses:
+        '200': { description: Applied change receipt with resulting schedule version }
+        '401': { description: Authentication required }
+        '404': { description: Own active proposal not found }
+        '409': { description: Cancelled or expired preview or changed schedule }
+        '422': { description: Explicit confirmation required }
+        '429': { description: Request limit reached }
+  /api/v1/ai/actions/{id}/cancel:
+    post:
+      operationId: aiCancelAction
+      tags: [Ai]
+      summary: Cancel an own pending action preview without applying it
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false }
+      responses:
+        '200': { description: Preview cancelled; domain settings unchanged }
+        '401': { description: Authentication required }
+        '404': { description: Own pending preview not found }
+        '422': { description: Unknown fields }
+        '429': { description: Request limit reached }
   /api/v1/ai/source-documents:
     get:
       tags: [Ai]

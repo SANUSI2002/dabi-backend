@@ -104,11 +104,12 @@ export async function deleteAiSession(userId, id) {
     await tx.aiRun.updateMany({ where: { sessionId: id, status: { in: active } }, data: { status: 'CANCELLED', errorCode: null, finishedAt: new Date() } });
     await tx.aiMessage.deleteMany({ where: { sessionId: id } });
     await tx.aiPersonalMemory.updateMany({ where: { sourceSessionId: id, deletedAt: null }, data: { content: '', deletedAt: new Date(), revision: { increment: 1 } } });
+    await tx.aiActionProposal.updateMany({ where: { sessionId: id, status: 'PENDING' }, data: { status: 'CANCELLED' } });
     await tx.aiSession.update({ where: { id }, data: { title: 'Deleted conversation', archivedAt: new Date() } });
     await audit(tx, userId, 'AI_CONVERSATION_DELETED', id); return runs.map((run) => run.id);
   });
   for (const runId of runIds) controllers.get(runId)?.abort();
-  return { deleted: true, retained: 'Minimal audit and usage metadata are retained. Backup copies follow the backup retention policy. No signed clinical records were changed.' };
+  return { deleted: true, retained: 'Completed action receipts and minimal audit and usage metadata are retained. Previously confirmed reminder changes are not undone. Backup copies follow the backup retention policy. No signed clinical records were changed.' };
 }
 export async function exportAiSession(userId, id) {
   return prisma.$transaction(async (tx) => {
@@ -119,7 +120,9 @@ export async function exportAiSession(userId, id) {
     if (messages.length > 5000) throw aiError(422, 'AI_EXPORT_TOO_LARGE', 'This conversation needs a larger data export. Contact Sabi support.');
     await audit(tx, userId, 'AI_CONVERSATION_EXPORTED', id);
     const runs = await tx.aiRun.findMany({ where: { sessionId: id }, select: { id: true, sourceContext: true } });
-    return { schemaVersion: 1, exportedAt: new Date(), conversation: { id: session.id, title: session.title, mode: session.mode, createdAt: session.createdAt }, messages: await visibleAiMessages(userId, messages, runs, tx) };
+    const actionReceipts = await tx.aiActionReceipt.findMany({ where: { proposal: { sessionId: id, ownerUserId: userId } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 5001, select: { id: true, result: true, createdAt: true } });
+    if (actionReceipts.length > 5000) throw aiError(422, 'AI_EXPORT_TOO_LARGE', 'This conversation needs a larger data export. Contact Sabi support.');
+    return { schemaVersion: 1, exportedAt: new Date(), conversation: { id: session.id, title: session.title, mode: session.mode, createdAt: session.createdAt }, messages: await visibleAiMessages(userId, messages, runs, tx), actionReceipts };
   });
 }
 export async function getAiUsage(userId) {

@@ -78,6 +78,7 @@ model User {
   aiSessions AiSession[]
   aiMemories AiPersonalMemory[]
   aiSources AiDocumentSource[]
+  aiActionProposals AiActionProposal[]
 
   @@map("users")
 }
@@ -97,6 +98,7 @@ model AiSession {
   runs AiRun[]
   messages AiMessage[]
   memories AiPersonalMemory[]
+  actionProposals AiActionProposal[]
   @@unique([id, ownerUserId])
   @@index([ownerUserId, updatedAt])
   @@map("ai_sessions")
@@ -166,6 +168,36 @@ model AiRuntimePolicy {
   updatedByUserId String? @map("updated_by_user_id")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   @@map("ai_runtime_policy")
+}
+
+model AiActionProposal {
+  id String @id @default(uuid())
+  ownerUserId String @map("owner_user_id")
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  sessionId String @map("session_id")
+  session AiSession @relation(fields: [sessionId, ownerUserId], references: [id, ownerUserId], onDelete: Restrict)
+  scheduleId String @map("schedule_id")
+  schedule MedicationSchedule @relation(fields: [scheduleId, ownerUserId], references: [id, userId], onDelete: Restrict)
+  scheduleVersion Int @map("schedule_version")
+  enableReminders Boolean @map("enable_reminders")
+  clientRequestId String @map("client_request_id") @db.VarChar(64)
+  status String @default("PENDING") @db.VarChar(24)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  confirmedAt DateTime? @map("confirmed_at")
+  receipt AiActionReceipt?
+  @@unique([ownerUserId, clientRequestId])
+  @@index([sessionId, createdAt])
+  @@map("ai_action_proposals")
+}
+
+model AiActionReceipt {
+  id String @id @default(uuid())
+  proposalId String @unique @map("proposal_id")
+  proposal AiActionProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  result Json
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("ai_action_receipts")
 }
 
 // A personal, revocable derivative of an existing screened document, not clinical truth.
@@ -1488,7 +1520,9 @@ model MedicationSchedule {
   updatedAt          DateTime         @default(now()) @updatedAt @map("updated_at")
   user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   doses              MedicationDose[]
+  aiActionProposals  AiActionProposal[]
 
+  @@unique([id, userId])
   @@index([userId, status])
   @@index([status, materializedUntil])
   @@map("medication_schedules")
