@@ -137,7 +137,7 @@ export async function createEmployee(context, input) {
     try {
       row = await tx.wfEmployee.create({ data: { ...org(context), ...toData(input), companyId: hq, status: 'ACTIVE' } });
     } catch (error) {
-      throw uniqueViolation(error, { user_id: 'EMPLOYEE_USER_LINKED' }) ?? error;
+      throw uniqueViolation(error, { user_id: 'EMPLOYEE_USER_LINKED', pkey: 'HR_CODE_IN_USE' }) ?? error;
     }
     await recordAudit(tx, context, { action: 'employee.created', resourceType: 'employee', resourceId: row.id });
     return presentEmployee(context)(row);
@@ -229,7 +229,7 @@ export async function createDepartment(context, input) {
     let row;
     try {
       row = await tx.wfDepartment.create({
-        data: { ...org(context), name: input.name, code: input.code, description: input.description ?? null, companyIds: input.companyIds ?? [], parentDepartmentId: input.parentDepartmentId ?? null, hodEmployeeId: input.hodId ?? null, deputyHodEmployeeId: input.deputyHodId ?? null },
+        data: { ...org(context), ...(input.id ? { id: input.id } : {}), name: input.name, code: input.code, description: input.description ?? null, companyIds: input.companyIds ?? [], parentDepartmentId: input.parentDepartmentId ?? null, hodEmployeeId: input.hodId ?? null, deputyHodEmployeeId: input.deputyHodId ?? null },
       });
     } catch (error) {
       throw uniqueViolation(error, { code: 'HR_CODE_IN_USE' }) ?? error;
@@ -303,10 +303,11 @@ export async function removeMember(context, departmentId, { employeeId }) {
 }
 
 // ---- documents and records ------------------------------------------------------------------------
-export async function requestDocuments(context, { employeeIds, title, category, notifyBeforeDays }) {
+export async function requestDocuments(context, { ids, employeeIds, title, category, notifyBeforeDays }) {
+  if (ids && ids.length !== employeeIds.length) throw new EmrError('VALIDATION_FAILED', { message: 'Give one id per employee.' });
   return withTenant(context, async (tx) => {
     for (const id of employeeIds) await checkEmployee(tx, context, id);
-    await tx.wfEmployeeDocument.createMany({ data: employeeIds.map((employeeId) => ({ ...org(context), employeeId, title, category, notifyBeforeDays, requestedByUserId: context.userId })) });
+    await tx.wfEmployeeDocument.createMany({ data: employeeIds.map((employeeId, i) => ({ ...org(context), ...(ids ? { id: ids[i] } : {}), employeeId, title, category, notifyBeforeDays, requestedByUserId: context.userId })) });
     await recordAudit(tx, context, { action: 'employee_document.requested', resourceType: 'employee_document', changedFields: [title] });
     return { requested: employeeIds.length };
   });

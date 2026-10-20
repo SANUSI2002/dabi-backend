@@ -19,6 +19,8 @@ const opt = (schema) => schema.nullable().optional();
 const date = z.iso.date();
 const body = (shape, params = org) => z.object({ params: z.object(params).strict(), query: noQuery, body: z.object(shape).strict() });
 const withId = (key) => ({ ...org, [key]: z.uuid() });
+// Creates may carry the id the screen already uses (a UUID it generated), so later steps can refer to it.
+const clientId = { id: z.uuid().optional() };
 
 const profile = {
   phone: opt(text(30)), email: opt(z.email().max(160)), license: opt(text(60)), dob: opt(date), gender: opt(z.enum(['Male', 'Female', 'Other'])),
@@ -30,16 +32,16 @@ const profile = {
 };
 const v = {
   overview: z.object({ params: z.object(org).strict(), query: noQuery }),
-  createEmployee: body({ name: text(160), role: text(80), cadre: z.string().trim().max(80).default(''), hireDate: date, ...profile }),
+  createEmployee: body({ ...clientId, name: text(160), role: text(80), cadre: z.string().trim().max(80).default(''), hireDate: date, ...profile }),
   updateEmployee: z.object({
     params: z.object(withId('employeeId')).strict(), query: noQuery,
     body: z.object({ name: text(160).optional(), role: text(80).optional(), cadre: z.string().trim().max(80).optional(), status: z.enum(['ACTIVE', 'INACTIVE']).optional(), ...profile }).strict()
       .refine((b) => Object.values(b).some((x) => x !== undefined), 'Send at least one field to change'),
   }),
   empty: body({}),
-  company: body({ name: text(120), code: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_-]{0,29}$/), address: opt(text(200)), lga: opt(text(80)), state: opt(text(80)), country: text(80).default('Nigeria') }),
+  company: body({ ...clientId, name: text(120), code: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_-]{0,29}$/), address: opt(text(200)), lga: opt(text(80)), state: opt(text(80)), country: text(80).default('Nigeria') }),
   department: body({
-    name: text(120), code: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_-]{0,19}$/), description: text(500).optional(), companyIds: z.array(z.uuid()).max(20).default([]),
+    ...clientId, name: text(120), code: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_-]{0,19}$/), description: text(500).optional(), companyIds: z.array(z.uuid()).max(20).default([]),
     hodId: z.uuid().optional(), deputyHodId: z.uuid().optional(), parentDepartmentId: z.uuid().optional(),
   }),
   updateDepartment: z.object({
@@ -49,19 +51,19 @@ const v = {
   }),
   leader: body({ role: z.enum(['hod', 'deputy-hod']), employeeId: z.uuid().nullable(), effectiveDate: date, reason: text(500).optional() }, withId('departmentId')),
   member: body({ employeeId: z.uuid() }, withId('departmentId')),
-  jobPosition: body({ name: text(120), departmentId: z.uuid() }),
-  jobRole: body({ name: text(120), jobPositionId: z.uuid() }),
-  named: body({ name: text(80) }),
-  tag: body({ name: text(60), color: z.string().trim().max(20).regex(/^[#a-zA-Z0-9-]+$/) }),
-  actionType: body({ name: text(80), blockOption: z.boolean().default(false) }),
-  requestDocs: body({ employeeIds: z.array(z.uuid()).min(1).max(200), title: text(160), category: text(80), notifyBeforeDays: z.number().int().min(0).max(365).default(30) }),
+  jobPosition: body({ ...clientId, name: text(120), departmentId: z.uuid() }),
+  jobRole: body({ ...clientId, name: text(120), jobPositionId: z.uuid() }),
+  named: body({ ...clientId, name: text(80) }),
+  tag: body({ ...clientId, name: text(60), color: z.string().trim().max(20).regex(/^[#a-zA-Z0-9-]+$/) }),
+  actionType: body({ ...clientId, name: text(80), blockOption: z.boolean().default(false) }),
+  requestDocs: body({ ids: z.array(z.uuid()).max(200).optional(), employeeIds: z.array(z.uuid()).min(1).max(200), title: text(160), category: text(80), notifyBeforeDays: z.number().int().min(0).max(365).default(30) }),
   uploadDoc: body({ issueDate: date.optional(), expiryDate: date.optional() }, withId('documentId')),
   reviewDoc: body({ status: z.enum(['Approved', 'Rejected']), rejectReason: text(500).optional() }, withId('documentId')).refine((r) => r.body.status !== 'Rejected' || !!r.body.rejectReason, { path: ['body', 'rejectReason'], message: 'Give the reason for rejecting.' }),
   disciplinary: body({ employeeIds: z.array(z.uuid()).min(1).max(100), actionTypeId: z.uuid(), description: text(2000), unit: z.enum(['Days', 'Hours']), amount: z.number().int().min(0).max(3650), startDate: date, attachment: text(200).optional() }),
   note: body({ note: text(4000) }, withId('employeeId')),
   bonus: body({ delta: z.number().int().min(-10000).max(10000).refine((n) => n !== 0, 'Cannot be zero'), reason: text(500) }, withId('employeeId')),
   qualification: body({ title: text(160), issuingBody: text(160), dateObtained: date, certificateRef: text(80).optional() }, withId('employeeId')),
-  policy: body({ category: z.enum(['Conduct', 'Safety & Clinical', 'Data & Security', 'IT & Assets', 'Leave & Attendance', 'Other']), title: text(160), purpose: text(500), body: text(20000) }),
+  policy: body({ ...clientId, category: z.enum(['Conduct', 'Safety & Clinical', 'Data & Security', 'IT & Assets', 'Leave & Attendance', 'Other']), title: text(160), purpose: text(500), body: text(20000) }),
 };
 
 export const peopleRoutes = express.Router({ mergeParams: true });

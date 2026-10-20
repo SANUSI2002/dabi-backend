@@ -2,6 +2,7 @@
 // starter structure, employees (sensitive fields only for HR), reporting lines without cycles,
 // departments with logged leadership changes, documents, append-only records, import of members,
 // permissions and isolation.
+import { randomUUID as randomId } from 'node:crypto';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../../src/app.js';
@@ -50,6 +51,10 @@ describe('workforce people', () => {
     const staff = (await hire({ reportingManagerId: boss.id })).body.data;
     expect((await as(hr).patch(`/people/employees/${boss.id}`, { reportingManagerId: staff.id }, ifMatch(boss.version))).body.error.message).toMatch(/report to themselves/);
     expect((await hire({ accountNumber: '123' })).status).toBe(400);
+    // The screen may name the new record itself; a repeated id is a conflict, never a second record.
+    const own = randomId();
+    expect((await hire({ id: own, name: 'Named by the screen' })).body.data.id).toBe(own);
+    expect((await hire({ id: own, name: 'Again' })).status).toBe(409);
     const seenByAdmin = (await people(admin)).employees.find((e) => e.id === boss.id);
     expect(seenByAdmin.accountNumber).toBeUndefined();
     expect((await as(admin).post('/people/employees', { name: 'X', role: 'Porter', hireDate: '2024-01-01', bankName: 'Access' })).status).toBe(403);
