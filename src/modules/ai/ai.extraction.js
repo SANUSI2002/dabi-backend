@@ -21,15 +21,15 @@ const schema = { type: 'OBJECT', required: ['patientLabels', 'pages'], propertie
   } } },
 } };
 
-export async function extractAiDocument(bytes, { contentType, pageCount, signal, authorize } = {}) {
+export async function extractAiDocument(bytes, { contentType, pageCount, signal, authorize, tokenBudget, maxOutputTokens = 8192 } = {}) {
   const result = await googleContent({ systemInstruction: { parts: [{ text: prompt }] }, contents: [{ role: 'user', parts: [
     { inlineData: { mimeType: contentType, data: bytes.toString('base64') } },
     { text: `Transcribe every page. This file has ${pageCount} physical page(s).` },
-  ] }], generationConfig: { temperature: 0, maxOutputTokens: 8192, responseMimeType: 'application/json', responseSchema: schema } }, { signal, authorize, maxCharacters: 90000 });
+  ] }], generationConfig: { temperature: 0, maxOutputTokens, responseMimeType: 'application/json', responseSchema: schema } }, { signal, authorize, maxCharacters: 90000, tokenBudget });
   let value; try { value = JSON.parse(result.text); } catch { /* Safe bounded schema failure below. */ }
   const parsed = extractionSchema.safeParse(value);
   if (!parsed.success || parsed.data.pages.length !== pageCount || parsed.data.pages.some((p, i) => p.pageNumber !== i + 1) || parsed.data.pages.reduce((n, p) => n + p.text.length, 0) > 50000) {
-    throw aiError(422, 'AI_EXTRACTION_INCOMPLETE', 'Sabi could not extract every page reliably. Use a clearer or smaller document.');
+    const error = aiError(422, 'AI_EXTRACTION_INCOMPLETE', 'Sabi could not extract every page reliably. Use a clearer or smaller document.'); error.usage = result.usage; throw error;
   }
   return { ...parsed.data, usage: result.usage };
 }

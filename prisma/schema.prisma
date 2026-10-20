@@ -79,6 +79,10 @@ model User {
   aiMemories AiPersonalMemory[]
   aiSources AiDocumentSource[]
   aiActionProposals AiActionProposal[]
+  aiAllowanceAccount AiAllowanceAccount?
+  aiAllowanceWindows AiAllowanceWindow[]
+  aiAllowanceReservations AiAllowanceReservation[]
+  aiAllowanceLedger AiAllowanceLedger[]
 
   @@map("users")
 }
@@ -168,6 +172,85 @@ model AiRuntimePolicy {
   updatedByUserId String? @map("updated_by_user_id")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   @@map("ai_runtime_policy")
+}
+
+model AiAllowancePolicy {
+  id String @id
+  version Int @default(1)
+  settings Json
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("ai_allowance_policies")
+}
+
+model AiAllowanceAccount {
+  userId String @id @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  version Int @default(1)
+  dailyRequestOverride Int? @map("daily_request_override")
+  tokenAllowanceOverride Int? @map("token_allowance_override")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("ai_allowance_accounts")
+}
+
+model AiAllowanceWindow {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  kind String @db.VarChar(16)
+  startsAt DateTime @map("starts_at")
+  endsAt DateTime @map("ends_at")
+  usedUnits Int @default(0) @map("used_units")
+  reservedUnits Int @default(0) @map("reserved_units")
+  bonusUnits Int @default(0) @map("bonus_units")
+  requestReservations AiAllowanceReservation[] @relation("AllowanceRequestWindow")
+  tokenReservations AiAllowanceReservation[] @relation("AllowanceTokenWindow")
+  ledger AiAllowanceLedger[]
+  @@unique([id, userId])
+  @@unique([userId, kind, startsAt])
+  @@index([userId, kind, endsAt])
+  @@map("ai_allowance_windows")
+}
+
+model AiAllowanceReservation {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  resourceKind String @map("resource_kind") @db.VarChar(16)
+  resourceId String @map("resource_id")
+  requestWindowId String @map("request_window_id")
+  requestWindow AiAllowanceWindow @relation("AllowanceRequestWindow", fields: [requestWindowId, userId], references: [id, userId], onDelete: Restrict)
+  tokenWindowId String @map("token_window_id")
+  tokenWindow AiAllowanceWindow @relation("AllowanceTokenWindow", fields: [tokenWindowId, userId], references: [id, userId], onDelete: Restrict)
+  reservedTokens Int @map("reserved_tokens")
+  maxOutputTokens Int @map("max_output_tokens")
+  state String @default("RESERVED") @db.VarChar(16)
+  inputTokens Int? @map("input_tokens")
+  outputTokens Int? @map("output_tokens")
+  totalTokens Int? @map("total_tokens")
+  createdAt DateTime @default(now()) @map("created_at")
+  dispatchedAt DateTime? @map("dispatched_at")
+  settledAt DateTime? @map("settled_at")
+  @@unique([resourceKind, resourceId])
+  @@index([userId, state, createdAt])
+  @@map("ai_allowance_reservations")
+}
+
+model AiAllowanceLedger {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  windowId String @map("window_id")
+  window AiAllowanceWindow @relation(fields: [windowId, userId], references: [id, userId], onDelete: Restrict)
+  eventKey String @unique @map("event_key") @db.VarChar(180)
+  type String @db.VarChar(24)
+  usedDelta Int @default(0) @map("used_delta")
+  reservedDelta Int @default(0) @map("reserved_delta")
+  bonusDelta Int @default(0) @map("bonus_delta")
+  metadata Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([userId, createdAt])
+  @@map("ai_allowance_ledger")
 }
 
 model AiActionProposal {

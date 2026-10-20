@@ -19,7 +19,7 @@ const session = async () => {
 };
 const queue = (id, extra = {}) => post(owner, `/sessions/${id}/messages`, { clientMessageId: randomUUID(), message: 'Explain what a medical report is.', ...extra });
 const result = { text: 'A medical report records information from a health assessment.', usage: { inputTokens: 20, outputTokens: 15 } };
-beforeAll(async () => { Object.assign(process.env, env); owner = await createUser(); stranger = await createUser(); });
+beforeAll(async () => { Object.assign(process.env, env); const row = await prisma.aiAllowancePolicy.findUnique({ where: { id: 'global' } }); await prisma.aiAllowancePolicy.update({ where: { id: 'global' }, data: { settings: { ...row.settings, personalDailyRequests: 1000, globalDailyRequests: 10000, globalTotalRequests: 100000 } } }); owner = await createUser(); stranger = await createUser(); });
 afterAll(() => { for (const key of Object.keys(env)) { if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]; } });
 
 describe('Sabi AI asynchronous foundation', () => {
@@ -144,7 +144,7 @@ describe('Sabi AI asynchronous foundation', () => {
   });
   it('enforces persisted daily request quotas without charging idempotent retries twice', async () => {
     const user = await createUser(); const created = await post(user, '/sessions', { consentGiven: true, consentVersion: AI_CONSENT_VERSION }); const id = created.body.data.id;
-    const previous = process.env.SABI_AI_USER_DAILY_RUNS; process.env.SABI_AI_USER_DAILY_RUNS = '1';
+    await prisma.aiAllowanceAccount.upsert({ where: { userId: user.id }, create: { userId: user.id, dailyRequestOverride: 1 }, update: { dailyRequestOverride: 1 } });
     try {
       const payload = { clientMessageId: randomUUID(), message: 'One question' };
       const first = await post(user, `/sessions/${id}/messages`, payload); expect(first.status).toBe(202);
@@ -153,7 +153,7 @@ describe('Sabi AI asynchronous foundation', () => {
       const blocked = await post(user, `/sessions/${id}/messages`, { ...payload, clientMessageId: randomUUID() });
       expect(blocked.status).toBe(429); expect(blocked.body.error.code).toBe('AI_USER_QUOTA');
       expect(await prisma.aiRun.count({ where: { sessionId: id } })).toBe(1);
-    } finally { process.env.SABI_AI_USER_DAILY_RUNS = previous; }
+    } finally { await prisma.aiAllowanceAccount.update({ where: { userId: user.id }, data: { dailyRequestOverride: null } }); }
   });
   it('cannot publish or export content after deletion during a provider response', async () => {
     const user = await createUser(); const created = await post(user, '/sessions', { consentGiven: true, consentVersion: AI_CONSENT_VERSION }); const id = created.body.data.id;

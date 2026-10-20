@@ -11,6 +11,17 @@ const result = { text: 'SABI_OK', usage: { inputTokens: 4, outputTokens: 2 } };
 const body = JSON.stringify({ payload, maxCharacters: 256 });
 const signed = (app, raw = body, stamp = timestamp, signature = gatewaySignature(secret, stamp, raw)) => request(app).post('/v1/generate').set('Content-Type', 'application/json').set('x-sabi-timestamp', stamp).set('x-sabi-signature', signature).send(raw);
 describe('keyless Google runtime boundary', () => {
+  it('signs the request token budget and forwards it unchanged to generation', async () => {
+    const raw = JSON.stringify({ payload, maxCharacters: 256, tokenBudget: 1000 });
+    const generate = vi.fn(async () => ({ ...result, usage: { ...result.usage, totalTokens: 6 } }));
+    const app = createAiGateway({ env, generate, now: () => Number(timestamp) });
+    expect((await signed(app, raw)).status).toBe(200);
+    expect(generate).toHaveBeenCalledWith(payload, expect.objectContaining({ tokenBudget: 1000 }));
+    const fetcher = vi.fn(async () => Response.json({ ...result, usage: { ...result.usage, totalTokens: 6 } }));
+    const response = await gatewayContent(payload, { tokenBudget: 1000, env: { SABI_AI_GATEWAY_SECRET: secret, SABI_AI_GATEWAY_URL: 'https://synthetic.run.app' }, fetcher });
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).tokenBudget).toBe(1000);
+    expect(response.usage.totalTokens).toBe(6);
+  });
   it('rejects invalid startup and keeps an uncredentialed API unavailable', () => {
     expect(() => createAiGateway({ env: {} })).toThrow('AI_GATEWAY_CONFIGURATION_INVALID');
     expect(aiAvailable({ SABI_AI_ENABLED: 'true', SABI_AI_GOOGLE_PROCESSING_APPROVED: 'true', SABI_AI_PROVIDER: 'gateway', SABI_AI_AUTH_MODE: 'gateway', SABI_AI_MODEL: 'gemini-synthetic' })).toBe(false);

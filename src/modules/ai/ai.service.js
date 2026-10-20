@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import prisma from '../../config/db.js';
 import { recordAudit } from '../audit/audit.service.js';
-import { AI_CONSENT_VERSION, aiConfig, aiDocumentsAvailable, aiError, aiLimits } from './ai.config.js';
+import { AI_CONSENT_VERSION, aiConfig, aiDocumentsAvailable, aiError } from './ai.config.js';
 import { promptVersion } from './ai.prompt.js';
 import { generateAiResponse } from './ai.provider.js';
 import { listAiMemory, memoryVersion } from './ai.memory.js';
@@ -9,6 +9,7 @@ import { generationAvailable, requireGenerationAvailable } from './ai.policy.js'
 import { dayStart, reserveAiQuota } from './ai.quota.js';
 import { retrieveAiSources, sourceContextAvailable } from './ai.sources.js';
 import { requireAiOriginSession } from './ai.auth.js';
+import { dispatchAllowance, finishAllowance, settleAllowance, getAllowance } from './ai.allowances.js';
 
 const active = ['QUEUED', 'RUNNING'];
 const controllers = new Map();
@@ -74,8 +75,9 @@ export async function queueAiMessage(user, id, input) {
       }
       if (await tx.aiRun.findFirst({ where: { sessionId: id, status: { in: active } } })) throw aiError(409, 'AI_RESPONSE_IN_PROGRESS', 'Wait for or cancel the current response first.');
       const context = sourceIds.length ? await retrieveAiSources(user.id, sourceIds, input.message, tx) : null;
-      await reserveAiQuota(tx, user.id);
-      const run = await tx.aiRun.create({ data: { sessionId: id, clientMessageId: input.clientMessageId, requestHash,
+      const runId = randomUUID();
+      await reserveAiQuota(tx, user.id, 'CHAT', runId);
+      const run = await tx.aiRun.create({ data: { id: runId, sessionId: id, clientMessageId: input.clientMessageId, requestHash,
         authSessionId: user.sessionId || null, model: aiConfig().model, promptVersion,
         ...(context ? { sourceContext: { versions: context.versions, passages: context.passages.map((p) => { const safe = { ...p }; delete safe.text; delete safe.score; return safe; }) } } : {}) } });
       await tx.aiMessage.create({ data: { sessionId: id, runId: run.id, role: 'user', content: input.message } });
@@ -102,6 +104,7 @@ export async function deleteAiSession(userId, id) {
     await owned(userId, id, tx);
     const runs = await tx.aiRun.findMany({ where: { sessionId: id, status: { in: active } }, select: { id: true } });
     await tx.aiRun.updateMany({ where: { sessionId: id, status: { in: active } }, data: { status: 'CANCELLED', errorCode: null, finishedAt: new Date() } });
+    for (const run of runs) await finishAllowance(tx, 'CHAT', run.id);
     await tx.aiMessage.deleteMany({ where: { sessionId: id } });
     await tx.aiPersonalMemory.updateMany({ where: { sourceSessionId: id, deletedAt: null }, data: { content: '', deletedAt: new Date(), revision: { increment: 1 } } });
     await tx.aiActionProposal.updateMany({ where: { sessionId: id, status: 'PENDING' }, data: { status: 'CANCELLED' } });
@@ -127,13 +130,13 @@ export async function exportAiSession(userId, id) {
 }
 export async function getAiUsage(userId) {
   await actor(userId); const since = dayStart();
-  const [today, total, completed, documentToday, documentTotal] = await Promise.all([
-    prisma.aiRun.count({ where: { session: { ownerUserId: userId }, createdAt: { gte: since } } }),
+  const [total, completed, documentToday, documentTotal] = await Promise.all([
     prisma.aiRun.count({ where: { session: { ownerUserId: userId } } }),
     prisma.aiRun.count({ where: { session: { ownerUserId: userId }, status: 'SUCCEEDED' } }),
     prisma.aiDocumentSource.count({ where: { ownerUserId: userId, createdAt: { gte: since } } }), prisma.aiDocumentSource.count({ where: { ownerUserId: userId } }),
   ]);
-  return { today: today + documentToday, total: total + documentTotal, completed, documentToday, documentTotal, dailyAllowance: aiLimits().userDailyRuns, resetsAt: new Date(since.getTime() + 86_400_000), billingEnabled: false };
+  const allowance = await getAllowance(userId);
+  return { today: allowance.requests.used, total: total + documentTotal, completed, documentToday, documentTotal, dailyAllowance: allowance.requests.limit, resetsAt: allowance.requests.resetsAt, billingEnabled: false, allowance };
 }
 export async function rateAiRun(userId, id, feedback) {
   await getAiRun(userId, id);
@@ -155,6 +158,7 @@ export async function cancelAiRun(userId, id) {
   const result = await prisma.$transaction(async (tx) => {
     const changed = await tx.aiRun.updateMany({ where: { id, status: { in: active }, session: { ownerUserId: userId } }, data: { status: 'CANCELLED', errorCode: null, finishedAt: new Date() } });
     if (changed.count) await audit(tx, userId, 'AI_RESPONSE_CANCELLED', id);
+    if (changed.count) await finishAllowance(tx, 'CHAT', id);
     return publicRun(await tx.aiRun.findUnique({ where: { id }, include: { messages: true } }));
   });
   if (result.status === 'CANCELLED') controllers.get(id)?.abort();
@@ -188,7 +192,10 @@ export async function processAiQueue({ generate = generateAiResponse } = {}) {
     const usedMemoryVersion = memoryVersion(memories);
     const context = next.sourceContext?.versions?.length ? await retrieveAiSources(next.session.ownerUserId, next.sourceContext.versions.map((v) => v.sourceId), current.content) : { passages: [] };
     if (!await sourceContextAvailable(next.session.ownerUserId, next.sourceContext)) throw aiError(409, 'AI_CONTEXT_CHANGED', 'Selected source context changed.');
-    const result = await generate([...history, current], { signal: controller.signal, memories, sources: context.passages });
+    const allocation = await dispatchAllowance(next.session.ownerUserId, 'CHAT', next.id);
+    const result = await generate([...history, current], { signal: controller.signal, memories, sources: context.passages, tokenBudget: allocation.reservedTokens, maxOutputTokens: allocation.maxOutputTokens });
+    // Provider usage survives cancellation or a later publication rejection.
+    await settleAllowance('CHAT', next.id, { usage: result.usage });
     const cited = [...result.text.matchAll(/\[S(\d+)\]/g)].map((m) => `S${m[1]}`);
     if (cited.some((label) => !context.passages.some((p) => p.label === label))) throw aiError(503, 'AI_RESPONSE_INVALID', 'Sabi returned an unsupported source reference.');
     await requireGenerationAvailable(); await authorisedRun(next);
@@ -211,7 +218,8 @@ export async function processAiQueue({ generate = generateAiResponse } = {}) {
       await audit(tx, next.session.ownerUserId, 'AI_RESPONSE_COMPLETED', next.sessionId);
     });
   } catch (error) {
-    const allowed = ['AI_GENERATION_PAUSED', 'AI_CONTEXT_CHANGED', 'AI_PROVIDER_BUSY', 'AI_PROVIDER_UNAVAILABLE', 'AI_RESPONSE_INCOMPLETE', 'AI_RESPONSE_INVALID', 'AI_SESSION_REVOKED', 'AI_CONFIGURATION_CHANGED', 'AI_UNAVAILABLE', 'AI_ACCOUNT_UNAVAILABLE'];
+    await settleAllowance('CHAT', next.id, { usage: error.usage, notDispatched: error.aiProviderDispatched === false });
+    const allowed = ['AI_TOKEN_QUOTA', 'AI_GENERATION_PAUSED', 'AI_CONTEXT_CHANGED', 'AI_PROVIDER_BUSY', 'AI_PROVIDER_UNAVAILABLE', 'AI_RESPONSE_INCOMPLETE', 'AI_RESPONSE_INVALID', 'AI_SESSION_REVOKED', 'AI_CONFIGURATION_CHANGED', 'AI_UNAVAILABLE', 'AI_ACCOUNT_UNAVAILABLE'];
     await finishFailure(next, allowed.includes(error.code) ? error.code : 'AI_RESPONSE_FAILED');
   } finally {
     controllers.delete(next.id);
@@ -221,6 +229,7 @@ export async function processAiQueue({ generate = generateAiResponse } = {}) {
 async function finishFailure(run, code) {
   await prisma.$transaction(async (tx) => {
     const changed = await tx.aiRun.updateMany({ where: { id: run.id, status: { in: active } }, data: { status: 'FAILED', errorCode: code, finishedAt: new Date() } });
+    await finishAllowance(tx, 'CHAT', run.id);
     if (changed.count) await audit(tx, run.session.ownerUserId, 'AI_RESPONSE_FAILED', run.sessionId);
   });
 }

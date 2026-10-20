@@ -4,11 +4,14 @@ import prisma from '../../config/db.js';
 import { validate } from '../../middleware/validateMiddleware.js';
 import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
 import { adminAudit, allow, ccError, handle, reason } from '../command-centre/cc.common.js';
-import { aiAvailable, aiConfig, aiLimits } from './ai.config.js';
+import { aiAvailable, aiConfig } from './ai.config.js';
 import { aiRuntimeConfiguration } from './ai.readiness.js';
+import { allowanceRoutes } from './ai.allowance.routes.js';
+import { allowancePolicy } from './ai.allowances.js';
 
 export const aiOperationsRoutes = Router();
 const empty = z.object({}).strict();
+aiOperationsRoutes.use('/allowances', allowanceRoutes);
 const write = (body, params = empty) => validate(z.object({ body, params, query: empty }));
 aiOperationsRoutes.get('/overview', allow('platform.ops.read', 'platform.settings.manage'), validate(z.object({ query: empty, params: empty })), handle(async () => {
   const [policy, counts, flagged, oldest] = await Promise.all([
@@ -19,9 +22,10 @@ aiOperationsRoutes.get('/overview', allow('platform.ops.read', 'platform.setting
   ]);
   if (!policy) throw ccError('AI_CONTROLS_UNAVAILABLE', 503, 'AI operational controls are unavailable. Generation remains disabled.');
   const config = aiConfig();
+  const allocation = await allowancePolicy();
   return { generatedAt: new Date(), policy, providerConfigured: aiAvailable(), provider: config.provider, model: config.model || null,
     generationEnabled: aiAvailable() && policy?.generationPaused === false, counts: Object.fromEntries(counts.map((row) => [row.status, row._count._all])),
-    flagged, oldestQueuedAt: oldest?.createdAt || null, limits: aiLimits(), monetaryBillingEnabled: false,
+    flagged, oldestQueuedAt: oldest?.createdAt || null, limits: { userDailyRuns: allocation.settings.personalDailyRequests, globalDailyRuns: allocation.settings.globalDailyRequests, globalTotalRuns: allocation.settings.globalTotalRequests }, monetaryBillingEnabled: false,
     runtime: aiRuntimeConfiguration(),
   };
 }));
