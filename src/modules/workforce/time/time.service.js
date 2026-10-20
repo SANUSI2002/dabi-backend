@@ -564,9 +564,10 @@ export async function submitTimesheet(context, id, expectedVersion) {
 export async function recallTimesheet(context, id, expectedVersion) {
   return withTenant(context, async (tx) => {
     const who = await actor(tx, context);
-    const { t } = await loadSheet(tx, context, id);
+    const { t, period } = await loadSheet(tx, context, id);
     if (t.employeeId !== who.self?.id) throw new EmrError('PERMISSION_DENIED');
     if (t.status !== 'Submitted') throw new EmrError('INVALID_STATE', { message: 'Only a submitted timesheet can be recalled.' });
+    if (period.locked) throw new EmrError('PERIOD_LOCKED'); // it could not be resubmitted until HR reopens the period
     await updateVersioned(tx.wfTimesheet, { organizationId: context.organizationId, id, expectedVersion, data: { status: 'Open' }, notFoundCode: 'WORKFORCE_RECORD_NOT_FOUND' });
     await tx.wfTimesheetLine.deleteMany({ where: { ...org(context), timesheetId: t.id, source: 'Attendance' } });
     await event(tx, context, t, 'Open', t.submission, 'Recalled by employee');
