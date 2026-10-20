@@ -140,6 +140,7 @@ describe('hiring and exits', () => {
     const emp = (await people()).employees.find((e) => e.id === done.employeeId);
     expect(emp).toMatchObject({ name: 'Ada Obi', role: 'Lab Scientist', cadre: 'GL 08', email: 'ada@applicant.test', departmentId: dept.id, jobPositionId: position.id, hireDate: '2026-12-01', status: 'ACTIVE' });
     expect((await people()).documents.filter((d) => d.employeeId === emp.id).map((d) => [d.title, d.status]).sort()).toEqual([['NIN-Ada-Obi.pdf', 'Approved'], ['Offer-signed.pdf', 'Approved']]);
+    expect((await as(hr).get('/payroll')).body.data.salaryStructures.find((x) => x.employeeId === emp.id)).toMatchObject({ basicSalary: 320000, allowances: [], deductions: [] });
     const data = await hiring(hr);
     expect(data.onboarding.find((x) => x.id === p.id)).toMatchObject({ employeeId: emp.id, basicSalary: 320000, resumptionDate: '2026-12-01' });
     expect(data.candidates.find((c) => c.id === ada.id).convertedEmployeeId).toBe(emp.id);

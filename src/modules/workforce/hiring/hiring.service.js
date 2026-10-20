@@ -6,7 +6,7 @@
 //     organization's "vacancy" workflow; the raiser and HR see it;
 //   - onboarding is a fixed checklist; at final sign-off HR submits it to the "onboarding" workflow and
 //     only an approved review lets the candidate be converted — which creates the employee record, with
-//     the onboarding documents on file;
+//     the onboarding documents on file and the approved basic salary as their salary structure;
 //   - offboarding walks a fixed exit pipeline; each stage needs its record; archiving deactivates the
 //     employee.
 // Documents are recorded by name and type — no files are stored here.
@@ -528,6 +528,8 @@ export async function convertToEmployee(context, id, { employeeId, role, cadre }
         data: { ...(employeeId ? { id: employeeId } : {}), ...org(context), name: p.candidateName, role, cadre: cadre ?? '', email: c.email && c.email !== '-' ? c.email : null, phone: c.phone || null, hireDate: joined, dateJoining: joined, companyId: hq, departmentId: p.departmentId, jobPositionId: p.jobPositionId, status: 'ACTIVE' },
       });
     } catch (error) { throw uniqueViolation(error, { pkey: 'HR_CODE_IN_USE' }) ?? error; }
+    // The basic salary HR review approved becomes the new employee's salary structure.
+    if (p.basicSalary) await tx.wfSalaryStructure.create({ data: { ...org(context), employeeId: e.id, basicSalary: p.basicSalary, updatedByUserId: context.userId } });
     const docs = await tx.wfOnboardingDocument.findMany({ where: { ...org(context), onboardingId: id } });
     if (docs.length) {
       await tx.wfEmployeeDocument.createMany({
