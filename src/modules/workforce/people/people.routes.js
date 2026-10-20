@@ -12,6 +12,7 @@ import { handle, validateEmr as check } from '../../emr/core/validate.js';
 import { requireVersion } from '../../emr/core/concurrency.js';
 import { send } from '../../emr/core/http.js';
 import * as people from './people.service.js';
+import { hrAuditEvents } from './audit.js';
 
 const org = { organizationId: z.uuid() };
 const noQuery = z.object({}).strict();
@@ -72,6 +73,7 @@ const R = 'hr.read';
 const M = 'hr.manage';
 peopleRoutes.get('/', check(v.overview), allow(R), handle(async (req, res) => send(res, await people.overview(req.emr))));
 peopleRoutes.get('/directory', check(v.overview), allow('workforce.directory', R), handle(async (req, res) => send(res, await people.directory(req.emr))));
+peopleRoutes.get('/audit-events', check(z.object({ params: z.object(org).strict(), query: z.object({ limit: z.coerce.number().int().min(1).max(500).default(200) }).strict() })), allow('hr.read'), handle(async (req, res) => send(res, await hrAuditEvents(req.emr, req.query))));
 peopleRoutes.post('/employees', check(v.createEmployee), allow(M), handle(async (req, res) => send(res, await people.createEmployee(req.emr, req.body), 201)));
 peopleRoutes.patch('/employees/:employeeId', check(v.updateEmployee), allow(M), handle(async (req, res) => send(res, await people.updateEmployee(req.emr, req.params.employeeId, requireVersion(req), req.body))));
 peopleRoutes.post('/employees/import-members', check(v.empty), allow(M), handle(async (req, res) => send(res, await people.importMembers(req.emr))));

@@ -80,7 +80,7 @@ export async function setStructure(context, employeeId, { basicSalary, allowance
     const existing = await tx.wfSalaryStructure.findFirst({ where: { ...org(context), employeeId } });
     if (existing) await tx.wfSalaryStructure.updateMany({ where: { ...org(context), id: existing.id }, data: { ...data, version: { increment: 1 } } });
     else await tx.wfSalaryStructure.create({ data: { ...org(context), employeeId, ...data } });
-    await audited(tx, context, 'payroll.structure_set', 'employee', employeeId);
+    await audited(tx, context, 'payroll.structure_set', 'salary_structure', employeeId);
     return { employeeId };
   });
 }
