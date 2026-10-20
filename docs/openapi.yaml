@@ -10,6 +10,8 @@ servers:
   - url: /
     description: Current environment
 tags:
+  - name: Ai Account
+    description: Standalone Sabi AI account registration, verification and applications.
   - name: Auth
     description: Auth endpoints currently registered by the backend.
   - name: Profile
