@@ -68,12 +68,29 @@ disposition only; it does not edit/sign a note or prescribe. Manual care remains
 The official Google project `project-2dfff4eb-ff04-40b1-aff` now has Secret Manager enabled and
 secret `typesafe-api-key`, version 1. The approved key was created in the user's TypeSafe account
 and transferred directly to Secret Manager. No key was printed, committed or saved in the workspace.
-No secret-access IAM permission or live runtime attachment was granted as part of storing it.
+On 20 October, the user separately approved and the console verified Secret Manager Secret
+Accessor for `sabi-ai-production@project-2dfff4eb-ff04-40b1-aff.iam.gserviceaccount.com` on this
+secret only. The identity is not yet attached to a deployed runtime; no other secret access was granted.
 
 Future runtime injection uses `TYPESAFE_API_KEY`. Each tenant workflow also needs a reviewed policy
 containing clinical owner, approval/evaluation reference, processing approval time, question version,
 mode and evaluated pinned model. This code does not seed clinical approval, invent cutoffs, or infer
 approval from the existence of a key. No real patient request was made during this checkpoint.
+
+### Connectivity checks, not configuration guesses
+
+`npm run ai:check` reports redacted configuration metadata only, without database or provider calls.
+`npm run ai:check -- --execute-synthetic` explicitly sends fixed non-personal fixtures to the
+configured Google and JEV providers. The JEV probe requires an available pinned `JEV_SMOKE_MODEL`;
+it does not guess a model or reuse clinical records. Run it within the configured server environment,
+never put credentials in command arguments. Exit status is nonzero if either explicit probe fails.
+Outputs exclude keys, provider error bodies, prompts and hidden reasoning.
+
+Provider checks are separate from clinical activation and tenant policies. Even a successful probe
+does not prove patient login, durable worker execution or a complete conversation. Command Centre
+shows configuration metadata, explicitly not a verified connection. Before release, exercise an
+authenticated patient conversation through enqueue, worker claim, provider execution, persistence,
+reload, cancellation and ownership denial in the intended deployed environment.
 
 `JEV_DAILY_ASSESSMENT_LIMIT` is a bounded count (1–1000, default 30) per tenant per UTC day.
 There is not yet a cross-tenant dollar budget, licensed billing policy, department policy editor,
@@ -186,7 +203,8 @@ accessibility state confirmed the synthetic rendered panel; a browser debugger t
 completion of screenshot/mobile visual QA. That check must not be represented as passed.
 
 This checkpoint is source/local verification, not production clinical activation. Secret storage is
-complete; runtime secret-access binding, provider smoke verification, clinically approved pinned
+complete, and the approved secret-only runtime IAM binding is verified; runtime attachment,
+provider smoke verification, clinically approved pinned
 model/policy, broader assessment UI, monitoring/retry operations and production migration remain outstanding.
 No existing live EMR, authentication, upload, prescription or inventory feature was disabled by this work.
 

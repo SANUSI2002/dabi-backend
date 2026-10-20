@@ -6,6 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "node src/index.js",
+    "ai:check": "node scripts/check-ai-runtime.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

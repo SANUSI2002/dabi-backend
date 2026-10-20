@@ -9,18 +9,18 @@ export const aiLimits = () => ({
   globalDailyRuns: bounded('SABI_AI_GLOBAL_DAILY_RUNS', 30, 10000),
   globalTotalRuns: bounded('SABI_AI_GLOBAL_TOTAL_RUNS', 1000, 100000),
 });
-export const aiConfig = () => ({
-  enabled: process.env.SABI_AI_ENABLED === 'true',
-  processingApproved: process.env.SABI_AI_GOOGLE_PROCESSING_APPROVED === 'true',
-  apiKey: process.env.SABI_AI_GOOGLE_API_KEY || '',
-  model: process.env.SABI_AI_MODEL || '',
-  projectId: process.env.SABI_AI_GOOGLE_PROJECT_ID || '',
-  provider: process.env.SABI_AI_PROVIDER || 'gemini',
-  authMode: process.env.SABI_AI_AUTH_MODE || 'api-key',
+export const aiConfig = (env = process.env) => ({
+  enabled: env.SABI_AI_ENABLED === 'true',
+  processingApproved: env.SABI_AI_GOOGLE_PROCESSING_APPROVED === 'true',
+  apiKey: env.SABI_AI_GOOGLE_API_KEY || '',
+  model: env.SABI_AI_MODEL || '',
+  projectId: env.SABI_AI_GOOGLE_PROJECT_ID || '',
+  provider: env.SABI_AI_PROVIDER || 'gemini',
+  authMode: env.SABI_AI_AUTH_MODE || 'api-key',
 });
-export const aiAvailable = () => {
-  const c = aiConfig();
-  return Boolean(c.enabled && c.processingApproved && (c.authMode === 'api-key' ? c.apiKey : c.authMode === 'adc' && c.provider === 'vertex') && /^[a-zA-Z0-9._-]{1,120}$/.test(c.model) &&
+export const aiAvailable = (env = process.env) => {
+  const c = aiConfig(env);
+  return Boolean(c.enabled && c.processingApproved && (c.authMode === 'api-key' ? c.apiKey && !/\s/.test(c.apiKey) : c.authMode === 'adc' && c.provider === 'vertex') && /^[a-zA-Z0-9._-]{1,120}$/.test(c.model) &&
     ['gemini', 'vertex'].includes(c.provider) && (c.provider !== 'vertex' || /^[a-z0-9-]+$/.test(c.projectId)));
 };
 export const aiError = (status, code, message) => Object.assign(new Error(message), { status, code });

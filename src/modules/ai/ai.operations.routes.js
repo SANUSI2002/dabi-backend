@@ -5,6 +5,7 @@ import { validate } from '../../middleware/validateMiddleware.js';
 import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
 import { adminAudit, allow, ccError, handle, reason } from '../command-centre/cc.common.js';
 import { aiAvailable, aiConfig, aiLimits } from './ai.config.js';
+import { aiRuntimeConfiguration } from './ai.readiness.js';
 
 export const aiOperationsRoutes = Router();
 const empty = z.object({}).strict();
@@ -21,6 +22,7 @@ aiOperationsRoutes.get('/overview', allow('platform.ops.read', 'platform.setting
   return { generatedAt: new Date(), policy, providerConfigured: aiAvailable(), provider: config.provider, model: config.model || null,
     generationEnabled: aiAvailable() && policy?.generationPaused === false, counts: Object.fromEntries(counts.map((row) => [row.status, row._count._all])),
     flagged, oldestQueuedAt: oldest?.createdAt || null, limits: aiLimits(), monetaryBillingEnabled: false,
+    runtime: aiRuntimeConfiguration(),
   };
 }));
 aiOperationsRoutes.post('/policy', allow('platform.settings.manage'), requireRecentMfa,
