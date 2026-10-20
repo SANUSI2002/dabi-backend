@@ -75,8 +75,140 @@ model User {
   medicationSchedules MedicationSchedule[]
   medicationDoses MedicationDose[]
   pushSubscriptions PushSubscription[]
+  aiSessions AiSession[]
+  aiMemories AiPersonalMemory[]
+  aiSources AiDocumentSource[]
 
   @@map("users")
+}
+
+// Sabi AI owns conversations, not a second patient or clinical-record database.
+model AiSession {
+  id String @id @default(uuid())
+  ownerUserId String @map("owner_user_id")
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  title String @db.VarChar(120)
+  mode String @default("GENERAL") @db.VarChar(32)
+  consentVersion String @map("consent_version") @db.VarChar(64)
+  consentedAt DateTime @default(now()) @map("consented_at")
+  archivedAt DateTime? @map("archived_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  runs AiRun[]
+  messages AiMessage[]
+  memories AiPersonalMemory[]
+  @@unique([id, ownerUserId])
+  @@index([ownerUserId, updatedAt])
+  @@map("ai_sessions")
+}
+
+model AiRun {
+  id String @id @default(uuid())
+  sessionId String @map("session_id")
+  session AiSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  clientMessageId String @map("client_message_id") @db.VarChar(64)
+  requestHash String @map("request_hash") @db.VarChar(64)
+  authSessionId String? @map("auth_session_id")
+  status String @default("QUEUED") @db.VarChar(24)
+  model String @db.VarChar(120)
+  promptVersion String @map("prompt_version") @db.VarChar(64)
+  errorCode String? @map("error_code") @db.VarChar(64)
+  usage Json?
+  sourceContext Json? @map("source_context")
+  feedback String? @db.VarChar(24)
+  feedbackAt DateTime? @map("feedback_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  startedAt DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  messages AiMessage[]
+  @@unique([sessionId, clientMessageId])
+  @@unique([id, sessionId])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("ai_runs")
+}
+
+model AiMessage {
+  id String @id @default(uuid())
+  sessionId String @map("session_id")
+  session AiSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  runId String @map("run_id")
+  run AiRun @relation(fields: [runId, sessionId], references: [id, sessionId], onDelete: Restrict)
+  role String @db.VarChar(16)
+  content String
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([runId, role])
+  @@index([sessionId, createdAt])
+  @@map("ai_messages")
+}
+
+// Explicit user-saved preferences/assertions, never verified clinical truth.
+model AiPersonalMemory {
+  id String @id @default(uuid())
+  ownerUserId String @map("owner_user_id")
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  kind String @db.VarChar(24)
+  content String @db.VarChar(1000)
+  sourceSessionId String? @map("source_session_id")
+  sourceSession AiSession? @relation(fields: [sourceSessionId, ownerUserId], references: [id, ownerUserId], onDelete: Restrict)
+  revision Int @default(1)
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@index([ownerUserId, deletedAt])
+  @@map("ai_personal_memories")
+}
+
+model AiRuntimePolicy {
+  id String @id
+  generationPaused Boolean @default(false) @map("generation_paused")
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("ai_runtime_policy")
+}
+
+// A personal, revocable derivative of an existing screened document, not clinical truth.
+model AiDocumentSource {
+  id String @id @default(uuid())
+  ownerUserId String @map("owner_user_id")
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  documentId String @map("document_id")
+  document MedicalDocument @relation(fields: [documentId, ownerUserId], references: [id, ownerPatientId], onDelete: Restrict)
+  clientRequestId String @map("client_request_id") @db.VarChar(64)
+  sourceSha256 String @map("source_sha256") @db.Char(64)
+  authSessionId String? @map("auth_session_id")
+  state String @default("QUEUED") @db.VarChar(24)
+  revision Int @default(1)
+  model String @db.VarChar(120)
+  promptVersion String @map("prompt_version") @db.VarChar(64)
+  consentVersion String @map("consent_version") @db.VarChar(64)
+  errorCode String? @map("error_code") @db.VarChar(64)
+  patientLabels Json @default("[]") @map("patient_labels")
+  usage Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  startedAt DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  reviewedAt DateTime? @map("reviewed_at")
+  deletedAt DateTime? @map("deleted_at")
+  pages AiDocumentPage[]
+  @@unique([ownerUserId, clientRequestId])
+  @@index([state, createdAt])
+  @@index([ownerUserId, deletedAt])
+  @@map("ai_document_sources")
+}
+
+model AiDocumentPage {
+  id String @id @default(uuid())
+  sourceId String @map("source_id")
+  source AiDocumentSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  pageNumber Int @map("page_number")
+  originalText String @map("original_text")
+  text String
+  uncertain Boolean @default(true)
+  fields Json
+  @@unique([sourceId, pageNumber])
+  @@map("ai_document_pages")
 }
 
 model UserProfile {
@@ -2300,7 +2432,9 @@ model MedicalDocument {
   scanErrorCode        String?               @map("scan_error_code") @db.VarChar(80)
   storageCleanupPending Boolean              @default(false) @map("storage_cleanup_pending")
   cleanupObjectKeys     String[]              @default([]) @map("cleanup_object_keys")
+  aiSources AiDocumentSource[]
 
+  @@unique([id, ownerPatientId])
   @@index([ownerPatientId, status, createdAt])
   @@index([medicalRecordId])
   @@index([status, scanRequestedAt])

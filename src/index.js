@@ -14,6 +14,7 @@ import { startPatientDocumentWorker } from './modules/medical-documents/medical-
 import { startAutoDispatchWorker } from './modules/riders/riders.operations.js';
 import { startRiderTransferReconciler } from './modules/riders/riders.payments.js';
 import { startRuntimeWorker } from './modules/command-centre/runtime.worker.js';
+import { startAiWorker } from './modules/ai/ai.worker.js';
 
 const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, () => {
@@ -38,10 +39,11 @@ const stopPatientDocuments = startPatientDocumentWorker();
 const stopAutoDispatch = startAutoDispatchWorker();
 const stopRiderTransfers = startRiderTransferReconciler();
 const stopRuntime = startRuntimeWorker();
+const stopAi = startAiWorker();
 const stopVideoCleanup = startVideoCleanup();
 // EMR worker (telehealth handoff, outbox → webhooks). Off by default; safe on several instances.
 if (process.env.EMR_OUTBOX_WORKER === 'true') startEmrWorker();
 // Medication reminders and WhatsApp deliveries. On by default; safe on several instances.
 if (process.env.NOTIFICATION_WORKER !== 'false') startNotificationWorker();
-const shutdown = () => { stopRuntime(); stopAutoDispatch(); stopRiderTransfers(); stopPatientDocuments(); stopRiderWorker(); stopNotificationWorker(); stopVideoCleanup(); stopEmrWorker(); stopPharmacyMail(); stopPharmacyScanner(); stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
+const shutdown = () => { stopAi(); stopRuntime(); stopAutoDispatch(); stopRiderTransfers(); stopPatientDocuments(); stopRiderWorker(); stopNotificationWorker(); stopVideoCleanup(); stopEmrWorker(); stopPharmacyMail(); stopPharmacyScanner(); stopEvidenceScanner(); stopExpiryRunner(); server.close(() => process.exit(0)); };
 process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown);
