@@ -5863,3 +5863,112 @@ model WfReimbursement {
   version Int @default(1)
   @@map("wf_reimbursements")
 }
+
+model WfAssetCategory {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  description String @default("") @db.VarChar(500)
+  @@map("wf_asset_categories")
+}
+
+model WfCompanyAsset {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  categoryId String @map("category_id")
+  batchNo String? @map("batch_no") @db.VarChar(60)
+  trackingId String @map("tracking_id") @db.VarChar(60)
+  purchaseDate DateTime @map("purchase_date") @db.Date
+  purchaseCost Decimal @map("purchase_cost") @db.Decimal(14, 2)
+  status String @default("Available") @db.VarChar(13)
+  expiryDate DateTime? @map("expiry_date") @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("wf_company_assets")
+}
+
+model WfAssetRequest {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  categoryId String @map("category_id")
+  description String @db.VarChar(1000)
+  status String @default("Requested") @db.VarChar(9)
+  requestedByUserId String @map("requested_by_user_id")
+  requestedAt DateTime @default(now()) @map("requested_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  version Int @default(1)
+  @@map("wf_asset_requests")
+}
+
+model WfAssetAllocation {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  assetId String @map("asset_id")
+  employeeId String @map("employee_id")
+  requestId String? @map("request_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  assignedByUserId String @map("assigned_by_user_id")
+  returnedAt DateTime? @map("returned_at")
+  returnCondition String? @map("return_condition") @db.VarChar(7)
+  returnNote String? @map("return_note") @db.VarChar(500)
+  receivedByUserId String? @map("received_by_user_id")
+  @@map("wf_asset_allocations")
+}
+
+model WfTicket {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  seq Int
+  type String @db.VarChar(12)
+  title String @db.VarChar(160)
+  description String @db.VarChar(4000)
+  raisedByUserId String @map("raised_by_user_id")
+  raisedByEmployeeId String? @map("raised_by_employee_id")
+  assigningType String @map("assigning_type") @db.VarChar(12)
+  raisedOn String @map("raised_on") @db.VarChar(160)
+  assignedTo String[] @default([]) @map("assigned_to")
+  priority Int
+  status String @default("New") @db.VarChar(11)
+  createdAt DateTime @default(now()) @map("created_at")
+  resolvedAt DateTime? @map("resolved_at")
+  version Int @default(1)
+  @@map("wf_tickets")
+}
+
+model WfFaqCategory {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  @@map("wf_faq_categories")
+}
+
+model WfFaq {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  categoryId String @map("category_id")
+  question String @db.VarChar(300)
+  answer String @db.VarChar(4000)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_faqs")
+}
+
+model WfQuery {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  raisedByUserId String @map("raised_by_user_id")
+  raisedByEmployeeId String? @map("raised_by_employee_id")
+  subject String @db.VarChar(200)
+  body String @db.VarChar(8000)
+  status String @default("Drafted") @db.VarChar(7)
+  responseDeadlineDays Int @map("response_deadline_days")
+  raisedAt DateTime @default(now()) @map("raised_at")
+  sentAt DateTime? @map("sent_at")
+  sentByUserId String? @map("sent_by_user_id")
+  version Int @default(1)
+  @@map("wf_queries")
+}

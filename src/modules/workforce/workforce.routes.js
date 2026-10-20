@@ -19,6 +19,7 @@ import { workflowRoutes } from './workflows/workflows.routes.js';
 import { hiringRoutes } from './hiring/hiring.routes.js';
 import { careerRoutes } from './careers/careers.routes.js';
 import { payrollRoutes } from './payroll/payroll.routes.js';
+import { serviceRoutes } from './services/services.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -30,6 +31,7 @@ tenant.use('/workflows', workflowRoutes);
 tenant.use('/hiring', hiringRoutes);
 tenant.use('/careers', careerRoutes);
 tenant.use('/payroll', payrollRoutes);
+tenant.use('/services', serviceRoutes);
 
 router.use(
   '/organizations/:organizationId',
