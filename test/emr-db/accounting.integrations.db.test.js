@@ -121,6 +121,37 @@ describe('payroll and pharmacy → ledger', () => {
     expect(bal(t, 5000)).toBe(600); // 30 tablets × ₦20
     expect(bal(t, 1200)).toBe(-600);
     expect((await sync(['Pharmacy'])).results[0].created).toBe(0);
-    expect(ok(await acct(finance).get('/integrations')).pending).toEqual({ emrBilling: 0, payrollAccrual: 0, payrollSettlement: 0, pharmacy: 0 });
+    expect(ok(await acct(finance).get('/integrations')).pending).toMatchObject({ emrBilling: 0, payrollAccrual: 0, payrollSettlement: 0, pharmacy: 0 });
+  });
+
+  it('posts store issues and write-offs at cost, but not receipts (the bill carries those)', async () => {
+    const storekeeper = await member(A, ['INVENTORY_OFFICER']);
+    const item = ok(await emr(storekeeper).post('/stores/items', { sku: 'GLV-01', name: 'Examination gloves (box)', category: 'PPE', unit: 'box', reorderLevel: 5 }), 201);
+    const store = ok(await emr(storekeeper).get('/stores')).locations.find((l) => l.type === 'STORE');
+    ok(await emr(storekeeper).post('/stores/receipts', { itemId: item.id, locationId: store.id, qty: 20, unitCostMinor: 450_000 }, key()), 201);
+    ok(await emr(storekeeper).post('/stores/issues', { itemId: item.id, locationId: store.id, qty: 4, department: 'Theatre' }, key()), 201);
+    ok(await emr(storekeeper).post('/stores/write-offs', { itemId: item.id, qty: 1, reason: 'Damaged in transit', locationId: store.id }, key()), 201);
+    const valuation = ok(await acct(finance).get('/inventory'));
+    expect(valuation.accounts[item.id]).toEqual({ inventory: 1210, cogs: 5010 });
+    expect(valuation.batches.filter((b) => b.itemId === item.id).reduce((n, b) => n + b.qtyRemaining, 0)).toBe(15);
+    const r = (await sync(['Stores'])).results[0];
+    expect(r).toMatchObject({ module: 'Stores', created: 2, skipped: 1, errors: [] });
+    expect((await sync(['Stores'])).results[0]).toMatchObject({ created: 0, skipped: 0 });
+    const t = await tb();
+    expect(bal(t, 5010)).toBe(18000); // 4 boxes × ₦4,500
+    expect(bal(t, 5900)).toBe(4500);
+    expect(bal(t, 1210)).toBe(-22500); // the receipt itself waits for its bill
+    expect(t.inBalance).toBe(true);
+  });
+
+  it('records stock paid for outside a bill straight into the books, once', async () => {
+    const item = (await acct(finance).get('/inventory')).body.data.items.find((i) => i.sku === 'GLV-01');
+    expect((await acct(finance).post('/inventory/receipts', { itemId: item.id, qty: 10, unitCostMinor: 450_000, fundingAccount: 1100 })).status).toBe(409); // a control account
+    const r = ok(await acct(finance).post('/inventory/receipts', { itemId: item.id, qty: 10, unitCostMinor: 450_000, fundingAccount: 1000, reference: 'Cash purchase' }), 201);
+    expect(r.value).toBe(45000);
+    expect((await sync(['Stores'])).results[0]).toMatchObject({ created: 0, skipped: 0 }); // already in the books
+    const t = await tb();
+    expect(bal(t, 1210)).toBe(-22500 + 45000);
+    expect(t.inBalance).toBe(true);
   });
 });

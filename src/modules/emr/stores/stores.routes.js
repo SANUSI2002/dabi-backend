@@ -55,7 +55,7 @@ const v = {
   stepRequisition: body({}, withId('requisitionId')),
   rejectRequisition: body({ reason: text(500) }, withId('requisitionId')),
   fulfilRequisition: body({ fulfillingLocationId: z.uuid() }, withId('requisitionId')),
-  createCount: body({ locationId: z.uuid(), itemIds: z.array(z.uuid()).min(1).max(500).refine((ids) => new Set(ids).size === ids.length, 'List each item once'), note: text(500).optional() }),
+  createCount: body({ id: z.uuid().optional(), locationId: z.uuid(), itemIds: z.array(z.uuid()).min(1).max(500).refine((ids) => new Set(ids).size === ids.length, 'List each item once'), note: text(500).optional() }),
   countLine: body({ itemId: z.uuid(), countedQty: z.number().int().min(0).max(10_000_000) }, withId('countId')),
   postCount: body({}, withId('countId')),
 };

@@ -11,6 +11,10 @@
 //     from the bank.
 //   - Pharmacy → inventory: dispensed quantities (less returns) relieve Drug Inventory to Cost of Drugs
 //     Sold at the dispensed batch's unit cost; a batch without a recorded cost is reported, not guessed.
+//   - Stores → inventory: issues from the hospital stores move stock to cost of sales (drugs) or supplies
+//     consumed, write-offs and count shrinkage to Miscellaneous Expense (a count gain back to inventory),
+//     at the movement's unit cost. Receipts are not posted — purchases reach the inventory accounts
+//     through their bills — and moves between locations change nothing in the books.
 //
 // Every source record is posted once (acct_integration_events), each in its own transaction, so one bad
 // record never blocks the rest and a sync can be repeated safely. acct.view reads the status; acct.post
@@ -24,10 +28,13 @@ import { addCustomerInTx, createInvoiceInTx, issueInvoiceInTx, recordReceiptInTx
 
 const org = (context) => ({ organizationId: context.organizationId });
 const minor = (v) => round2(Number(v) / 100);
-const ACCT = { cashOnHand: 1000, bank: 1010, staffAdvances: 1400, drugInventory: 1200, accruals: 2100, salariesPayable: 2120, payePayable: 2300, pensionPayable: 2310, nhfPayable: 2320, discounts: 4900, cogsDrugs: 5000, salaries: 5100 };
+const ACCT = { cashOnHand: 1000, bank: 1010, staffAdvances: 1400, drugInventory: 1200, suppliesInventory: 1210, miscExpense: 5900, cogsSupplies: 5010, accruals: 2100, salariesPayable: 2120, payePayable: 2300, pensionPayable: 2310, nhfPayable: 2320, discounts: 4900, cogsDrugs: 5000, salaries: 5100 };
 const REVENUE = { CONSULTATION: 4000, LAB: 4010, MEDICATION: 4020, PROCEDURE: 4030, BED_DAY: 4040, IMAGING: 4050, OTHER: 4000 };
 const DEPOSIT = { CASH: [ACCT.cashOnHand, 'Cash'], POS: [ACCT.bank, 'POS'], CARD: [ACCT.bank, 'POS'], BANK_TRANSFER: [ACCT.bank, 'Bank Transfer'], MOBILE_MONEY: [ACCT.bank, 'Bank Transfer'], CHEQUE: [ACCT.bank, 'Cheque'] };
 const EXEMPT = 'tax-vat-exempt';
+/** The ledger accounts behind a store item: drugs, or every other kind of supply. */
+export const storeAccountsFor = (category) => (category === 'Drugs' ? { inventory: ACCT.drugInventory, cogs: ACCT.cogsDrugs } : { inventory: ACCT.suppliesInventory, cogs: ACCT.cogsSupplies });
+const POSTED_STORE_KINDS = ['ISSUE', 'WRITE_OFF', 'ADJUSTMENT', 'COUNT'];
 
 // ---- the record of what was posted ------------------------------------------------------------------
 const key = (context, kind, sourceRef) => ({ organizationId_kind_sourceRef: { organizationId: context.organizationId, kind, sourceRef } });
@@ -59,11 +66,12 @@ const classify = (name) => {
 
 // ---- what is waiting ---------------------------------------------------------------------------------
 async function pendingWork(tx, context) {
-  const [invoices, payments, slips, lines, events] = await Promise.all([
+  const [invoices, payments, slips, lines, storeMoves, events] = await Promise.all([
     tx.emrInvoice.findMany({ where: org(context), select: { id: true, status: true } }),
     tx.emrPayment.findMany({ where: org(context), select: { id: true, status: true, invoiceId: true } }),
     tx.wfPayslip.findMany({ where: { ...org(context), status: { in: ['Confirmed', 'Paid'] } }, select: { id: true, batch: true, status: true } }),
     tx.emrDispenseLine.findMany({ where: org(context), select: { id: true, quantity: true, quantityReturned: true } }),
+    tx.emrStoreMovement.findMany({ where: org(context), select: { id: true } }),
     tx.acctIntegrationEvent.findMany({ where: org(context), select: { kind: true, sourceRef: true, data: true } }),
   ]);
   const has = new Map();
@@ -81,7 +89,8 @@ async function pendingWork(tx, context) {
     const e = has.get(`dispense-line:${l.id}`);
     return !e || (e.data.costed !== false && e.data.qty !== l.quantity - l.quantityReturned);
   }).length;
-  return { emrBilling: billing, payrollAccrual: accrual, payrollSettlement: settlement, pharmacy };
+  const stores = storeMoves.filter((m) => !done('store-movement', m.id)).length;
+  return { emrBilling: billing, payrollAccrual: accrual, payrollSettlement: settlement, pharmacy, stores };
 }
 export async function status(context) {
   requireAcct(context, 'acct.view');
@@ -239,8 +248,40 @@ async function syncPharmacy(context, result) {
   }
 }
 
+// ---- stores → inventory -----------------------------------------------------------------------------
+async function syncStores(context, result) {
+  const { moves, items, posted } = await withTenant(context, async (tx) => ({
+    moves: await tx.emrStoreMovement.findMany({ where: org(context), orderBy: { createdAt: 'asc' } }),
+    items: new Map((await tx.emrStoreItem.findMany({ where: org(context), select: { id: true, name: true, category: true } })).map((i) => [i.id, i])),
+    posted: await refsOf(tx, context, 'store-movement'),
+  }));
+  for (const m of moves.filter((x) => !posted.has(x.id))) {
+    const item = items.get(m.itemId);
+    await each(context, result, `${item?.name ?? 'Store item'} ${m.kind.toLowerCase().replace('_', '-')}`, async (tx) => {
+      const amount = round2(Math.abs(m.qtyDelta) * minor(m.unitCostMinor));
+      if (!POSTED_STORE_KINDS.includes(m.kind) || amount === 0) {
+        await mark(tx, context, 'store-movement', m.id, { posted: false, kind: m.kind });
+        return 'skipped';
+      }
+      const acct = storeAccountsFor(item?.category);
+      const name = (item?.name ?? 'store item').slice(0, 120);
+      const what = m.kind === 'COUNT' ? 'count' : 'adjustment';
+      const [debit, credit, memo] = m.kind === 'ISSUE' ? [acct.cogs, acct.inventory, `Stores issue — ${name}${m.department ? ` to ${m.department}` : ''}`]
+        : m.kind === 'WRITE_OFF' ? [ACCT.miscExpense, acct.inventory, `Stock written off — ${name}`]
+        : m.qtyDelta > 0 ? [acct.inventory, ACCT.miscExpense, `Stock ${what} gain — ${name}`]
+        : [ACCT.miscExpense, acct.inventory, `Stock ${what} loss — ${name}`];
+      const entry = await postEntry(tx, context, {
+        date: m.createdAt, source: 'Inventory', memo, reference: (m.reference ?? m.kind).slice(0, 100),
+        lines: [{ accountNumber: debit, debit: amount, credit: 0, description: `${Math.abs(m.qtyDelta)} unit(s)` }, { accountNumber: credit, debit: 0, credit: amount, description: memo }],
+      });
+      await mark(tx, context, 'store-movement', m.id, { posted: true, kind: m.kind }, entry.id);
+      return true;
+    });
+  }
+}
+
 // ---- running a sync ---------------------------------------------------------------------------------
-const MODULES = { 'EMR Billing': syncBilling, Payroll: syncPayroll, Pharmacy: syncPharmacy };
+const MODULES = { 'EMR Billing': syncBilling, Payroll: syncPayroll, Pharmacy: syncPharmacy, Stores: syncStores };
 export async function sync(context, { modules }) {
   requireAcct(context, 'acct.post');
   await withTenant(context, (tx) => ensureBooks(tx, context));

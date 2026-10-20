@@ -176,18 +176,29 @@ export async function setLocationStatus(context, locationId, expectedVersion, { 
 // ---- stock movements ------------------------------------------------------------------------------
 export async function receive(context, input, { idempotencyKey } = {}) {
   return withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: 'stores.receive', body: input }, async () => {
-    const item = await lockItem(tx, context, input.itemId);
-    if (!item.active) throw new EmrError('VALIDATION_FAILED', { message: `${item.name} is inactive.` });
-    await activeLocation(tx, context, input.locationId);
-    if (input.expiryDate && new Date(`${input.expiryDate}T00:00:00.000Z`) < today()) throw new EmrError('VALIDATION_FAILED', { message: 'This batch has already expired; do not receive it into usable stock.' });
-    const batch = await newBatch(tx, context, {
-      itemId: item.id, locationId: input.locationId, batchNumber: input.batchNumber ?? null, expiryDate: input.expiryDate ? new Date(`${input.expiryDate}T00:00:00.000Z`) : null,
-      qtyReceived: input.qty, unitCostMinor: BigInt(input.unitCostMinor), source: 'RECEIPT', reference: input.reference ?? null,
-    });
-    await moveStock(tx, context, batch, input.qty, 'RECEIPT', { reference: input.reference ?? null, note: input.note ?? null });
-    await recordAudit(tx, context, { action: 'stores.received', resourceType: 'store_item', resourceId: item.id });
+    const { batch } = await receiveInTx(tx, context, input);
     return { statusCode: 201, body: { batchId: batch.id, qty: input.qty } };
   }));
+}
+/** Receives a batch inside the caller's transaction (Accounting records a paid-for receipt with it). */
+export async function receiveInTx(tx, context, input) {
+  const item = await lockItem(tx, context, input.itemId);
+  if (!item.active) throw new EmrError('VALIDATION_FAILED', { message: `${item.name} is inactive.` });
+  await activeLocation(tx, context, input.locationId);
+  if (input.expiryDate && new Date(`${input.expiryDate}T00:00:00.000Z`) < today()) throw new EmrError('VALIDATION_FAILED', { message: 'This batch has already expired; do not receive it into usable stock.' });
+  const batch = await newBatch(tx, context, {
+    itemId: item.id, locationId: input.locationId, batchNumber: input.batchNumber ?? null, expiryDate: input.expiryDate ? new Date(`${input.expiryDate}T00:00:00.000Z`) : null,
+    qtyReceived: input.qty, unitCostMinor: BigInt(input.unitCostMinor), source: 'RECEIPT', reference: input.reference ?? null,
+  });
+  await moveStock(tx, context, batch, input.qty, 'RECEIPT', { reference: input.reference ?? null, note: input.note ?? null });
+  await recordAudit(tx, context, { action: 'stores.received', resourceType: 'store_item', resourceId: item.id });
+  return { item, batch };
+}
+/** The main store (created with the organization's first stores use). */
+export async function mainLocationId(tx, context) {
+  await ensureLocations(tx, context);
+  const locations = await tx.emrStoreLocation.findMany({ where: { organizationId: context.organizationId, status: 'ACTIVE' } });
+  return (locations.find((l) => l.code === 'MAIN') ?? locations.find((l) => l.type === 'STORE') ?? locations[0])?.id;
 }
 
 export async function issue(context, input, { idempotencyKey } = {}) {
@@ -413,7 +424,7 @@ export async function createCount(context, input) {
     const lines = [];
     for (const itemId of input.itemIds) lines.push({ itemId, systemQty: await heldAt(tx, context, itemId, input.locationId) });
     const count = await tx.emrStoreCount.create({
-      data: { organizationId: context.organizationId, number: countNumber(year, await nextSequence(tx, context, `store_count_${year}`)), locationId: input.locationId, note: input.note ?? null, createdByUserId: context.userId },
+      data: { ...(input.id ? { id: input.id } : {}), organizationId: context.organizationId, number: countNumber(year, await nextSequence(tx, context, `store_count_${year}`)), locationId: input.locationId, note: input.note ?? null, createdByUserId: context.userId },
     });
     await tx.emrStoreCountLine.createMany({ data: lines.map((l) => ({ ...l, organizationId: context.organizationId, countId: count.id })) });
     await recordAudit(tx, context, { action: 'store_count.created', resourceType: 'store_count', resourceId: count.id });
