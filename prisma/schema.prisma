@@ -2941,10 +2941,87 @@ model EmrClinicalNote {
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  jevAssessments EmrJevAssessment[]
 
   @@unique([organizationId, id])
+  @@unique([organizationId, id, encounterId])
   @@index([organizationId, encounterId, createdAt])
   @@map("emr_clinical_notes")
+}
+
+model EmrJevPolicy {
+  organizationId String @map("organization_id")
+  workflow String @db.VarChar(80)
+  version Int @default(1)
+  mode String @default("DISABLED") @db.VarChar(24)
+  questionVersion String @map("question_version") @db.VarChar(80)
+  model String @db.VarChar(120)
+  clinicalOwnerUserId String? @map("clinical_owner_user_id")
+  approvalReference String? @map("approval_reference") @db.VarChar(200)
+  processingApprovedAt DateTime? @map("processing_approved_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@id([organizationId, workflow])
+  @@map("emr_jev_policies")
+}
+
+model EmrJevAssessment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  noteId String @map("note_id")
+  encounterId String @map("encounter_id")
+  requestedByUserId String @map("requested_by_user_id")
+  clientRequestId String @map("client_request_id") @db.VarChar(64)
+  workflow String @db.VarChar(80)
+  questionVersion String @map("question_version") @db.VarChar(80)
+  sourceFingerprint String @map("source_fingerprint") @db.VarChar(64)
+  noteVersion Int @map("note_version")
+  policyVersion Int @map("policy_version")
+  mode String @db.VarChar(24)
+  requestedModel String @map("requested_model") @db.VarChar(120)
+  resolvedModel String? @map("resolved_model") @db.VarChar(120)
+  processingStatus String @default("QUEUED") @map("processing_status") @db.VarChar(24)
+  answers Json?
+  usage Json?
+  errorCode String? @map("error_code") @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at")
+  finishedAt DateTime? @map("finished_at")
+  sourceNote EmrClinicalNote @relation(fields:[organizationId,noteId,encounterId], references:[organizationId,id,encounterId], onDelete:Restrict)
+  jobs JevAssessmentJob[]
+  reviews EmrJevReview[]
+  @@unique([organizationId,id])
+  @@unique([organizationId,clientRequestId])
+  @@unique([organizationId,noteId,sourceFingerprint,policyVersion,questionVersion])
+  @@index([organizationId,noteId,createdAt])
+  @@map("emr_jev_assessments")
+}
+
+model JevAssessmentJob {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  assessmentId String @unique @map("assessment_id")
+  requestedByUserId String @map("requested_by_user_id")
+  status String @default("QUEUED") @db.VarChar(24)
+  startedAt DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  assessment EmrJevAssessment @relation(fields:[organizationId,assessmentId], references:[organizationId,id], onDelete:Restrict)
+  @@index([status,createdAt])
+  @@map("jev_assessment_jobs")
+}
+
+model EmrJevReview {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  assessmentId String @map("assessment_id")
+  actorUserId String @map("actor_user_id")
+  clientRequestId String @map("client_request_id") @db.VarChar(64)
+  disposition String @db.VarChar(24)
+  reason String @db.VarChar(2000)
+  createdAt DateTime @default(now()) @map("created_at")
+  assessment EmrJevAssessment @relation(fields:[organizationId,assessmentId], references:[organizationId,id], onDelete:Restrict)
+  @@index([organizationId,assessmentId,createdAt])
+  @@unique([organizationId,clientRequestId])
+  @@map("emr_jev_reviews")
 }
 
 model EmrNoteAmendment {

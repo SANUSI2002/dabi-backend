@@ -10,7 +10,9 @@ sessions and account suspension; no new Firebase or Supabase identity database i
 
 The current slice includes general conversation and explicitly selected, owner-reviewed personal
 documents. It does not automatically retrieve charts, generate clinical writeback, execute bookings
-or dispense medicines. JEV is deferred by the user's 20 October decision. Other requirements remain
+or dispense medicines. The later 20 October JEV specifications supersede the earlier "JEV later"
+decision: a separate typed assessment provider and durable EMR documentation-assessment workflow
+are now implemented locally; see `jev-emdex-implementation.md`. Other requirements remain
 in scope; this document is not a declaration that the full product specification is complete.
 
 ## Implemented contracts

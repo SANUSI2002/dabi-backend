@@ -34,3 +34,10 @@ The current entrypoint starts interval workers in the same process. A request-bi
 Current in-memory rate limits also require shared atomic enforcement before horizontal scaling. Review maximum replicas, concurrency and PostgreSQL pool totals together. Migrations, durable jobs, transactional outbox delivery, distributed limits, Google storage integration, backup/restore and full staging acceptance remain prerequisites for production cutover.
 
 All costs must fit the user's **less than USD 120 cumulative** allowance, with USD 90 as the operating target. The saved Google budget is an alert mechanism, not a hard total cap. No paid resource is created by either build command.
+
+The user subsequently approved a **USD 60/month ongoing hosting budget**, with no artificial
+30-day rollout expiry. This does not remove the original cumulative trial allowance or authorize
+a paid-billing upgrade. Plan the complete database/storage/API/worker/AI/backup cost against both
+constraints, using actual regional quotes and expected load before provisioning. The TypeSafe key
+is now stored in official-project Secret Manager (`typesafe-api-key`); no runtime access grant,
+resource deployment, database copy or DNS cutover was made by that secret setup.
