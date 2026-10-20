@@ -4813,3 +4813,254 @@ model EmrPatientCategory {
   @@unique([organizationId, code])
   @@map("emr_patient_categories")
 }
+
+// Workforce: organization structure and people (migration 20261110090000_workforce_people).
+model WfCompany {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  code String @db.VarChar(30)
+  isHeadquarters Boolean @default(false) @map("is_headquarters")
+  address String? @db.VarChar(200)
+  lga String? @db.VarChar(80)
+  state String? @db.VarChar(80)
+  country String @default("Nigeria") @db.VarChar(80)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_companies_org_id_key")
+  @@unique([organizationId, code])
+  @@map("wf_companies")
+}
+
+model WfEmployee {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  userId String? @map("user_id")
+  name String @db.VarChar(160)
+  role String @db.VarChar(80)
+  cadre String @default("") @db.VarChar(80)
+  phone String? @db.VarChar(30)
+  email String? @db.VarChar(160)
+  hireDate DateTime @map("hire_date") @db.Date
+  license String? @db.VarChar(60)
+  status String @default("ACTIVE") @db.VarChar(8)
+  dob DateTime? @db.Date
+  gender String? @db.VarChar(6)
+  maritalStatus String? @map("marital_status") @db.VarChar(8)
+  address String? @db.VarChar(200)
+  lga String? @db.VarChar(80)
+  state String? @db.VarChar(80)
+  emergencyContactName String? @map("emergency_contact_name") @db.VarChar(120)
+  emergencyContactPhone String? @map("emergency_contact_phone") @db.VarChar(30)
+  emergencyContactRelation String? @map("emergency_contact_relation") @db.VarChar(40)
+  qualification String? @db.VarChar(160)
+  companyId String? @map("company_id")
+  departmentId String? @map("department_id")
+  jobPositionId String? @map("job_position_id")
+  jobRoleId String? @map("job_role_id")
+  employeeTypeId String? @map("employee_type_id")
+  reportingManagerId String? @map("reporting_manager_id")
+  dateJoining DateTime? @map("date_joining") @db.Date
+  contractEndDate DateTime? @map("contract_end_date") @db.Date
+  workEmail String? @map("work_email") @db.VarChar(160)
+  workPhone String? @map("work_phone") @db.VarChar(30)
+  tagIds String[] @default([]) @map("tag_ids")
+  bankName String? @map("bank_name") @db.VarChar(80)
+  accountNumber String? @map("account_number") @db.VarChar(20)
+  bankBranch String? @map("bank_branch") @db.VarChar(80)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@unique([organizationId, id], map: "wf_employees_org_id_key")
+  @@map("wf_employees")
+}
+
+model WfDepartment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  code String @db.VarChar(20)
+  description String? @db.VarChar(500)
+  status String @default("Active") @db.VarChar(10)
+  parentDepartmentId String? @map("parent_department_id")
+  hodEmployeeId String? @map("hod_employee_id")
+  deputyHodEmployeeId String? @map("deputy_hod_employee_id")
+  companyIds String[] @default([]) @map("company_ids")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  members WfDepartmentMember[]
+
+  @@unique([organizationId, id], map: "wf_departments_org_id_key")
+  @@unique([organizationId, code])
+  @@map("wf_departments")
+}
+
+model WfDepartmentMember {
+  organizationId String @map("organization_id")
+  departmentId String @map("department_id")
+  employeeId String @map("employee_id")
+  addedAt DateTime @default(now()) @map("added_at")
+  department WfDepartment @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+
+  @@id([organizationId, departmentId, employeeId])
+  @@map("wf_department_members")
+}
+
+model WfHodChange {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  departmentId String @map("department_id")
+  role String @db.VarChar(10)
+  previousEmployeeId String? @map("previous_employee_id")
+  newEmployeeId String? @map("new_employee_id")
+  effectiveDate DateTime @map("effective_date") @db.Date
+  reason String? @db.VarChar(500)
+  changedByUserId String @map("changed_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_hod_changes")
+}
+
+model WfJobPosition {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  departmentId String @map("department_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_job_positions_org_id_key")
+  @@map("wf_job_positions")
+}
+
+model WfJobRole {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  jobPositionId String @map("job_position_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_job_roles")
+}
+
+model WfEmployeeType {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, name])
+  @@map("wf_employee_types")
+}
+
+model WfTag {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(60)
+  color String @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, name])
+  @@map("wf_tags")
+}
+
+model WfEmployeeDocument {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  title String @db.VarChar(160)
+  category String @db.VarChar(80)
+  status String @default("Requested") @db.VarChar(9)
+  issueDate DateTime? @map("issue_date") @db.Date
+  expiryDate DateTime? @map("expiry_date") @db.Date
+  notifyBeforeDays Int @default(30) @map("notify_before_days")
+  rejectReason String? @map("reject_reason") @db.VarChar(500)
+  requestedByUserId String @map("requested_by_user_id")
+  reviewedByUserId String? @map("reviewed_by_user_id")
+  reviewedAt DateTime? @map("reviewed_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_employee_documents")
+}
+
+model WfActionType {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  blockOption Boolean @default(false) @map("block_option")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_action_types_org_id_key")
+  @@unique([organizationId, name])
+  @@map("wf_action_types")
+}
+
+model WfDisciplinaryAction {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeIds String[] @map("employee_ids")
+  actionTypeId String @map("action_type_id")
+  description String @db.VarChar(2000)
+  unit String @db.VarChar(5)
+  amount Int
+  startDate DateTime @map("start_date") @db.Date
+  attachment String? @db.VarChar(200)
+  recordedByUserId String @map("recorded_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_disciplinary_actions")
+}
+
+model WfEmployeeNote {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  note String @db.VarChar(4000)
+  byUserId String @map("by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_employee_notes")
+}
+
+model WfBonusEntry {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  delta Int
+  reason String @db.VarChar(500)
+  byUserId String @map("by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_bonus_entries")
+}
+
+model WfQualification {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  title String @db.VarChar(160)
+  issuingBody String @map("issuing_body") @db.VarChar(160)
+  dateObtained DateTime @map("date_obtained") @db.Date
+  certificateRef String? @map("certificate_ref") @db.VarChar(80)
+  recordedByUserId String @map("recorded_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_qualifications")
+}
+
+model WfPolicy {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  category String @db.VarChar(30)
+  title String @db.VarChar(160)
+  purpose String @db.VarChar(500)
+  body String @db.VarChar(20000)
+  publishedByUserId String @map("published_by_user_id")
+  version Int @default(1)
+  updatedAt DateTime @default(now()) @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_policies")
+}

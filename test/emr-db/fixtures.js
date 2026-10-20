@@ -16,25 +16,28 @@ async function user(label) {
   });
 }
 
-let emrPackageVersion;
-async function emrPackage(createdByUserId) {
-  if (emrPackageVersion) return emrPackageVersion;
-  const pkg = await prisma.platformPackage.create({ data: { code: `EMR-TEST-${short()}`, name: 'EMR Test', description: 'Test package' } });
-  emrPackageVersion = await prisma.platformPackageVersion.create({
-    data: { packageId: pkg.id, version: 1, status: 'PUBLISHED', monthlyPriceMinor: 0, annualPriceMinor: 0, moduleKeys: ['emr'], createdByUserId, publishedAt: new Date() },
+const packageVersions = new Map();
+async function productPackage(createdByUserId, modules) {
+  const key = modules.join(',');
+  if (packageVersions.has(key)) return packageVersions.get(key);
+  const pkg = await prisma.platformPackage.create({ data: { code: `PKG-TEST-${short()}`, name: `Test ${key}`, description: 'Test package' } });
+  const version = await prisma.platformPackageVersion.create({
+    data: { packageId: pkg.id, version: 1, status: 'PUBLISHED', monthlyPriceMinor: 0, annualPriceMinor: 0, moduleKeys: modules, createdByUserId, publishedAt: new Date() },
   });
-  return emrPackageVersion;
+  packageVersions.set(key, version);
+  return version;
 }
 
-/** A verified hospital with an ACTIVE owner-admin membership and (by default) an EMR entitlement. */
-export async function createTenant(label, { roles = ['HOSPITAL_ADMIN'], emr = true } = {}) {
+/** A verified hospital with an ACTIVE owner-admin membership and (by default) an EMR entitlement.
+ *  `modules` sets the products in its package (e.g. ['workforce'] or ['emr', 'workforce']). */
+export async function createTenant(label, { roles = ['HOSPITAL_ADMIN'], emr = true, modules = ['emr'] } = {}) {
   const owner = await user(`${label}-admin`);
   const facility = await prisma.organisation.create({
     data: { ownerId: owner.id, type: 'HOSPITAL', name: `${label} Hospital`, address: '1 Test Road', country: 'Nigeria', state: 'Lagos', city: 'Ikeja', contactEmail: `${label}-${short()}@hospital.test`, contactPhone: '+234 700 000 0000', status: 'VERIFIED' },
   });
   const organization = await prisma.identityOrganization.create({ data: { type: 'HOSPITAL', organisationId: facility.id } });
   if (emr) {
-    const version = await emrPackage(owner.id);
+    const version = await productPackage(owner.id, modules);
     await prisma.platformApplication.create({
       data: {
         clientDraftId: randomUUID(), requestHash: short(), reference: `APP-${short()}`, ownerEmail: owner.email, organizationName: facility.name,
