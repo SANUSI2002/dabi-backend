@@ -24,6 +24,7 @@ export const handle = (fn) => async (req, res) => {
     const result = await fn(req, res);
     if (!res.headersSent) res.json({ status: 'success', data: result });
   } catch (error) {
+    if(error instanceof z.ZodError)return res.status(422).json({status:'error',error:{code:'INVALID_REQUEST',message:'Check the supplied fields and try again.'}});
     if (error.ccError || error.status) {
       return res.status(error.status ?? 400).json({ status: 'error', error: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } });
     }

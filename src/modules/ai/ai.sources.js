@@ -11,6 +11,8 @@ import { extractionVersion, extractAiDocument } from './ai.extraction.js';
 import { inspectAiDocument } from './ai.document-inspection.js';
 import { requireAiOriginSession } from './ai.auth.js';
 import { dispatchAllowance, finishAllowance, settleAllowance, allowanceLock } from './ai.allowances.js';
+import { knowledgeReferencesAvailable } from './ai.knowledge.js';
+import { requireAiFeature } from './ai.access.js';
 
 const missing = () => aiError(404, 'AI_SOURCE_NOT_FOUND', 'This document is not available for Sabi AI.');
 const activeUser = async (userId, db = prisma) => {
@@ -123,6 +125,7 @@ export async function retrieveAiSources(userId, sourceIds, query, db = prisma) {
   return { versions, passages: selected };
 }
 export async function sourceContextAvailable(userId, context, db = prisma, { lock = false } = {}) {
+  if (!await knowledgeReferencesAvailable(userId,context?.knowledge,db)) return false;
   if (!context?.versions?.length) return true;
   try {
     for (const version of context.versions) {
@@ -162,6 +165,7 @@ export async function processAiSourceQueue({ read = readAiDocument, inspect = in
   try {
     await owned(source.ownerUserId, source.id);
     await requireAiOriginSession(source.authSessionId, source.ownerUserId);
+    await requireAiFeature(source.ownerUserId,'documents');
     if (source.model !== aiConfig().model || source.promptVersion !== extractionVersion) throw aiError(409, 'AI_CONFIGURATION_CHANGED', 'The extraction configuration changed.');
     const file = await read(source); const { pageCount } = await inspect(file.bytes, file.contentType);
     const allocation = await dispatchAllowance(source.ownerUserId, 'DOCUMENT', source.id);
@@ -178,6 +182,7 @@ export async function processAiSourceQueue({ read = readAiDocument, inspect = in
       await requireGenerationAvailable(tx);
       if (!aiDocumentsAvailable()) throw aiError(503, 'AI_DOCUMENTS_UNAVAILABLE', 'Document processing is unavailable.');
       await requireAiOriginSession(source.authSessionId, source.ownerUserId, tx);
+      await requireAiFeature(source.ownerUserId,'documents',tx);
       await tx.aiDocumentPage.createMany({ data: result.pages.map((p) => ({ sourceId: source.id, pageNumber: p.pageNumber, originalText: p.text, text: p.text, uncertain: p.uncertain, fields: p.fields })) });
       await tx.aiDocumentSource.update({ where: { id: source.id }, data: { state: 'NEEDS_REVIEW', patientLabels: result.patientLabels, usage: result.usage, finishedAt: new Date() } });
       await audit(tx, source.ownerUserId, 'AI_SOURCE_EXTRACTED', source.id);

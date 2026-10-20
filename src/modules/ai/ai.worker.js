@@ -2,6 +2,7 @@ import { setInterval, clearInterval } from 'node:timers';
 import { processAiQueue, abortAiRuns } from './ai.service.js';
 import { processAiSourceQueue, purgeRevokedAiSources } from './ai.sources.js';
 import { processJevAssessmentQueue } from './jev/jev.assessments.js';
+import { processKnowledgeQueue } from './ai.knowledge.js';
 export function startAiWorker() {
   let busy = false;
   const tick = async () => {
@@ -14,5 +15,9 @@ export function startAiWorker() {
       }
     } finally { busy = false; }
   };
-  const timer = setInterval(tick, 1500); timer.unref(); return () => { clearInterval(timer); abortAiRuns(); };
+  // A long book scan/OCR job must not hold up the conversation queue's next tick.
+  let knowledgeBusy=false;
+  const knowledgeTimer=setInterval(async()=>{if(knowledgeBusy)return;knowledgeBusy=true;try{await processKnowledgeQueue();}catch{console.error('[ai] knowledge queue unavailable');}finally{knowledgeBusy=false;}},3000);
+  knowledgeTimer.unref();
+  const timer = setInterval(tick, 1500); timer.unref(); return () => { clearInterval(timer); clearInterval(knowledgeTimer); abortAiRuns(); };
 }
