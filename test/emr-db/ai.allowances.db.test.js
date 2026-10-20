@@ -111,11 +111,13 @@ describe('durable AI allowances', () => {
     expect(await prisma.auditEvent.count({ where: { subjectUserId: u.id, resourceType: 'ai-allowance-account' } })).toBe(2);
   });
   it('enforces an explicit zero override without falling back to a default allowance', async () => {
-    const u = await createUser(); await getAllowance(u.id);
+    const u = await createUser(); const balance = await getAllowance(u.id);
+    expect((await post(`/users/${u.id}/adjust`, { expectedVersion: balance.accountVersion, clientRequestId: randomUUID(), deltaTokens: 400, reason: 'Synthetic bonus before disabling' })).status).toBe(200);
     await prisma.aiAllowanceAccount.update({ where: { userId: u.id }, data: { dailyRequestOverride: 0 } });
     await expect(reserve(u)).rejects.toMatchObject({ code: 'AI_USER_QUOTA' });
     await prisma.aiAllowanceAccount.update({ where: { userId: u.id }, data: { dailyRequestOverride: null, tokenAllowanceOverride: 0 } });
     await expect(reserve(u)).rejects.toMatchObject({ code: 'AI_TOKEN_QUOTA' });
+    expect((await getAllowance(u.id)).tokens).toMatchObject({ allocated: 0, remaining: 0, bonus: 400 });
     expect((await getAllowance(u.id)).requests.used).toBe(0);
   });
   it('checks both service safeguards without debiting a denied request', async () => {

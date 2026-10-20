@@ -75,7 +75,8 @@ export async function allowanceSnapshot(tx, userId, { now = new Date() } = {}) {
   const bounds = await allowanceBoundaries(tx, settings, now);
   const requests = await currentWindow(tx, userId, 'REQUEST', bounds.requestStart, bounds.requestEnd, now);
   const tokens = await currentWindow(tx, userId, 'TOKEN', bounds.tokenStart, bounds.tokenEnd, now);
-  const allocation = Math.max(0, tokenLimit + tokens.bonusUnits);
+  // An explicit zero disables generation even if an earlier period adjustment remains.
+  const allocation = tokenLimit === 0 ? 0 : Math.max(0, tokenLimit + tokens.bonusUnits);
   const remaining = Math.max(0, allocation - tokens.usedUnits - tokens.reservedUnits);
   return { userId, accountVersion: account.version, plan: professional ? 'PROFESSIONAL' : 'PERSONAL', accountStatus: user.accountStatus,
     overrides: { dailyRequests: account.dailyRequestOverride, tokenAllowance: account.tokenAllowanceOverride },
