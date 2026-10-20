@@ -1,0 +1,19 @@
+# Allowlist the build context: exclude local secrets, patient files, artifacts,
+# worktrees, node_modules, Git metadata and every other unneeded source by default.
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!prisma.config.ts
+!prisma/
+!prisma/**
+!src/
+!src/**
+!docs/
+!docs/**
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*credentials*.json

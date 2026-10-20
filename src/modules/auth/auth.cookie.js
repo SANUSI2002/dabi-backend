@@ -1,4 +1,8 @@
-const cookieName = () => process.env.NODE_ENV === 'production' ? '__Secure-sabi-refresh' : 'sabi-refresh';
+// Firebase Hosting only forwards the __session cookie to a rewritten backend.
+// Opt in per deployment; existing Render/Vercel sessions keep their current name.
+const cookieName = () => process.env.AUTH_HOSTING_PROXY === 'firebase'
+  ? '__session'
+  : process.env.NODE_ENV === 'production' ? '__Secure-sabi-refresh' : 'sabi-refresh';
 const allowedOrigins = () => (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:5173')
   .split(',').map((origin) => origin.trim()).filter(Boolean);
 
