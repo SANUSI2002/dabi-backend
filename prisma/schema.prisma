@@ -4781,3 +4781,35 @@ model EmrMaintenanceJob {
   @@index([organizationId, assetId, status], map: "emr_maintenance_jobs_asset_idx")
   @@map("emr_maintenance_jobs")
 }
+
+// Hospital catalogs (migration 20261109090000_emr_catalogs; see catalogs.service.js).
+model EmrDiagnosisCatalog {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(16)
+  name String @db.VarChar(200)
+  chapter String @db.VarChar(80)
+  ncd Boolean @default(false)
+  notifiable Boolean @default(false)
+  active Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, code])
+  @@map("emr_diagnosis_catalog")
+}
+
+model EmrPatientCategory {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(24)
+  name String @db.VarChar(80)
+  exempt Boolean @default(false)
+  reason String? @db.VarChar(200)
+  active Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, code])
+  @@map("emr_patient_categories")
+}

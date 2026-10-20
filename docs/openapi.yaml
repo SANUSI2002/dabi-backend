@@ -15472,6 +15472,496 @@ paths:
         "500":
           $ref: "#/components/responses/EmrServerError"
       x-generated: true
+  /api/v1/emr/organizations/{organizationId}/catalogs/categories:
+    get:
+      tags:
+        - EMR
+      summary: List categories
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires any of the permissions `patient.read`, `catalog.manage`.
+      operationId: get_api_v1_emr_organizations_organizationId_catalogs_categories
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+    post:
+      tags:
+        - EMR
+      summary: Create category
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `catalog.manage`.
+      operationId: post_api_v1_emr_organizations_organizationId_catalogs_categories
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  pattern: ^[A-Z0-9_-]{1,24}$
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                  pattern: ^[^\p{Cc}]+$
+                exempt:
+                  default: false
+                  type: boolean
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - code
+                - name
+              additionalProperties: false
+      responses:
+        "201":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/catalogs/categories/{id}:
+    patch:
+      tags:
+        - EMR
+      summary: Update category
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `catalog.manage`.
+
+        Optimistic concurrency: send the record’s current version in `If-Match` (e.g. `W/"3"`). A stale version returns 412 with the current version in `ETag`.
+      operationId: patch_api_v1_emr_organizations_organizationId_catalogs_categories_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: If-Match
+          in: header
+          required: true
+          description: The record version from your last read, e.g. W/"3".
+          schema:
+            type: string
+            examples:
+              - W/"3"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                  pattern: ^[^\p{Cc}]+$
+                exempt:
+                  type: boolean
+                reason:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                      maxLength: 200
+                      pattern: ^[^\p{Cc}]+$
+                    - type: "null"
+                active:
+                  type: boolean
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "412":
+          $ref: "#/components/responses/EmrPreconditionFailed"
+        "428":
+          $ref: "#/components/responses/EmrPreconditionRequired"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/catalogs/diagnoses:
+    get:
+      tags:
+        - EMR
+      summary: List diagnoses
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires any of the permissions `diagnosis.record`, `clinical.read`, `catalog.manage`.
+      operationId: get_api_v1_emr_organizations_organizationId_catalogs_diagnoses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+    post:
+      tags:
+        - EMR
+      summary: Create diagnosis
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `catalog.manage`.
+      operationId: post_api_v1_emr_organizations_organizationId_catalogs_diagnoses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  pattern: ^[0-9A-Z][0-9A-Z.&/]{1,15}$
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  pattern: ^[^\p{Cc}]+$
+                chapter:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                  pattern: ^[^\p{Cc}]+$
+                ncd:
+                  default: false
+                  type: boolean
+                notifiable:
+                  default: false
+                  type: boolean
+              required:
+                - code
+                - name
+                - chapter
+              additionalProperties: false
+      responses:
+        "201":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/catalogs/diagnoses/{id}:
+    patch:
+      tags:
+        - EMR
+      summary: Update diagnosis
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `catalog.manage`.
+
+        Optimistic concurrency: send the record’s current version in `If-Match` (e.g. `W/"3"`). A stale version returns 412 with the current version in `ETag`.
+      operationId: patch_api_v1_emr_organizations_organizationId_catalogs_diagnoses_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: If-Match
+          in: header
+          required: true
+          description: The record version from your last read, e.g. W/"3".
+          schema:
+            type: string
+            examples:
+              - W/"3"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  pattern: ^[^\p{Cc}]+$
+                chapter:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                  pattern: ^[^\p{Cc}]+$
+                ncd:
+                  type: boolean
+                notifiable:
+                  type: boolean
+                active:
+                  type: boolean
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "412":
+          $ref: "#/components/responses/EmrPreconditionFailed"
+        "428":
+          $ref: "#/components/responses/EmrPreconditionRequired"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/catalogs/diseases:
+    get:
+      tags:
+        - EMR
+      summary: List diseases
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires any of the permissions `surveillance.read`, `catalog.manage`.
+      operationId: get_api_v1_emr_organizations_organizationId_catalogs_diseases
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/catalogs/vaccines:
+    get:
+      tags:
+        - EMR
+      summary: List vaccines
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires any of the permissions `immunization.read`, `catalog.manage`.
+      operationId: get_api_v1_emr_organizations_organizationId_catalogs_vaccines
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
   /api/v1/emr/organizations/{organizationId}/dashboard:
     get:
       tags:
