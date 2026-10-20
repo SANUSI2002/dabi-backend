@@ -176,7 +176,7 @@ export const requestEmailVerification = async (req, res, next) => {
   try {
     if (!verificationEmailConfigured() || (process.env.NODE_ENV === 'production' && !/^https:\/\/[^/]+$/.test(process.env.PATIENT_PORTAL_URL || ''))) return res.status(503).json({ status: 'error', message: 'Email verification is temporarily unavailable.' });
     const user = await AuthModel.findUserByEmail(req.body.email);
-    if (user?.accountStatus === 'PENDING' && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT') && verificationEmailAllowedFor(user.email)) {
+    if (['PENDING', 'ACTIVE'].includes(user?.accountStatus) && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT') && verificationEmailAllowedFor(user.email)) {
       const latest = await AuthModel.latestEmailVerificationToken(user.id);
       if (!latest || latest.createdAt < new Date(Date.now() - 60_000)) await sendPatientVerification(user);
     }
