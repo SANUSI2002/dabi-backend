@@ -1,4 +1,5 @@
 import prisma from '../../config/db.js';
+import { allowanceLock } from './ai.allowances.js';
 import { recordAudit } from '../audit/audit.service.js';
 import { updateScheduleInTransaction } from '../medication-schedules/schedule.service.js';
 import { aiError } from './ai.config.js';
@@ -24,6 +25,7 @@ export async function listAiActions(userId, sessionId) {
 }
 export async function proposeReminderAction(userId, sessionId, input) {
   return prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
     await conversation(userId, sessionId, tx);
     const prior = await tx.aiActionProposal.findUnique({ where: { ownerUserId_clientRequestId: { ownerUserId: userId, clientRequestId: input.clientRequestId } }, select: fields });
@@ -42,6 +44,7 @@ export async function proposeReminderAction(userId, sessionId, input) {
 }
 export async function confirmAiAction(userId, id) {
   return prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`; await actor(userId, tx);
     await tx.$queryRaw`SELECT id FROM ai_action_proposals WHERE id = ${id} AND owner_user_id = ${userId} FOR UPDATE`;
     const proposal = await tx.aiActionProposal.findFirst({ where: { id, ownerUserId: userId }, select: fields });
@@ -60,6 +63,7 @@ export async function confirmAiAction(userId, id) {
 }
 export async function cancelAiAction(userId, id) {
   return prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     await actor(userId, tx);
     const result = await tx.aiActionProposal.updateMany({ where: { id, ownerUserId: userId, status: 'PENDING', session: { archivedAt: null } }, data: { status: 'CANCELLED' } });
     if (!result.count) throw missing(); await audit(tx, userId, 'AI_ACTION_CANCELLED', id); return { cancelled: true };
