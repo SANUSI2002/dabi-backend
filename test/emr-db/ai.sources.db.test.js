@@ -9,7 +9,7 @@ import { processAiQueue } from '../../src/modules/ai/ai.service.js';
 
 const env = { SABI_AI_ENABLED: 'true', SABI_AI_GOOGLE_PROCESSING_APPROVED: 'true', SABI_AI_DOCUMENT_PROCESSING_APPROVED: 'true', SABI_AI_GOOGLE_API_KEY: 'synthetic', SABI_AI_MODEL: 'synthetic-model', SABI_AI_USER_DAILY_RUNS: '1000', SABI_AI_GLOBAL_DAILY_RUNS: '10000', SABI_AI_GLOBAL_TOTAL_RUNS: '100000' };
 const saved = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
-beforeAll(() => Object.assign(process.env, env));
+beforeAll(async () => { Object.assign(process.env, env); const row = await prisma.aiAllowancePolicy.findUnique({ where: { id: 'global' } }); await prisma.aiAllowancePolicy.update({ where: { id: 'global' }, data: { settings: { ...row.settings, personalDailyRequests: 1000, globalDailyRequests: 10000, globalTotalRequests: 100000 } } }); });
 afterAll(() => { for (const key of Object.keys(env)) { if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]; } });
 const createUser = () => prisma.user.create({ data: { patientId: `AI-DOC-${randomUUID()}`, email: `${randomUUID()}@ai.test`, password: 'synthetic', accountStatus: 'ACTIVE', emailVerifiedAt: new Date() } });
 const post = (u, path, body) => request(app).post(`/api/v1/ai${path}`).set('Authorization', tokenFor(u.id)).send(body);

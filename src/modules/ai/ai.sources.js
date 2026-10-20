@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import prisma from '../../config/db.js';
 import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient } from '../../config/privateStorage.js';
@@ -10,6 +10,7 @@ import { reserveAiQuota } from './ai.quota.js';
 import { extractionVersion, extractAiDocument } from './ai.extraction.js';
 import { inspectAiDocument } from './ai.document-inspection.js';
 import { requireAiOriginSession } from './ai.auth.js';
+import { dispatchAllowance, finishAllowance, settleAllowance } from './ai.allowances.js';
 
 const missing = () => aiError(404, 'AI_SOURCE_NOT_FOUND', 'This document is not available for Sabi AI.');
 const activeUser = async (userId, db = prisma) => {
@@ -55,8 +56,9 @@ export async function createAiSource(user, input) {
     if (!doc?.sha256 || !doc.objectKey.startsWith('clean/') || doc.byteSize > 3500000) throw missing();
     const existing = await tx.aiDocumentSource.findFirst({ where: { documentId: doc.id, deletedAt: null } });
     if (existing) return tx.aiDocumentSource.findUnique({ where: { id: existing.id }, select: safe });
-    await reserveAiQuota(tx, user.id);
-    const source = await tx.aiDocumentSource.create({ data: { ownerUserId: user.id, documentId: doc.id, clientRequestId: input.clientRequestId, sourceSha256: doc.sha256,
+    const sourceId = randomUUID();
+    await reserveAiQuota(tx, user.id, 'DOCUMENT', sourceId);
+    const source = await tx.aiDocumentSource.create({ data: { id: sourceId, ownerUserId: user.id, documentId: doc.id, clientRequestId: input.clientRequestId, sourceSha256: doc.sha256,
       authSessionId: user.sessionId || null, model: aiConfig().model, promptVersion: extractionVersion, consentVersion: AI_DOCUMENT_CONSENT_VERSION }, select: safe });
     await audit(tx, user.id, 'AI_SOURCE_REQUESTED', source.id); return source;
   });
@@ -79,6 +81,7 @@ export async function deleteAiSource(userId, id) {
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
     const source = await tx.aiDocumentSource.findFirst({ where: { id, ownerUserId: userId, deletedAt: null } });
     if (!source) throw missing();
+    await finishAllowance(tx, 'DOCUMENT', id);
     await tx.aiDocumentSource.update({ where: { id }, data: { state: 'DELETED', patientLabels: [], revision: { increment: 1 }, deletedAt: new Date() } });
     await tx.aiDocumentPage.deleteMany({ where: { sourceId: id } });
     await audit(tx, userId, 'AI_SOURCE_DELETED', id);
@@ -144,7 +147,11 @@ export async function readAiDocument(source, { client = privateStorageClient(), 
 export async function processAiSourceQueue({ read = readAiDocument, inspect = inspectAiDocument, extract = extractAiDocument } = {}) {
   if (!aiDocumentsAvailable() || !await generationAvailable()) return 0;
   // Unknown outcomes are not automatically charged/replayed after a crash.
-  await prisma.aiDocumentSource.updateMany({ where: { state: 'EXTRACTING', startedAt: { lt: new Date(Date.now() - 120000) } }, data: { state: 'FAILED', errorCode: 'AI_EXTRACTION_INTERRUPTED', finishedAt: new Date() } });
+  const stale = await prisma.aiDocumentSource.findMany({ where: { state: 'EXTRACTING', startedAt: { lt: new Date(Date.now() - 120000) } }, take: 25 });
+  for (const row of stale) await prisma.$transaction(async (tx) => {
+    const changed = await tx.aiDocumentSource.updateMany({ where: { id: row.id, state: 'EXTRACTING' }, data: { state: 'FAILED', errorCode: 'AI_EXTRACTION_INTERRUPTED', finishedAt: new Date() } });
+    if (changed.count) await finishAllowance(tx, 'DOCUMENT', row.id);
+  });
   const source = await prisma.aiDocumentSource.findFirst({ where: { state: 'QUEUED', deletedAt: null }, orderBy: { createdAt: 'asc' } });
   if (!source) return 0;
   if (!(await prisma.aiDocumentSource.updateMany({ where: { id: source.id, state: 'QUEUED' }, data: { state: 'EXTRACTING', startedAt: new Date() } })).count) return 0;
@@ -153,7 +160,9 @@ export async function processAiSourceQueue({ read = readAiDocument, inspect = in
     await requireAiOriginSession(source.authSessionId, source.ownerUserId);
     if (source.model !== aiConfig().model || source.promptVersion !== extractionVersion) throw aiError(409, 'AI_CONFIGURATION_CHANGED', 'The extraction configuration changed.');
     const file = await read(source); const { pageCount } = await inspect(file.bytes, file.contentType);
-    const result = await extract(file.bytes, { ...file, pageCount });
+    const allocation = await dispatchAllowance(source.ownerUserId, 'DOCUMENT', source.id);
+    const result = await extract(file.bytes, { ...file, pageCount, tokenBudget: allocation.reservedTokens, maxOutputTokens: allocation.maxOutputTokens });
+    await settleAllowance('DOCUMENT', source.id, { usage: result.usage });
     // An injected worker adapter is never an HTTP input; still validate all production results in the adapter.
     await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${source.ownerUserId} FOR UPDATE`;
@@ -169,6 +178,7 @@ export async function processAiSourceQueue({ read = readAiDocument, inspect = in
       await audit(tx, source.ownerUserId, 'AI_SOURCE_EXTRACTED', source.id);
     });
   } catch (error) {
+    await settleAllowance('DOCUMENT', source.id, { usage: error.usage, notDispatched: error.aiProviderDispatched === false });
     const allowed = ['AI_EXTRACTION_INCOMPLETE','AI_DOCUMENT_UNSUPPORTED','AI_SOURCE_CHANGED','AI_DOCUMENT_READ_FAILED','AI_CONFIGURATION_CHANGED','AI_SESSION_REVOKED','AI_GENERATION_PAUSED','AI_ACCOUNT_UNAVAILABLE','AI_DOCUMENTS_UNAVAILABLE','AI_PROVIDER_BUSY','AI_PROVIDER_UNAVAILABLE'];
     await prisma.$transaction(async (tx) => {
       const changed = await tx.aiDocumentSource.updateMany({ where: { id: source.id, state: 'EXTRACTING' }, data: { state: 'FAILED', errorCode: allowed.includes(error.code) ? error.code : 'AI_EXTRACTION_FAILED', finishedAt: new Date() } });

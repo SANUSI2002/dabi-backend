@@ -1,15 +1,6 @@
 import { URL } from 'node:url';
 export const AI_CONSENT_VERSION = 'sabi-ai-conversation-v1';
 export const AI_DOCUMENT_CONSENT_VERSION = 'sabi-ai-document-v1';
-const bounded = (key, fallback, max) => {
-  const value = Number(process.env[key]);
-  return Number.isSafeInteger(value) && value > 0 && value <= max ? value : fallback;
-};
-export const aiLimits = () => ({
-  userDailyRuns: bounded('SABI_AI_USER_DAILY_RUNS', 10, 1000),
-  globalDailyRuns: bounded('SABI_AI_GLOBAL_DAILY_RUNS', 30, 10000),
-  globalTotalRuns: bounded('SABI_AI_GLOBAL_TOTAL_RUNS', 1000, 100000),
-});
 export const aiConfig = (env = process.env) => ({
   enabled: env.SABI_AI_ENABLED === 'true',
   processingApproved: env.SABI_AI_GOOGLE_PROCESSING_APPROVED === 'true',
