@@ -5,7 +5,8 @@ import { app } from '../../src/app.js';
 import { prisma, tokenFor } from './fixtures.js';
 import { AI_CONSENT_VERSION } from '../../src/modules/ai/ai.config.js';
 import { processAiQueue } from '../../src/modules/ai/ai.service.js';
-import { createAiSession, queueAiMessage } from '../../src/modules/ai/ai.service.js';
+import { createAiSession, queueAiMessage, renameAiSession, exportAiSession, deleteAiSession, cancelAiRun } from '../../src/modules/ai/ai.service.js';
+import { saveAiMemory, deleteAiMemory } from '../../src/modules/ai/ai.memory.js';
 
 const env = { SABI_AI_ENABLED: 'true', SABI_AI_GOOGLE_PROCESSING_APPROVED: 'true', SABI_AI_GOOGLE_API_KEY: 'synthetic-key-never-transmitted', SABI_AI_MODEL: 'synthetic-model', SABI_AI_USER_DAILY_RUNS: '1000', SABI_AI_GLOBAL_DAILY_RUNS: '10000', SABI_AI_GLOBAL_TOTAL_RUNS: '100000' };
 const saved = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
@@ -23,6 +24,35 @@ beforeAll(async () => { Object.assign(process.env, env); const row = await prism
 afterAll(() => { for (const key of Object.keys(env)) { if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]; } });
 
 describe('Sabi AI asynchronous foundation', () => {
+  it('takes the shared allowance lock before touching rows throughout generation, cancellation, failure and deletion', async () => {
+    const user = await createUser(); const original = prisma.$transaction.bind(prisma); const transactions = [];
+    const guard = vi.spyOn(prisma, '$transaction').mockImplementation((callback, options) => original(async (tx) => {
+      const state = { locked: false }; transactions.push(state);
+      return callback(new Proxy(tx, { get(target, key) {
+        const value = Reflect.get(target, key, target);
+        if (key === '$queryRaw') return (...args) => {
+          if (!state.locked) { expect(args[0].join('')).toContain('pg_advisory_xact_lock(739294, 1)'); state.locked = true; }
+          return Reflect.apply(value, target, args);
+        };
+        if (!state.locked) throw new Error('AI transaction touched a row before acquiring the shared allowance lock');
+        return typeof value === 'function' ? value.bind(target) : value;
+      } }));
+    }, options));
+    try {
+      const conversation = await createAiSession(user.id, {});
+      const memory = await saveAiMemory(user.id, { kind: 'PREFERENCE', content: 'Use short explanations.', sourceSessionId: conversation.id });
+      await renameAiSession(user.id, conversation.id, 'Synthetic lock-order check'); await exportAiSession(user.id, conversation.id);
+      const queueOne = () => queueAiMessage(user, conversation.id, { clientMessageId: randomUUID(), message: 'Synthetic concurrency check.' });
+      const first = await queueOne(); await processAiQueue({ generate: async () => result });
+      expect((await prisma.aiRun.findUnique({ where: { id: first.id } })).status).toBe('SUCCEEDED');
+      await deleteAiMemory(user.id, memory.id);
+      const second = await queueOne(); await cancelAiRun(user.id, second.id);
+      const third = await queueOne(); await processAiQueue({ generate: async () => { throw new Error('Synthetic provider interruption'); } });
+      expect((await prisma.aiRun.findUnique({ where: { id: third.id } })).status).toBe('FAILED');
+      await deleteAiSession(user.id, conversation.id);
+      expect(transactions.length).toBeGreaterThan(10); expect(transactions.every((state) => state.locked)).toBe(true);
+    } finally { guard.mockRestore(); }
+  });
   it('rechecks a real originating session through the publication transaction without retaining its connection', async () => {
     const user = await createUser(); const device = await prisma.authDevice.create({ data: { userId: user.id, label: 'Synthetic device' } });
     const auth = await prisma.authSession.create({ data: { userId: user.id, deviceId: device.id, expiresAt: new Date(Date.now() + 3600000) } });

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import prisma from '../../config/db.js';
+import { allowanceLock } from './ai.allowances.js';
 import { recordAudit } from '../audit/audit.service.js';
 import { aiError } from './ai.config.js';
 
@@ -14,6 +15,7 @@ export async function listAiMemory(userId, db = prisma) {
 export const memoryVersion = (items) => createHash('sha256').update(JSON.stringify(items.map(({ id, revision, content, kind }) => ({ id, revision, content, kind })))).digest('hex');
 export async function saveAiMemory(userId, input, id) {
   return prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
     await actor(userId, tx);
     const all = await tx.aiPersonalMemory.findMany({ where: { ownerUserId: userId, deletedAt: null }, select: { id: true, content: true } });
@@ -35,6 +37,7 @@ export async function saveAiMemory(userId, input, id) {
 }
 export async function deleteAiMemory(userId, id) {
   return prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
     await actor(userId, tx);
     const deleted = await tx.aiPersonalMemory.updateMany({ where: { id, ownerUserId: userId, deletedAt: null }, data: { content: '', deletedAt: new Date(), revision: { increment: 1 } } });

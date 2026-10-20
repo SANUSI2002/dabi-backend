@@ -9,7 +9,7 @@ import { generationAvailable, requireGenerationAvailable } from './ai.policy.js'
 import { dayStart, reserveAiQuota } from './ai.quota.js';
 import { retrieveAiSources, sourceContextAvailable } from './ai.sources.js';
 import { requireAiOriginSession } from './ai.auth.js';
-import { dispatchAllowance, finishAllowance, settleAllowance, getAllowance } from './ai.allowances.js';
+import { dispatchAllowance, finishAllowance, settleAllowance, getAllowance, allowanceLock } from './ai.allowances.js';
 
 const active = ['QUEUED', 'RUNNING'];
 const controllers = new Map();
@@ -34,6 +34,7 @@ const audit = (db, userId, action, id) => recordAudit(db, { actorUserId: userId,
 export async function createAiSession(userId, input) {
   await requireGenerationAvailable(); await actor(userId);
   return prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     const row = await tx.aiSession.create({ data: { ownerUserId: userId, title: input.title || 'New conversation', consentVersion: AI_CONSENT_VERSION } });
     await audit(tx, userId, 'AI_CONVERSATION_CREATED', row.id); return row;
   });
@@ -66,6 +67,7 @@ export async function queueAiMessage(user, id, input) {
   const requestHash = createHash('sha256').update(JSON.stringify({ message: input.message, sourceIds })).digest('hex');
   try {
     return await prisma.$transaction(async (tx) => {
+      await allowanceLock(tx);
       await tx.$queryRaw`SELECT id FROM ai_sessions WHERE id = ${id} FOR UPDATE`;
       await owned(user.id, id, tx);
       const existing = await tx.aiRun.findUnique({ where: { sessionId_clientMessageId: { sessionId: id, clientMessageId: input.clientMessageId } }, include: { messages: true } });
@@ -91,6 +93,7 @@ export async function queueAiMessage(user, id, input) {
 }
 export async function renameAiSession(userId, id, title) {
   return prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     await tx.$queryRaw`SELECT id FROM ai_sessions WHERE id = ${id} FOR UPDATE`;
     await owned(userId, id, tx);
     const row = await tx.aiSession.update({ where: { id }, data: { title } });
@@ -99,6 +102,7 @@ export async function renameAiSession(userId, id, title) {
 }
 export async function deleteAiSession(userId, id) {
   const runIds = await prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM ai_sessions WHERE id = ${id} FOR UPDATE`;
     await owned(userId, id, tx);
@@ -116,6 +120,7 @@ export async function deleteAiSession(userId, id) {
 }
 export async function exportAiSession(userId, id) {
   return prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     await tx.$queryRaw`SELECT id FROM ai_sessions WHERE id = ${id} FOR UPDATE`;
     const session = await owned(userId, id, tx);
     const messages = await tx.aiMessage.findMany({ where: { sessionId: id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 5001,
@@ -141,6 +146,7 @@ export async function getAiUsage(userId) {
 export async function rateAiRun(userId, id, feedback) {
   await getAiRun(userId, id);
   return prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     const row = await tx.aiRun.updateMany({ where: { id, status: 'SUCCEEDED', session: { ownerUserId: userId, archivedAt: null } }, data: { feedback, feedbackAt: new Date() } });
     if (!row.count) throw aiError(409, 'AI_FEEDBACK_UNAVAILABLE', 'Only a completed response can be reviewed.');
     await audit(tx, userId, 'AI_RESPONSE_REVIEWED', id); return { recorded: true, feedback };
@@ -156,6 +162,7 @@ export async function getAiRun(userId, id) {
 export async function cancelAiRun(userId, id) {
   await getAiRun(userId, id);
   const result = await prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     const changed = await tx.aiRun.updateMany({ where: { id, status: { in: active }, session: { ownerUserId: userId } }, data: { status: 'CANCELLED', errorCode: null, finishedAt: new Date() } });
     if (changed.count) await audit(tx, userId, 'AI_RESPONSE_CANCELLED', id);
     if (changed.count) await finishAllowance(tx, 'CHAT', id);
@@ -200,11 +207,11 @@ export async function processAiQueue({ generate = generateAiResponse } = {}) {
     if (cited.some((label) => !context.passages.some((p) => p.label === label))) throw aiError(503, 'AI_RESPONSE_INVALID', 'Sabi returned an unsupported source reference.');
     await requireGenerationAvailable(); await authorisedRun(next);
     await prisma.$transaction(async (tx) => {
+      await allowanceLock(tx);
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${next.session.ownerUserId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM ai_sessions WHERE id = ${next.sessionId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM ai_runs WHERE id = ${next.id} FOR UPDATE`;
       if ((await tx.aiRun.findUnique({ where: { id: next.id } })).status !== 'RUNNING') return;
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(739294, 1)::text`;
       await requireGenerationAvailable(tx);
       await owned(next.session.ownerUserId, next.sessionId, tx);
       await requireAiOriginSession(next.authSessionId, next.session.ownerUserId, tx);
@@ -228,6 +235,7 @@ export async function processAiQueue({ generate = generateAiResponse } = {}) {
 }
 async function finishFailure(run, code) {
   await prisma.$transaction(async (tx) => {
+    await allowanceLock(tx);
     const changed = await tx.aiRun.updateMany({ where: { id: run.id, status: { in: active } }, data: { status: 'FAILED', errorCode: code, finishedAt: new Date() } });
     await finishAllowance(tx, 'CHAT', run.id);
     if (changed.count) await audit(tx, run.session.ownerUserId, 'AI_RESPONSE_FAILED', run.sessionId);
