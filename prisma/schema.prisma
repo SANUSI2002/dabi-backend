@@ -6443,3 +6443,93 @@ model AcctVendorCreditApplication {
   appliedAt DateTime @default(now()) @map("applied_at")
   @@map("acct_vendor_credit_applications")
 }
+
+model AcctBankAccount {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  accountNumber Int @map("account_number")
+  bankName String @map("bank_name") @db.VarChar(120)
+  accountName String @map("account_name") @db.VarChar(160)
+  accountNo String @map("account_no") @db.VarChar(40)
+  currency String @default("NGN") @db.VarChar(3)
+  sortCode String? @map("sort_code") @db.VarChar(20)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, accountNumber], map: "acct_bank_accounts_number_key")
+  @@map("acct_bank_accounts")
+}
+
+model AcctStatementLine {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  accountNumber Int @map("account_number")
+  lineDate DateTime @map("line_date")
+  description String @db.VarChar(300)
+  amount Decimal @db.Decimal(16, 2)
+  reference String? @db.VarChar(100)
+  reconciled Boolean @default(false)
+  matchedJournalEntryId String? @map("matched_journal_entry_id")
+  ruleApplied String? @map("rule_applied")
+  origin String @default("import") @db.VarChar(6)
+  importedByUserId String @map("imported_by_user_id")
+  importedAt DateTime @default(now()) @map("imported_at")
+  @@index([organizationId, accountNumber, reconciled], map: "acct_statement_lines_account_idx")
+  @@map("acct_statement_lines")
+}
+
+model AcctReconciliationRule {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  accountNumber Int @map("account_number")
+  name String @db.VarChar(120)
+  descriptionContains String? @map("description_contains") @db.VarChar(120)
+  direction String? @db.VarChar(3)
+  contraAccount Int @map("contra_account")
+  memo String? @db.VarChar(200)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_reconciliation_rules")
+}
+
+model AcctReconciliation {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  accountNumber Int @map("account_number")
+  statementDate DateTime @map("statement_date")
+  openingBalance Decimal @map("opening_balance") @db.Decimal(16, 2)
+  closingBalance Decimal @map("closing_balance") @db.Decimal(16, 2)
+  status String @default("In Progress") @db.VarChar(12)
+  clearedKeys String[] @default([]) @map("cleared_keys")
+  startedByUserId String @map("started_by_user_id")
+  completedByUserId String? @map("completed_by_user_id")
+  completedAt DateTime? @map("completed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_reconciliations")
+}
+
+model AcctExpenseClaim {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(40)
+  claimantEmployeeId String? @map("claimant_employee_id")
+  claimDate DateTime @map("claim_date")
+  title String @db.VarChar(200)
+  costCenter String? @map("cost_center") @db.VarChar(120)
+  payMode String @map("pay_mode") @db.VarChar(20)
+  paidFromAccount Int? @map("paid_from_account")
+  lines Json
+  receiptRef String? @map("receipt_ref") @db.VarChar(100)
+  status String @default("Draft") @db.VarChar(16)
+  approval Json
+  journalEntryId String? @map("journal_entry_id")
+  paymentJournalEntryId String? @map("payment_journal_entry_id")
+  paidAt DateTime? @map("paid_at")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, number], map: "acct_expense_claims_number_key")
+  @@map("acct_expense_claims")
+}

@@ -286,7 +286,7 @@ export async function reverseEntry(context, id, { date, memo }) {
 }
 
 // ---- chart of accounts ------------------------------------------------------------------------------
-async function addAccountInTx(tx, context, a) {
+export async function addAccountInTx(tx, context, a) {
   if (await tx.acctAccount.findFirst({ where: { ...org(context), number: a.number } })) throw new EmrError('ACCOUNT_IN_USE', { message: `Account ${a.number} already exists.` });
   if (a.parentNumber && !(await tx.acctAccount.findFirst({ where: { ...org(context), number: a.parentNumber } }))) throw new EmrError('ACCOUNT_NOT_FOUND', { message: `Parent account ${a.parentNumber} does not exist.` });
   await tx.acctAccount.create({
