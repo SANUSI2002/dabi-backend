@@ -48679,6 +48679,700 @@ paths:
         "500":
           $ref: "#/components/responses/EmrServerError"
       x-generated: true
+  /api/v1/workforce/organizations/{organizationId}/workflows:
+    get:
+      tags:
+        - Workforce
+      summary: List workflows of organization
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires any of the permissions `workforce.self`, `workflow.manage`.
+      operationId: get_api_v1_workforce_organizations_organizationId_workflows
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/workforce/organizations/{organizationId}/workflows/defs:
+    post:
+      tags:
+        - Workforce
+      summary: Create def
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `workflow.manage`.
+      operationId: post_api_v1_workforce_organizations_organizationId_workflows_defs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                triggerType:
+                  type: string
+                  pattern: ^[a-z][a-z0-9-]{1,39}$
+                description:
+                  type: string
+                  maxLength: 500
+              required:
+                - name
+                - triggerType
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/workforce/organizations/{organizationId}/workflows/defs/{id}:
+    put:
+      tags:
+        - Workforce
+      summary: Replace def
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `workflow.manage`.
+
+        Optimistic concurrency: send the record’s current version in `If-Match` (e.g. `W/"3"`). A stale version returns 412 with the current version in `ETag`.
+      operationId: put_api_v1_workforce_organizations_organizationId_workflows_defs_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: If-Match
+          in: header
+          required: true
+          description: The record version from your last read, e.g. W/"3".
+          schema:
+            type: string
+            examples:
+              - W/"3"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                description:
+                  type: string
+                  maxLength: 500
+                triggerType:
+                  type: string
+                  pattern: ^[a-z][a-z0-9-]{1,39}$
+                nodes:
+                  maxItems: 60
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        minLength: 1
+                        maxLength: 60
+                        pattern: ^[\w.:-]+$
+                      type:
+                        type: string
+                        enum:
+                          - start
+                          - approval
+                          - review
+                          - condition
+                          - parallel
+                          - notify
+                          - escalation
+                          - end
+                      label:
+                        type: string
+                        minLength: 1
+                        maxLength: 160
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                      x:
+                        type: number
+                        minimum: -10000
+                        maximum: 10000
+                      y:
+                        type: number
+                        minimum: -10000
+                        maximum: 10000
+                      approverType:
+                        type: string
+                        enum:
+                          - initiator
+                          - line-manager
+                          - hod
+                          - deputy-hod
+                          - department-role
+                          - specific-person
+                          - role
+                      approverRef:
+                        type: string
+                        maxLength: 120
+                      joinMode:
+                        type: string
+                        enum:
+                          - all
+                          - any
+                          - quorum
+                      quorum:
+                        type: integer
+                        minimum: 1
+                        maximum: 20
+                      members:
+                        maxItems: 20
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            approverType:
+                              type: string
+                              enum:
+                                - initiator
+                                - line-manager
+                                - hod
+                                - deputy-hod
+                                - department-role
+                                - specific-person
+                                - role
+                            approverRef:
+                              type: string
+                              maxLength: 120
+                            label:
+                              type: string
+                              minLength: 1
+                              maxLength: 120
+                              pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                          required:
+                            - approverType
+                            - label
+                          additionalProperties: false
+                      conditions:
+                        maxItems: 20
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              minLength: 1
+                              maxLength: 60
+                              pattern: ^[\w.:-]+$
+                            field:
+                              type: string
+                              minLength: 1
+                              maxLength: 60
+                              pattern: ^[\w.:-]+$
+                            op:
+                              type: string
+                              enum:
+                                - eq
+                                - ne
+                                - gt
+                                - gte
+                                - lt
+                                - lte
+                                - contains
+                                - in
+                            value:
+                              anyOf:
+                                - type: string
+                                  maxLength: 200
+                                - type: number
+                          required:
+                            - id
+                            - field
+                            - op
+                            - value
+                          additionalProperties: false
+                      conditionMatch:
+                        type: string
+                        enum:
+                          - all
+                          - any
+                      afterHours:
+                        type: number
+                        minimum: 1
+                        maximum: 2000
+                      notifyText:
+                        type: string
+                        maxLength: 300
+                      outcome:
+                        type: string
+                        enum:
+                          - approved
+                          - rejected
+                    required:
+                      - id
+                      - type
+                      - label
+                      - x
+                      - y
+                    additionalProperties: false
+                edges:
+                  maxItems: 120
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        minLength: 1
+                        maxLength: 60
+                        pattern: ^[\w.:-]+$
+                      from:
+                        type: string
+                        minLength: 1
+                        maxLength: 60
+                        pattern: ^[\w.:-]+$
+                      to:
+                        type: string
+                        minLength: 1
+                        maxLength: 60
+                        pattern: ^[\w.:-]+$
+                      branch:
+                        type: string
+                        enum:
+                          - approve
+                          - reject
+                          - "true"
+                          - "false"
+                          - timeout
+                          - default
+                      label:
+                        type: string
+                        maxLength: 60
+                    required:
+                      - id
+                      - from
+                      - to
+                      - branch
+                    additionalProperties: false
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "412":
+          $ref: "#/components/responses/EmrPreconditionFailed"
+        "428":
+          $ref: "#/components/responses/EmrPreconditionRequired"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/workforce/organizations/{organizationId}/workflows/defs/{id}/active:
+    post:
+      tags:
+        - Workforce
+      summary: Record active for def
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `workflow.manage`.
+      operationId: post_api_v1_workforce_organizations_organizationId_workflows_defs_id_active
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                active:
+                  type: boolean
+              required:
+                - active
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/workforce/organizations/{organizationId}/workflows/escalations:
+    post:
+      tags:
+        - Workforce
+      summary: Create escalation
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `workflow.manage`.
+      operationId: post_api_v1_workforce_organizations_organizationId_workflows_escalations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/workforce/organizations/{organizationId}/workflows/instances:
+    post:
+      tags:
+        - Workforce
+      summary: Create instance
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires any of the permissions `workforce.self`, `workflow.manage`.
+      operationId: post_api_v1_workforce_organizations_organizationId_workflows_instances
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                triggerType:
+                  type: string
+                  pattern: ^[a-z][a-z0-9-]{1,39}$
+                reference:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                subject:
+                  type: string
+                  minLength: 1
+                  maxLength: 300
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                defId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                context:
+                  type: object
+                  propertyNames:
+                    type: string
+                    minLength: 1
+                    maxLength: 60
+                    pattern: ^[\w.:-]+$
+                  additionalProperties:
+                    anyOf:
+                      - type: string
+                        maxLength: 200
+                      - type: number
+                      - type: boolean
+              required:
+                - triggerType
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/workforce/organizations/{organizationId}/workflows/instances/{id}/cancel:
+    post:
+      tags:
+        - Workforce
+      summary: Cancel instance
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires any of the permissions `workforce.self`, `workflow.manage`.
+      operationId: post_api_v1_workforce_organizations_organizationId_workflows_instances_id_cancel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/workforce/organizations/{organizationId}/workflows/instances/{id}/decide:
+    post:
+      tags:
+        - Workforce
+      summary: Decide instance
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires any of the permissions `workforce.self`, `workflow.manage`.
+      operationId: post_api_v1_workforce_organizations_organizationId_workflows_instances_id_decide
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nodeId:
+                  type: string
+                  minLength: 1
+                  maxLength: 60
+                  pattern: ^[\w.:-]+$
+                decision:
+                  type: string
+                  enum:
+                    - approve
+                    - reject
+                comment:
+                  type: string
+                  maxLength: 500
+              required:
+                - nodeId
+                - decision
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
 components:
   securitySchemes:
     bearerAuth:

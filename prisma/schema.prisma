@@ -5377,3 +5377,56 @@ model WfWorkActivity {
   createdAt DateTime @default(now()) @map("created_at")
   @@map("wf_work_activities")
 }
+
+model WfWorkflowDef {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  starterKey String? @map("starter_key") @db.VarChar(30)
+  name String @db.VarChar(120)
+  description String? @db.VarChar(500)
+  triggerType String @map("trigger_type") @db.VarChar(40)
+  active Boolean @default(false)
+  nodes Json
+  edges Json
+  version Int @default(1)
+  createdByUserId String? @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("wf_workflow_defs")
+}
+
+model WfWorkflowInstance {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  defId String @map("def_id")
+  defName String @map("def_name") @db.VarChar(120)
+  defVersion Int @map("def_version")
+  graph Json
+  triggerType String @map("trigger_type") @db.VarChar(40)
+  subject String @db.VarChar(300)
+  reference String @db.VarChar(100)
+  context Json
+  isTest Boolean @default(false) @map("is_test")
+  initiatedByUserId String @map("initiated_by_user_id")
+  initiatedByEmployeeId String? @map("initiated_by_employee_id")
+  status String @default("Running") @db.VarChar(9)
+  active Json
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+  @@map("wf_workflow_instances")
+}
+
+model WfWorkflowEvent {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  instanceId String @map("instance_id")
+  nodeId String @map("node_id") @db.VarChar(60)
+  nodeLabel String @map("node_label") @db.VarChar(160)
+  action String @db.VarChar(10)
+  actorUserId String? @map("actor_user_id")
+  actorEmployeeId String? @map("actor_employee_id")
+  comment String? @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_workflow_events")
+}
