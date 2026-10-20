@@ -8,10 +8,14 @@ import { aiAvailable, aiConfig } from './ai.config.js';
 import { aiRuntimeConfiguration } from './ai.readiness.js';
 import { allowanceRoutes } from './ai.allowance.routes.js';
 import { allowancePolicy } from './ai.allowances.js';
+import { aiAccountAdminRoutes } from './ai.account.routes.js';
+import { knowledgeRoutes } from './ai.knowledge.routes.js';
 
 export const aiOperationsRoutes = Router();
 const empty = z.object({}).strict();
 aiOperationsRoutes.use('/allowances', allowanceRoutes);
+aiOperationsRoutes.use('/accounts', aiAccountAdminRoutes);
+aiOperationsRoutes.use('/knowledge', knowledgeRoutes);
 const write = (body, params = empty) => validate(z.object({ body, params, query: empty }));
 aiOperationsRoutes.get('/overview', allow('platform.ops.read', 'platform.settings.manage'), validate(z.object({ query: empty, params: empty })), handle(async () => {
   const [policy, counts, flagged, oldest] = await Promise.all([

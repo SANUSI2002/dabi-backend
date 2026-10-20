@@ -9,6 +9,7 @@ import * as service from './ai.service.js';
 import * as memory from './ai.memory.js';
 import * as sources from './ai.sources.js';
 import * as actions from './ai.actions.js';
+import { aiAccess, requireAiFeature } from './ai.access.js';
 const routes = Router();
 routes.use(protect, (req, res, next) => { req.aiRequestId = randomUUID(); res.set('Cache-Control', 'no-store'); next(); });
 const handle = (fn) => async (req, res) => {
@@ -18,13 +19,22 @@ const handle = (fn) => async (req, res) => {
       error: { code: error.code?.startsWith('AI_') ? error.code : 'AI_UNAVAILABLE', message: error.status ? error.message : 'Sabi AI is temporarily unavailable.', retryable: status === 503 } });
   }
 };
+routes.use((req,res,next)=>{
+  const path=req.path;
+  const feature=path.startsWith('/sources')||path==='/source-documents'?'documents'
+    :path.startsWith('/actions')||path.includes('/actions/')||path==='/action-targets/reminders'?'reminders'
+    :path.startsWith('/memory')&&['POST','PATCH'].includes(req.method)?'memory':null;
+  if(!feature||req.method==='DELETE')return next();
+  requireAiFeature(req.user.id,feature).then(()=>next()).catch(e=>res.status(e.status||503).json({status:'error',error:{code:e.code||'AI_UNAVAILABLE',message:e.status?e.message:'Access could not be checked.'}}));
+});
 const parse = (schema, value) => { const result = schema.safeParse(value); if (!result.success) throw aiError(422, 'AI_INVALID_REQUEST', 'Check the supplied fields and try again.'); return result.data; };
 const id = z.string().uuid();
 const send = (req, res, data, status = 200) => res.status(status).json({ status: 'success', requestId: req.aiRequestId, data });
 const limiter = createLimiter({ kind: 'ai-messages', max: 30, keyGenerator: (req) => `ai:${req.user.id}` });
 routes.get('/config', handle(async (req, res) => {
   const enabled = await generationAvailable();
-  send(req, res, { enabled, consentVersion: AI_CONSENT_VERSION, documentConsentVersion: AI_DOCUMENT_CONSENT_VERSION, documents: enabled && aiDocumentsAvailable(), actions: ['REMINDER_TOGGLE'], modes: ['GENERAL'], personalRecords: false, tools: false, billing: false });
+  const access=await aiAccess(req.user.id);
+  send(req, res, { enabled:enabled&&access.features.chat, access, consentVersion: AI_CONSENT_VERSION, documentConsentVersion: AI_DOCUMENT_CONSENT_VERSION, documents: enabled && aiDocumentsAvailable() && access.features.documents, actions: access.features.reminders?['REMINDER_TOGGLE']:[], modes: ['GENERAL'], personalRecords: false, tools: false, billing: false });
 }));
 routes.get('/action-targets/reminders', handle(async (req, res) => send(req, res, { items: await actions.reminderActionTargets(req.user.id) })));
 routes.get('/sessions/:id/actions', handle(async (req, res) => send(req, res, { items: await actions.listAiActions(req.user.id, parse(id, req.params.id)) })));

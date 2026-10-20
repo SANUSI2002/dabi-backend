@@ -10,6 +10,8 @@ servers:
   - url: /
     description: Current environment
 tags:
+  - name: Ai Account
+    description: Standalone Sabi AI account registration, verification and applications.
   - name: Auth
     description: Auth endpoints currently registered by the backend.
   - name: Profile
@@ -901,21 +903,29 @@ paths:
       x-generated: true
   /api/v1/ai/memory:
     get:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: List own explicitly saved AI memory
       operationId: get_api_v1_ai_memory
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       responses:
-        '200': { description: Own active preferences and self-reported information only. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: Verified active account required. }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Own active preferences and self-reported information only.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Verified active account required.
+        "503":
+          description: Dependency unavailable.
     post:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Explicitly save personal context for future AI responses
       operationId: post_api_v1_ai_memory
       description: Never creates verified clinical facts. Source conversation ownership is checked. Up to 50 active memories and 8000 characters total per user.
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -923,26 +933,50 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [kind, content]
+              required:
+                - kind
+                - content
               properties:
-                kind: { type: string, enum: [PREFERENCE, USER_REPORTED] }
-                content: { type: string, minLength: 1, maxLength: 1000 }
-                sourceSessionId: { type: string, format: uuid }
+                kind:
+                  type: string
+                  enum:
+                    - PREFERENCE
+                    - USER_REPORTED
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+                sourceSessionId:
+                  type: string
+                  format: uuid
       responses:
-        '201': { description: Explicit personal memory saved. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '422': { description: Invalid fields. }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '503': { description: Dependency unavailable. }
+        "201":
+          description: Explicit personal memory saved.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Invalid fields.
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: Dependency unavailable.
   /api/v1/ai/memory/{id}:
     patch:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Correct own memory using optimistic concurrency
       operationId: patch_api_v1_ai_memory_id
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -950,39 +984,76 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [kind, content, revision]
+              required:
+                - kind
+                - content
+                - revision
               properties:
-                kind: { type: string, enum: [PREFERENCE, USER_REPORTED] }
-                content: { type: string, minLength: 1, maxLength: 1000 }
-                revision: { type: integer, minimum: 1 }
+                kind:
+                  type: string
+                  enum:
+                    - PREFERENCE
+                    - USER_REPORTED
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+                revision:
+                  type: integer
+                  minimum: 1
       responses:
-        '200': { description: Correction saved with incremented revision. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '422': { description: Invalid fields. }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Correction saved with incremented revision.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          description: Invalid fields.
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: Dependency unavailable.
     delete:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Delete own saved memory and invalidate in-flight context
       operationId: delete_api_v1_ai_memory_id
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200': { description: Content erased and future use revoked. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Content erased and future use revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Dependency unavailable.
   /api/v1/ai/runs/{id}/feedback:
     post:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Review an owned completed AI response
       operationId: post_api_v1_ai_runs_id_feedback
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -990,16 +1061,28 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [feedback]
+              required:
+                - feedback
               properties:
-                feedback: { type: string, enum: [HELPFUL, UNCLEAR, UNSAFE] }
+                feedback:
+                  type: string
+                  enum:
+                    - HELPFUL
+                    - UNCLEAR
+                    - UNSAFE
       responses:
-        '200': { description: Feedback recorded without rewriting the answer. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '422': { description: Invalid feedback. }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Feedback recorded without rewriting the answer.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          description: Invalid feedback.
+        "503":
+          description: Dependency unavailable.
   /api/v1/ai/runs/{id}:
     get:
       tags:
@@ -1069,33 +1152,55 @@ paths:
   /api/v1/ai/action-targets/reminders:
     get:
       operationId: aiReminderTargets
-      tags: [Ai]
+      tags:
+        - Ai
       summary: List own active scheduled medicines eligible for reminder controls
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       responses:
-        '200': { description: 'Own reminder names, setting, timezone and concurrency version only' }
-        '401': { description: Authentication required }
-        '403': { description: Verified active account required }
+        "200":
+          description: Own reminder names, setting, timezone and concurrency version only
+        "401":
+          description: Authentication required
+        "403":
+          description: Verified active account required
   /api/v1/ai/sessions/{id}/actions:
     get:
       operationId: aiSessionActions
-      tags: [Ai]
+      tags:
+        - Ai
       summary: List own conversation action previews and immutable completion receipts
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200': { description: Latest fifty proposals and their completion receipts }
-        '401': { description: Authentication required }
-        '404': { description: Own active conversation not found }
+        "200":
+          description: Latest fifty proposals and their completion receipts
+        "401":
+          description: Authentication required
+        "404":
+          description: Own active conversation not found
   /api/v1/ai/sessions/{id}/actions/reminders:
     post:
       operationId: aiProposeReminderAction
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Prepare an expiring reminder-only change without applying it
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -1103,28 +1208,52 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [clientRequestId, scheduleId, expectedVersion, enableReminders]
+              required:
+                - clientRequestId
+                - scheduleId
+                - expectedVersion
+                - enableReminders
               properties:
-                clientRequestId: { type: string, format: uuid }
-                scheduleId: { type: string, format: uuid }
-                expectedVersion: { type: integer, minimum: 1 }
-                enableReminders: { type: boolean }
+                clientRequestId:
+                  type: string
+                  format: uuid
+                scheduleId:
+                  type: string
+                  format: uuid
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                enableReminders:
+                  type: boolean
       responses:
-        '201': { description: Ten-minute confirmation preview; no treatment or notification setting changed }
-        '401': { description: Authentication required }
-        '404': { description: Own active conversation or reminder not found }
-        '409': { description: Version changed or idempotency conflict }
-        '422': { description: Invalid or unknown fields }
-        '429': { description: Too many pending previews or requests }
+        "201":
+          description: Ten-minute confirmation preview; no treatment or notification setting changed
+        "401":
+          description: Authentication required
+        "404":
+          description: Own active conversation or reminder not found
+        "409":
+          description: Version changed or idempotency conflict
+        "422":
+          description: Invalid or unknown fields
+        "429":
+          description: Too many pending previews or requests
   /api/v1/ai/actions/{id}/confirm:
     post:
       operationId: aiConfirmAction
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Confirm the exact reminder preview and return an immutable completion receipt
-      description: 'Rechecks ownership, current schedule version and expiry. Uses the existing reminder domain service transactionally. Repeating confirmation returns the same receipt without applying twice. Doses and treatment instructions cannot be changed here.'
-      security: [{ bearerAuth: [] }]
+      description: Rechecks ownership, current schedule version and expiry. Uses the existing reminder domain service transactionally. Repeating confirmation returns the same receipt without applying twice. Doses and treatment instructions cannot be changed here.
+      security:
+        - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -1132,38 +1261,62 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [confirm]
+              required:
+                - confirm
               properties:
-                confirm: { type: boolean, const: true }
+                confirm:
+                  type: boolean
+                  const: true
       responses:
-        '200': { description: Applied change receipt with resulting schedule version }
-        '401': { description: Authentication required }
-        '404': { description: Own active proposal not found }
-        '409': { description: Cancelled or expired preview or changed schedule }
-        '422': { description: Explicit confirmation required }
-        '429': { description: Request limit reached }
+        "200":
+          description: Applied change receipt with resulting schedule version
+        "401":
+          description: Authentication required
+        "404":
+          description: Own active proposal not found
+        "409":
+          description: Cancelled or expired preview or changed schedule
+        "422":
+          description: Explicit confirmation required
+        "429":
+          description: Request limit reached
   /api/v1/ai/actions/{id}/cancel:
     post:
       operationId: aiCancelAction
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Cancel an own pending action preview without applying it
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: false }
+            schema:
+              type: object
+              additionalProperties: false
       responses:
-        '200': { description: Preview cancelled; domain settings unchanged }
-        '401': { description: Authentication required }
-        '404': { description: Own pending preview not found }
-        '422': { description: Unknown fields }
-        '429': { description: Request limit reached }
+        "200":
+          description: Preview cancelled; domain settings unchanged
+        "401":
+          description: Authentication required
+        "404":
+          description: Own pending preview not found
+        "422":
+          description: Unknown fields
+        "429":
+          description: Request limit reached
   /api/v1/ai/source-documents:
     get:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: List own medical files eligible for the AI workspace
       operationId: get__api_v1_ai_source_documents
       security:
@@ -1191,7 +1344,8 @@ paths:
           description: Processing unavailable
   /api/v1/ai/sources:
     get:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: List own nonrevoked AI document extractions
       operationId: get__api_v1_ai_sources
       security:
@@ -1218,7 +1372,8 @@ paths:
         "503":
           description: Processing unavailable
     post:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Queue screened owner-document extraction with explicit consent
       operationId: post__api_v1_ai_sources
       security:
@@ -1230,12 +1385,24 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [documentId, clientRequestId, consentGiven, consentVersion]
+              required:
+                - documentId
+                - clientRequestId
+                - consentGiven
+                - consentVersion
               properties:
-                documentId: { type: string, format: uuid }
-                clientRequestId: { type: string, format: uuid }
-                consentGiven: { type: boolean, const: true }
-                consentVersion: { type: string, const: sabi-ai-document-v1 }
+                documentId:
+                  type: string
+                  format: uuid
+                clientRequestId:
+                  type: string
+                  format: uuid
+                consentGiven:
+                  type: boolean
+                  const: true
+                consentVersion:
+                  type: string
+                  const: sabi-ai-document-v1
       responses:
         "202":
           description: Success; sensitive data is never cacheable.
@@ -1259,7 +1426,8 @@ paths:
           description: Processing unavailable
   /api/v1/ai/sources/{id}:
     get:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Read own page-anchored extraction for review
       operationId: get__api_v1_ai_sources_id_
       security:
@@ -1268,7 +1436,9 @@ paths:
         - in: path
           name: id
           required: true
-          schema: { type: string, format: uuid }
+          schema:
+            type: string
+            format: uuid
       responses:
         "200":
           description: Success; sensitive data is never cacheable.
@@ -1291,7 +1461,8 @@ paths:
         "503":
           description: Processing unavailable
     delete:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Erase an AI derivative and revoke its use without deleting the original
       operationId: delete__api_v1_ai_sources_id_
       security:
@@ -1300,7 +1471,9 @@ paths:
         - in: path
           name: id
           required: true
-          schema: { type: string, format: uuid }
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -1308,9 +1481,12 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [confirm]
+              required:
+                - confirm
               properties:
-                confirm: { type: boolean, const: true }
+                confirm:
+                  type: boolean
+                  const: true
       responses:
         "200":
           description: Success; sensitive data is never cacheable.
@@ -1334,7 +1510,8 @@ paths:
           description: Processing unavailable
   /api/v1/ai/sources/{id}/preview:
     post:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Authorise a short-lived private original-document preview
       operationId: post__api_v1_ai_sources_id_preview
       security:
@@ -1343,7 +1520,9 @@ paths:
         - in: path
           name: id
           required: true
-          schema: { type: string, format: uuid }
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -1351,9 +1530,13 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [pageNumber]
+              required:
+                - pageNumber
               properties:
-                pageNumber: { type: integer, minimum: 1, maximum: 20 }
+                pageNumber:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
       responses:
         "200":
           description: Success; sensitive data is never cacheable.
@@ -1377,7 +1560,8 @@ paths:
           description: Processing unavailable
   /api/v1/ai/sources/{id}/review:
     post:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Confirm patient match and review extraction without certifying clinical truth
       operationId: post__api_v1_ai_sources_id_review
       security:
@@ -1386,7 +1570,9 @@ paths:
         - in: path
           name: id
           required: true
-          schema: { type: string, format: uuid }
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -1394,11 +1580,21 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [revision, patientMatchConfirmed, extractionReviewed, pages]
+              required:
+                - revision
+                - patientMatchConfirmed
+                - extractionReviewed
+                - pages
               properties:
-                revision: { type: integer, minimum: 1 }
-                patientMatchConfirmed: { type: boolean, const: true }
-                extractionReviewed: { type: boolean, const: true }
+                revision:
+                  type: integer
+                  minimum: 1
+                patientMatchConfirmed:
+                  type: boolean
+                  const: true
+                extractionReviewed:
+                  type: boolean
+                  const: true
                 pages:
                   type: array
                   minItems: 1
@@ -1406,10 +1602,17 @@ paths:
                   items:
                     type: object
                     additionalProperties: false
-                    required: [pageNumber, text]
+                    required:
+                      - pageNumber
+                      - text
                     properties:
-                      pageNumber: { type: integer, minimum: 1, maximum: 20 }
-                      text: { type: string, maxLength: 12000 }
+                      pageNumber:
+                        type: integer
+                        minimum: 1
+                        maximum: 20
+                      text:
+                        type: string
+                        maxLength: 12000
       responses:
         "200":
           description: Success; sensitive data is never cacheable.
@@ -1466,12 +1669,20 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [consentGiven, consentVersion]
+              required:
+                - consentGiven
+                - consentVersion
               properties:
-                title: { type: string, minLength: 1, maxLength: 120 }
-                consentGiven: { const: true }
-                consentVersion: { const: sabi-ai-conversation-v1 }
-                mode: { const: GENERAL }
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                consentGiven:
+                  const: true
+                consentVersion:
+                  const: sabi-ai-conversation-v1
+                mode:
+                  const: GENERAL
       security:
         - bearerAuth: []
       responses:
@@ -1492,15 +1703,19 @@ paths:
       x-generated: true
   /api/v1/ai/sessions/{id}:
     patch:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Rename an owned AI conversation
       operationId: patch_api_v1_ai_sessions_id
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
           required: true
-          schema: { type: string, format: uuid }
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -1508,26 +1723,39 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [title]
+              required:
+                - title
               properties:
-                title: { type: string, minLength: 1, maxLength: 120 }
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
       responses:
-        '200': { description: Renamed conversation. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '422': { description: Invalid title or unknown fields. }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Renamed conversation.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Invalid title or unknown fields.
+        "503":
+          description: Dependency unavailable.
     delete:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Delete conversation messages and revoke future use
       operationId: delete_api_v1_ai_sessions_id
       description: Requires explicit confirmation. Cancels active runs, deletes messages and archives the conversation. Retains minimal usage and audit metadata; signed clinical records are unchanged.
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
           required: true
-          schema: { type: string, format: uuid }
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -1535,15 +1763,24 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [confirm]
+              required:
+                - confirm
               properties:
-                confirm: { type: boolean, enum: [true] }
+                confirm:
+                  type: boolean
+                  enum:
+                    - true
       responses:
-        '200': { description: Messages deleted and processing revoked. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '422': { description: Confirmation missing or invalid. }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Messages deleted and processing revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Confirmation missing or invalid.
+        "503":
+          description: Dependency unavailable.
     get:
       tags:
         - Ai
@@ -1577,33 +1814,48 @@ paths:
       x-generated: true
   /api/v1/ai/sessions/{id}/export:
     get:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Export an owned AI conversation
       operationId: get_api_v1_ai_sessions_id_export
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
           required: true
-          schema: { type: string, format: uuid }
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200': { description: JSON export with schema version and original message timestamps. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '422': { description: Conversation requires a larger asynchronous export. }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: JSON export with schema version and original message timestamps.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Conversation requires a larger asynchronous export.
+        "503":
+          description: Dependency unavailable.
   /api/v1/ai/usage:
     get:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Read own AI request usage
       operationId: get_api_v1_ai_usage
       description: UTC daily counts, cumulative counts, completed responses, daily request allowance and reset timestamp. Counts are not monetary invoices. Failed and cancelled requests count conservatively.
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       responses:
-        '200': { description: Own usage only; no other users or provider credentials. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: Verified active account required. }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Own usage only; no other users or provider credentials.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Verified active account required.
+        "503":
+          description: Dependency unavailable.
   /api/v1/ai/sessions/{id}/messages:
     post:
       tags:
@@ -1618,10 +1870,17 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [clientMessageId, message]
+              required:
+                - clientMessageId
+                - message
               properties:
-                clientMessageId: { type: string, format: uuid }
-                message: { type: string, minLength: 1, maxLength: 4000 }
+                clientMessageId:
+                  type: string
+                  format: uuid
+                message:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
       security:
         - bearerAuth: []
       parameters:
@@ -1631,14 +1890,14 @@ paths:
           schema:
             type: string
       responses:
-        "202":
-          description: Response queued or running. Poll GET /api/v1/ai/runs/{id} for the terminal status.
         "200":
           description: Success.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Success"
+        "202":
+          description: Response queued or running. Poll GET /api/v1/ai/runs/{id} for the terminal status.
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2775,11 +3034,23 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [code]
+              required:
+                - code
               properties:
-                code: { type: string, minLength: 10, maxLength: 2048 }
-                intent: { type: string, enum: [patient, professional], description: "professional (from the professional portal) never creates a patient account; a new person gets signup_required with a signupToken for POST /api/v1/doctors/register or /register-professional." }
-                consentGiven: { type: boolean, enum: [true] }
+                code:
+                  type: string
+                  minLength: 10
+                  maxLength: 2048
+                intent:
+                  type: string
+                  enum:
+                    - patient
+                    - professional
+                  description: professional (from the professional portal) never creates a patient account; a new person gets signup_required with a signupToken for POST /api/v1/doctors/register or /register-professional.
+                consentGiven:
+                  type: boolean
+                  enum:
+                    - true
       responses:
         "200":
           description: Signed in (`accessToken`, `user`), or `status` is `signup_required` with `signupToken` and `profile`.
@@ -2818,14 +3089,34 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [idToken, nonce]
+              required:
+                - idToken
+                - nonce
               properties:
-                idToken: { type: string, minLength: 20, maxLength: 8192 }
-                nonce: { type: string, minLength: 20, maxLength: 200 }
-                firstName: { type: string, maxLength: 100 }
-                lastName: { type: string, maxLength: 100 }
-                consentGiven: { type: boolean, enum: [true] }
-                intent: { type: string, enum: [patient, professional], description: "professional (from the professional portal) never creates a patient account; a new person gets signup_required with a signupToken for POST /api/v1/doctors/register or /register-professional." }
+                idToken:
+                  type: string
+                  minLength: 20
+                  maxLength: 8192
+                nonce:
+                  type: string
+                  minLength: 20
+                  maxLength: 200
+                firstName:
+                  type: string
+                  maxLength: 100
+                lastName:
+                  type: string
+                  maxLength: 100
+                consentGiven:
+                  type: boolean
+                  enum:
+                    - true
+                intent:
+                  type: string
+                  enum:
+                    - patient
+                    - professional
+                  description: professional (from the professional portal) never creates a patient account; a new person gets signup_required with a signupToken for POST /api/v1/doctors/register or /register-professional.
       responses:
         "200":
           description: Signed in, or `status` is `signup_required` with `signupToken`.
@@ -2862,10 +3153,18 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [signupToken, consentGiven]
+              required:
+                - signupToken
+                - consentGiven
               properties:
-                signupToken: { type: string, minLength: 20, maxLength: 4096 }
-                consentGiven: { type: boolean, enum: [true] }
+                signupToken:
+                  type: string
+                  minLength: 20
+                  maxLength: 4096
+                consentGiven:
+                  type: boolean
+                  enum:
+                    - true
       responses:
         "200":
           description: Signed in.
@@ -4338,23 +4637,31 @@ paths:
           $ref: "#/components/responses/ServerError"
   /api/v1/command-centre/ai/overview:
     get:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Inspect AI queue health and effective generation controls
       operationId: get_api_v1_command_centre_ai_overview
       description: Requires platform.ops.read or platform.settings.manage. Returns only operational metadata, never messages or keys.
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       responses:
-        '200': { description: 'Policy version, effective availability, request counts and allowances.' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: Platform context and permission required. }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Policy version, effective availability, request counts and allowances.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Platform context and permission required.
+        "503":
+          description: Dependency unavailable.
   /api/v1/command-centre/ai/policy:
     post:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Pause or resume configured AI generation
       operationId: post_api_v1_command_centre_ai_policy
       description: Requires platform.settings.manage, recent MFA, a reason and the expected policy version. Preserves normal Sabi services and history; does not bypass provider configuration or quotas.
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -4362,45 +4669,100 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [expectedVersion, generationPaused, reason]
+              required:
+                - expectedVersion
+                - generationPaused
+                - reason
               properties:
-                expectedVersion: { type: integer, minimum: 1 }
-                generationPaused: { type: boolean }
-                reason: { type: string, minLength: 5, maxLength: 500 }
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                generationPaused:
+                  type: boolean
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
       responses:
-        '200': { description: 'Versioned, audited policy update.' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: 'Permission, platform context and recent MFA required.' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '422': { description: Invalid fields. }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Versioned, audited policy update.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Permission, platform context and recent MFA required.
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          description: Invalid fields.
+        "503":
+          description: Dependency unavailable.
   /api/v1/command-centre/ai/runs:
     get:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: List AI request metadata without conversation content
       operationId: get_api_v1_command_centre_ai_runs
       description: Requires platform.ops.read or platform.audit.read.
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
-        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 10000, default: 0 } }
-        - { name: status, in: query, schema: { type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED] } }
-        - { name: flagged, in: query, schema: { type: string, enum: ['true'] } }
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 10000
+            default: 0
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - QUEUED
+              - RUNNING
+              - SUCCEEDED
+              - FAILED
+              - CANCELLED
+        - name: flagged
+          in: query
+          schema:
+            type: string
+            enum:
+              - "true"
       responses:
-        '200': { description: Paginated operational metadata and user-feedback classification. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: Platform context and permission required. }
-        '422': { description: Invalid filters. }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Paginated operational metadata and user-feedback classification.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Platform context and permission required.
+        "422":
+          description: Invalid filters.
+        "503":
+          description: Dependency unavailable.
   /api/v1/command-centre/ai/traces/{id}/read:
     post:
-      tags: [Ai]
+      tags:
+        - Ai
       summary: Open an audited AI trace metadata view
       operationId: post_api_v1_command_centre_ai_traces_id_read
       description: Requires platform.audit.read, recent MFA and a recorded purpose. Excludes message content, personal memory, auth-session identifiers and hidden model reasoning.
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -4408,16 +4770,26 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [reason]
+              required:
+                - reason
               properties:
-                reason: { type: string, minLength: 5, maxLength: 500 }
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
       responses:
-        '200': { description: 'Authorised context references, configuration and safe usage metadata.' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { description: 'Platform context, audit permission and recent MFA required.' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '422': { description: Invalid purpose. }
-        '503': { description: Dependency unavailable. }
+        "200":
+          description: Authorised context references, configuration and safe usage metadata.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Platform context, audit permission and recent MFA required.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Invalid purpose.
+        "503":
+          description: Dependency unavailable.
   /api/v1/command-centre/access:
     get:
       tags:
@@ -38430,6 +38802,1522 @@ paths:
           description: Missing or wrong signature
         "500":
           description: An item failed; Meta will retry
+  /api/v1/ai-account/catalogue:
+    get:
+      tags:
+        - Ai Account
+      summary: Get catalogue
+      operationId: get_api_v1_ai_account_catalogue
+      security: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/ai-account/enrollment:
+    post:
+      tags:
+        - Ai Account
+      summary: Enrollment ai account
+      operationId: post_api_v1_ai_account_enrollment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+                enrollment:
+                  type: object
+                  properties:
+                    kind:
+                      type: string
+                      enum:
+                        - PERSONAL
+                        - PROFESSIONAL
+                        - BUSINESS
+                    profession:
+                      type: string
+                      enum:
+                        - DOCTOR
+                        - DENTIST
+                        - NURSE
+                        - MIDWIFE
+                        - PHARMACIST
+                        - PHYSIOTHERAPIST
+                        - LABORATORY_SCIENTIST
+                        - RADIOGRAPHER
+                        - OPTOMETRIST
+                        - COMMUNITY_HEALTH
+                        - OTHER
+                    country:
+                      type: string
+                      minLength: 2
+                      maxLength: 80
+                    authority:
+                      type: string
+                      minLength: 2
+                      maxLength: 160
+                    licenceNumber:
+                      type: string
+                      minLength: 3
+                      maxLength: 100
+                    expiresAt:
+                      type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                    organizationName:
+                      type: string
+                      minLength: 2
+                      maxLength: 180
+                    registrationNumber:
+                      type: string
+                      minLength: 3
+                      maxLength: 100
+                    attestation:
+                      type: boolean
+                      const: true
+                  required:
+                    - kind
+                    - attestation
+                  additionalProperties: false
+              required:
+                - expectedVersion
+                - enrollment
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/ai-account/me:
+    get:
+      tags:
+        - Ai Account
+      summary: Get me
+      operationId: get_api_v1_ai_account_me
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/ai-account/register:
+    post:
+      tags:
+        - Ai Account
+      summary: Register ai account
+      operationId: post_api_v1_ai_account_register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                password:
+                  type: string
+                  minLength: 12
+                  maxLength: 128
+                fullName:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+                consentGiven:
+                  type: boolean
+                  const: true
+                enrollment:
+                  type: object
+                  properties:
+                    kind:
+                      type: string
+                      enum:
+                        - PERSONAL
+                        - PROFESSIONAL
+                        - BUSINESS
+                    profession:
+                      type: string
+                      enum:
+                        - DOCTOR
+                        - DENTIST
+                        - NURSE
+                        - MIDWIFE
+                        - PHARMACIST
+                        - PHYSIOTHERAPIST
+                        - LABORATORY_SCIENTIST
+                        - RADIOGRAPHER
+                        - OPTOMETRIST
+                        - COMMUNITY_HEALTH
+                        - OTHER
+                    country:
+                      type: string
+                      minLength: 2
+                      maxLength: 80
+                    authority:
+                      type: string
+                      minLength: 2
+                      maxLength: 160
+                    licenceNumber:
+                      type: string
+                      minLength: 3
+                      maxLength: 100
+                    expiresAt:
+                      type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                    organizationName:
+                      type: string
+                      minLength: 2
+                      maxLength: 180
+                    registrationNumber:
+                      type: string
+                      minLength: 3
+                      maxLength: 100
+                    attestation:
+                      type: boolean
+                      const: true
+                  required:
+                    - kind
+                    - attestation
+                  additionalProperties: false
+              required:
+                - email
+                - password
+                - fullName
+                - consentGiven
+                - enrollment
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/ai-account/resend-verification:
+    post:
+      tags:
+        - Ai Account
+      summary: Resend verification ai account
+      operationId: post_api_v1_ai_account_resend_verification
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+              required:
+                - email
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/accounts:
+    get:
+      tags:
+        - Command Centre
+      summary: List accounts
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+      operationId: get_api_v1_command_centre_ai_accounts
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/accounts/{id}/decision:
+    post:
+      tags:
+        - Command Centre
+      summary: Record decision for account
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_accounts_id_decision
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                status:
+                  type: string
+                  enum:
+                    - APPROVED
+                    - REJECTED
+                    - SUSPENDED
+                verificationReference:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - status
+                - verificationReference
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/accounts/{id}/features:
+    post:
+      tags:
+        - Command Centre
+      summary: Create feature for account
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_accounts_id_features
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                featureOverrides:
+                  type: object
+                  properties:
+                    chat:
+                      type: boolean
+                    knowledge:
+                      type: boolean
+                    documents:
+                      type: boolean
+                    reminders:
+                      type: boolean
+                    memory:
+                      type: boolean
+                  additionalProperties: false
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - featureOverrides
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/accounts/policy:
+    get:
+      tags:
+        - Command Centre
+      summary: Get policy
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+      operationId: get_api_v1_command_centre_ai_accounts_policy
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    post:
+      tags:
+        - Command Centre
+      summary: Policy account
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_accounts_policy
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                settings:
+                  type: object
+                  properties:
+                    PERSONAL:
+                      type: object
+                      properties:
+                        chat:
+                          type: boolean
+                        knowledge:
+                          type: boolean
+                        documents:
+                          type: boolean
+                        reminders:
+                          type: boolean
+                        memory:
+                          type: boolean
+                      required:
+                        - chat
+                        - knowledge
+                        - documents
+                        - reminders
+                        - memory
+                      additionalProperties: false
+                    PROFESSIONAL:
+                      type: object
+                      properties:
+                        chat:
+                          type: boolean
+                        knowledge:
+                          type: boolean
+                        documents:
+                          type: boolean
+                        reminders:
+                          type: boolean
+                        memory:
+                          type: boolean
+                      required:
+                        - chat
+                        - knowledge
+                        - documents
+                        - reminders
+                        - memory
+                      additionalProperties: false
+                    BUSINESS:
+                      type: object
+                      properties:
+                        chat:
+                          type: boolean
+                        knowledge:
+                          type: boolean
+                        documents:
+                          type: boolean
+                        reminders:
+                          type: boolean
+                        memory:
+                          type: boolean
+                      required:
+                        - chat
+                        - knowledge
+                        - documents
+                        - reminders
+                        - memory
+                      additionalProperties: false
+                  required:
+                    - PERSONAL
+                    - PROFESSIONAL
+                    - BUSINESS
+                  additionalProperties: false
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - settings
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents:
+    get:
+      tags:
+        - Command Centre
+      summary: List documents
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_command_centre_ai_knowledge_documents
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+    post:
+      tags:
+        - Command Centre
+      summary: Create document
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_knowledge_documents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                metadata:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                      minLength: 2
+                      maxLength: 240
+                    authors:
+                      type: string
+                      minLength: 2
+                      maxLength: 300
+                    edition:
+                      type: string
+                      minLength: 1
+                      maxLength: 80
+                    publicationDate:
+                      anyOf:
+                        - type: string
+                          format: date
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                        - type: "null"
+                    jurisdiction:
+                      type: string
+                      minLength: 2
+                      maxLength: 100
+                    language:
+                      type: string
+                      minLength: 2
+                      maxLength: 60
+                    specialty:
+                      type: string
+                      minLength: 2
+                      maxLength: 100
+                    audiences:
+                      minItems: 1
+                      maxItems: 3
+                      type: array
+                      items:
+                        type: string
+                        enum:
+                          - PERSONAL
+                          - PROFESSIONAL
+                          - BUSINESS
+                    rightsBasis:
+                      type: string
+                      minLength: 10
+                      maxLength: 1000
+                    rightsConfirmed:
+                      type: boolean
+                      const: true
+                    reviewBy:
+                      type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                    sourceType:
+                      type: string
+                      enum:
+                        - BOOK
+                        - EXTERNAL_GUIDELINE
+                    sourceUrl:
+                      anyOf:
+                        - type: string
+                          maxLength: 1000
+                          format: uri
+                        - type: "null"
+                  required:
+                    - title
+                    - authors
+                    - edition
+                    - publicationDate
+                    - jurisdiction
+                    - language
+                    - specialty
+                    - audiences
+                    - rightsBasis
+                    - rightsConfirmed
+                    - reviewBy
+                    - sourceType
+                    - sourceUrl
+                  additionalProperties: false
+                byteSize:
+                  type: integer
+                  minimum: 1
+                  maximum: 10485760
+                sha256:
+                  type: string
+                  pattern: ^[a-f0-9]{64}$
+                replacesId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+                scanDisclosureAccepted:
+                  type: boolean
+                  const: true
+              required:
+                - id
+                - metadata
+                - byteSize
+                - sha256
+                - reason
+                - scanDisclosureAccepted
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents/{id}:
+    get:
+      tags:
+        - Command Centre
+      summary: Get document
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_command_centre_ai_knowledge_documents_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents/{id}/approve:
+    post:
+      tags:
+        - Command Centre
+      summary: Approve document
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_knowledge_documents_id_approve
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents/{id}/file:
+    put:
+      tags:
+        - Command Centre
+      summary: Set file of document
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: put_api_v1_command_centre_ai_knowledge_documents_id_file
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents/{id}/metadata:
+    post:
+      tags:
+        - Command Centre
+      summary: Record metadata for document
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_knowledge_documents_id_metadata
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+                metadata:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                      minLength: 2
+                      maxLength: 240
+                    authors:
+                      type: string
+                      minLength: 2
+                      maxLength: 300
+                    edition:
+                      type: string
+                      minLength: 1
+                      maxLength: 80
+                    publicationDate:
+                      anyOf:
+                        - type: string
+                          format: date
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                        - type: "null"
+                    jurisdiction:
+                      type: string
+                      minLength: 2
+                      maxLength: 100
+                    language:
+                      type: string
+                      minLength: 2
+                      maxLength: 60
+                    specialty:
+                      type: string
+                      minLength: 2
+                      maxLength: 100
+                    audiences:
+                      minItems: 1
+                      maxItems: 3
+                      type: array
+                      items:
+                        type: string
+                        enum:
+                          - PERSONAL
+                          - PROFESSIONAL
+                          - BUSINESS
+                    rightsBasis:
+                      type: string
+                      minLength: 10
+                      maxLength: 1000
+                    rightsConfirmed:
+                      type: boolean
+                      const: true
+                    reviewBy:
+                      type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                    sourceType:
+                      type: string
+                      enum:
+                        - BOOK
+                        - EXTERNAL_GUIDELINE
+                    sourceUrl:
+                      anyOf:
+                        - type: string
+                          maxLength: 1000
+                          format: uri
+                        - type: "null"
+                  required:
+                    - title
+                    - authors
+                    - edition
+                    - publicationDate
+                    - jurisdiction
+                    - language
+                    - specialty
+                    - audiences
+                    - rightsBasis
+                    - rightsConfirmed
+                    - reviewBy
+                    - sourceType
+                    - sourceUrl
+                  additionalProperties: false
+              required:
+                - expectedVersion
+                - reason
+                - metadata
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents/{id}/page-review:
+    post:
+      tags:
+        - Command Centre
+      summary: Record page review for document
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_knowledge_documents_id_page_review
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+                pageNumber:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+                text:
+                  type: string
+                  maxLength: 30000
+                pageLabel:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                      maxLength: 40
+                    - type: "null"
+                quality:
+                  type: string
+                  enum:
+                    - APPROVED
+                    - EXCLUDED
+              required:
+                - expectedVersion
+                - reason
+                - pageNumber
+                - text
+                - pageLabel
+                - quality
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents/{id}/pages/{page}:
+    get:
+      tags:
+        - Command Centre
+      summary: Get page
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: get_api_v1_command_centre_ai_knowledge_documents_id_pages_page
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents/{id}/preview:
+    post:
+      tags:
+        - Command Centre
+      summary: Preview document
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_knowledge_documents_id_preview
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents/{id}/publish:
+    post:
+      tags:
+        - Command Centre
+      summary: Publish document
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_knowledge_documents_id_publish
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents/{id}/retire:
+    post:
+      tags:
+        - Command Centre
+      summary: Record retire for document
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_knowledge_documents_id_retire
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
+  /api/v1/command-centre/ai/knowledge/documents/{id}/retry:
+    post:
+      tags:
+        - Command Centre
+      summary: Retry document
+      description: |-
+        Platform staff only (no organization context).
+
+        Requires the permission `platform.settings.manage`.
+
+        Requires a recent multi-factor verification.
+      operationId: post_api_v1_command_centre_ai_knowledge_documents_id_retry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                  pattern: ^[^\p{Cc}]+$
+              required:
+                - expectedVersion
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-generated: true
 components:
   securitySchemes:
     bearerAuth:

@@ -83,8 +83,75 @@ model User {
   aiAllowanceWindows AiAllowanceWindow[]
   aiAllowanceReservations AiAllowanceReservation[]
   aiAllowanceLedger AiAllowanceLedger[]
+  aiEnrollment AiEnrollment?
 
   @@map("users")
+}
+
+model AiEnrollment {
+  userId String @id @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  kind String @db.VarChar(24)
+  status String @default("PENDING") @db.VarChar(24)
+  details Json
+  featureOverrides Json @default("{}") @map("feature_overrides")
+  version Int @default(1)
+  expiresAt DateTime? @map("expires_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  decisionReason String? @map("decision_reason")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@index([status, createdAt])
+  @@map("ai_enrollments")
+}
+
+model AiAccessPolicy {
+  id String @id @default("global")
+  version Int @default(1)
+  settings Json
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("ai_access_policies")
+}
+
+model AiKnowledgeDocument {
+  id String @id @default(uuid())
+  familyId String @map("family_id")
+  revision Int @default(1)
+  version Int @default(1)
+  metadata Json
+  status String @default("UPLOADED") @db.VarChar(32)
+  scanStatus String @default("PENDING") @map("scan_status") @db.VarChar(24)
+  scannerVersion String? @map("scanner_version")
+  storageKey String @map("storage_key")
+  sha256 String @db.VarChar(64)
+  byteSize Int @map("byte_size")
+  pageCount Int? @map("page_count")
+  errorCode String? @map("error_code") @db.VarChar(80)
+  uploadedByUserId String @map("uploaded_by_user_id")
+  reviewedByUserId String? @map("reviewed_by_user_id")
+  reviewedAt DateTime? @map("reviewed_at")
+  publishedAt DateTime? @map("published_at")
+  leaseToken String? @map("lease_token")
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  attempts Int @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  passages AiKnowledgePassage[]
+  @@unique([familyId, revision])
+  @@index([status, createdAt])
+  @@map("ai_knowledge_documents")
+}
+
+model AiKnowledgePassage {
+  id String @id @default(uuid())
+  documentId String @map("document_id")
+  document AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  pageNumber Int @map("page_number")
+  pageLabel String? @map("page_label") @db.VarChar(40)
+  text String
+  quality String @default("REVIEW_REQUIRED") @db.VarChar(32)
+  @@unique([documentId, pageNumber])
+  @@map("ai_knowledge_passages")
 }
 
 // Sabi AI owns conversations, not a second patient or clinical-record database.

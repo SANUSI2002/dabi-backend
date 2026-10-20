@@ -10,6 +10,8 @@ import { dayStart, reserveAiQuota } from './ai.quota.js';
 import { retrieveAiSources, sourceContextAvailable } from './ai.sources.js';
 import { requireAiOriginSession } from './ai.auth.js';
 import { dispatchAllowance, finishAllowance, settleAllowance, getAllowance, allowanceLock } from './ai.allowances.js';
+import { aiAccess, requireAiFeature } from './ai.access.js';
+import { retrieveKnowledge, validateKnowledgeAnswer, knowledgeReferencesAvailable } from './ai.knowledge.js';
 
 const active = ['QUEUED', 'RUNNING'];
 const controllers = new Map();
@@ -17,7 +19,7 @@ export const abortAiRuns = () => { for (const controller of controllers.values()
 const missing = () => aiError(404, 'AI_NOT_FOUND', 'This Sabi AI conversation or response is not available.');
 export const publicRun = (run) => ({ id: run.id, sessionId: run.sessionId, status: run.status,
   createdAt: run.createdAt, finishedAt: run.finishedAt, errorCode: run.errorCode,
-  citations: run.sourceContext?.passages || [],
+  citations: [...(run.sourceContext?.passages || []),...(run.sourceContext?.knowledge || [])],
   ...(run.status === 'SUCCEEDED' ? { answer: run.messages?.find((m) => m.role === 'assistant')?.content ?? null } : {}),
 });
 async function actor(userId, db = prisma) {
@@ -33,6 +35,7 @@ async function owned(userId, id, db = prisma) {
 const audit = (db, userId, action, id) => recordAudit(db, { actorUserId: userId, action, resourceType: 'AI_CONVERSATION', resourceId: id });
 export async function createAiSession(userId, input) {
   await requireGenerationAvailable(); await actor(userId);
+  await requireAiFeature(userId,'chat');
   return prisma.$transaction(async (tx) => {
     await allowanceLock(tx);
     const row = await tx.aiSession.create({ data: { ownerUserId: userId, title: input.title || 'New conversation', consentVersion: AI_CONSENT_VERSION } });
@@ -59,7 +62,7 @@ async function visibleAiMessages(userId, messages, runs, db = prisma) {
   for (const run of runs) visible.set(run.id, await sourceContextAvailable(userId, run.sourceContext, db));
   return messages.map((m) => m.role !== 'assistant' ? m : visible.get(m.runId) === false
     ? { ...m, content: 'This response is no longer available because its source was removed or changed.', citations: [], sourceUnavailable: true }
-    : { ...m, citations: runs.find((r) => r.id === m.runId)?.sourceContext?.passages || [] });
+    : { ...m, citations: [...(runs.find((r) => r.id === m.runId)?.sourceContext?.passages || []),...(runs.find((r) => r.id === m.runId)?.sourceContext?.knowledge || [])] });
 }
 export async function queueAiMessage(user, id, input) {
   await requireGenerationAvailable();
@@ -70,6 +73,8 @@ export async function queueAiMessage(user, id, input) {
       await allowanceLock(tx);
       await tx.$queryRaw`SELECT id FROM ai_sessions WHERE id = ${id} FOR UPDATE`;
       await owned(user.id, id, tx);
+      await requireAiFeature(user.id,'chat',tx);
+      if(sourceIds.length)await requireAiFeature(user.id,'documents',tx);
       const existing = await tx.aiRun.findUnique({ where: { sessionId_clientMessageId: { sessionId: id, clientMessageId: input.clientMessageId } }, include: { messages: true } });
       if (existing) {
         if (existing.requestHash !== requestHash) throw aiError(409, 'AI_IDEMPOTENCY_CONFLICT', 'This message ID was already used for different content.');
@@ -173,6 +178,8 @@ export async function cancelAiRun(userId, id) {
 }
 async function authorisedRun(run) {
   await actor(run.session.ownerUserId);
+  await requireAiFeature(run.session.ownerUserId,'chat');
+  if(run.sourceContext?.versions?.length)await requireAiFeature(run.session.ownerUserId,'documents');
   if (run.session.archivedAt) throw missing();
   await requireAiOriginSession(run.authSessionId, run.session.ownerUserId);
 }
@@ -195,32 +202,40 @@ export async function processAiQueue({ generate = generateAiResponse } = {}) {
     const history = []; let size = current.content.length;
     for (const message of previous) { if (!await sourceContextAvailable(next.session.ownerUserId, message.run.sourceContext)) continue; if (size + message.content.length > 24_000) break; history.push(message); size += message.content.length; }
     history.reverse(); while (history[0]?.role === 'assistant') history.shift();
-    const memories = await listAiMemory(next.session.ownerUserId);
+    const access=await aiAccess(next.session.ownerUserId);
+    const memories = access.features.memory ? await listAiMemory(next.session.ownerUserId) : [];
     const usedMemoryVersion = memoryVersion(memories);
     const context = next.sourceContext?.versions?.length ? await retrieveAiSources(next.session.ownerUserId, next.sourceContext.versions.map((v) => v.sourceId), current.content) : { passages: [] };
     if (!await sourceContextAvailable(next.session.ownerUserId, next.sourceContext)) throw aiError(409, 'AI_CONTEXT_CHANGED', 'Selected source context changed.');
+    const knowledge=await retrieveKnowledge(next.session.ownerUserId,current.content);
     const allocation = await dispatchAllowance(next.session.ownerUserId, 'CHAT', next.id);
-    const result = await generate([...history, current], { signal: controller.signal, memories, sources: context.passages, tokenBudget: allocation.reservedTokens, maxOutputTokens: allocation.maxOutputTokens });
+    const result = await generate([...history.map(m=>({...m,content:m.content.replace(/\[K\d+\]/g,'')})), current], { signal: controller.signal, memories, sources: context.passages, knowledge, category:access.category, tokenBudget: allocation.reservedTokens, maxOutputTokens: allocation.maxOutputTokens });
     // Provider usage survives cancellation or a later publication rejection.
     await settleAllowance('CHAT', next.id, { usage: result.usage });
+    const references=validateKnowledgeAnswer(result.text,knowledge);
     const cited = [...result.text.matchAll(/\[S(\d+)\]/g)].map((m) => `S${m[1]}`);
     if (cited.some((label) => !context.passages.some((p) => p.label === label))) throw aiError(503, 'AI_RESPONSE_INVALID', 'Sabi returned an unsupported source reference.');
     await requireGenerationAvailable(); await authorisedRun(next);
     await prisma.$transaction(async (tx) => {
       await allowanceLock(tx);
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(739294, 2)::text`;
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${next.session.ownerUserId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM ai_sessions WHERE id = ${next.sessionId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM ai_runs WHERE id = ${next.id} FOR UPDATE`;
       if ((await tx.aiRun.findUnique({ where: { id: next.id } })).status !== 'RUNNING') return;
       await requireGenerationAvailable(tx);
       await owned(next.session.ownerUserId, next.sessionId, tx);
+      await requireAiFeature(next.session.ownerUserId,'chat',tx);
+      if(next.sourceContext?.versions?.length)await requireAiFeature(next.session.ownerUserId,'documents',tx);
+      if(!await knowledgeReferencesAvailable(next.session.ownerUserId,references,tx))throw aiError(409,'AI_CONTEXT_CHANGED','Reference availability changed during generation.');
       await requireAiOriginSession(next.authSessionId, next.session.ownerUserId, tx);
       if (next.sourceContext?.versions?.length && !aiDocumentsAvailable()) throw aiError(409, 'AI_CONTEXT_CHANGED', 'Document AI processing was withdrawn.');
       if (!await sourceContextAvailable(next.session.ownerUserId, next.sourceContext, tx, { lock: true })) throw aiError(409, 'AI_CONTEXT_CHANGED', 'Selected document context changed.');
       // Revocation/correction during provider work invalidates the answer, not just later retrieval.
-      if (memoryVersion(await listAiMemory(next.session.ownerUserId, tx)) !== usedMemoryVersion) throw aiError(409, 'AI_CONTEXT_CHANGED', 'Saved context changed while the response was being prepared.');
+      const finalAccess=await aiAccess(next.session.ownerUserId,tx);
+      if(finalAccess.features.memory!==access.features.memory || memoryVersion(finalAccess.features.memory?await listAiMemory(next.session.ownerUserId, tx):[]) !== usedMemoryVersion) throw aiError(409, 'AI_CONTEXT_CHANGED', 'Saved context changed while the response was being prepared.');
       await tx.aiMessage.create({ data: { sessionId: next.sessionId, runId: next.id, role: 'assistant', content: result.text } });
-      await tx.aiRun.update({ where: { id: next.id }, data: { status: 'SUCCEEDED', usage: { ...result.usage, memoryVersion: usedMemoryVersion, memoryCount: memories.length }, finishedAt: new Date() } });
+      await tx.aiRun.update({ where: { id: next.id }, data: { status: 'SUCCEEDED',sourceContext:{...(next.sourceContext||{}),knowledge:references}, usage: { ...result.usage, memoryVersion: usedMemoryVersion, memoryCount: memories.length }, finishedAt: new Date() } });
       await tx.aiSession.update({ where: { id: next.sessionId }, data: { updatedAt: new Date() } });
       await audit(tx, next.session.ownerUserId, 'AI_RESPONSE_COMPLETED', next.sessionId);
     });

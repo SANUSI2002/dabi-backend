@@ -65,10 +65,10 @@ async function currentWindow(tx, userId, kind, start, end, now) {
 }
 export async function allowanceSnapshot(tx, userId, { now = new Date() } = {}) {
   const policy = await allowancePolicy(tx);
-  const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true, accountStatus: true, professionalProfile: { select: { verificationStatus: true } } } });
+  const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true, accountStatus: true, aiEnrollment:{select:{kind:true,status:true,expiresAt:true}}, professionalProfile: { select: { verificationStatus: true } } } });
   if (!user) throw aiError(404, 'AI_ACCOUNT_NOT_FOUND', 'Sabi account not found.');
   const account = await tx.aiAllowanceAccount.upsert({ where: { userId }, create: { userId }, update: {} });
-  const professional = user.professionalProfile?.verificationStatus === 'VERIFIED';
+  const professional = user.professionalProfile?.verificationStatus === 'VERIFIED'||(user.aiEnrollment?.status==='APPROVED'&&['PROFESSIONAL','BUSINESS'].includes(user.aiEnrollment.kind)&&(!user.aiEnrollment.expiresAt||user.aiEnrollment.expiresAt>now));
   const settings = policy.settings;
   const dailyLimit = account.dailyRequestOverride ?? (professional ? settings.professionalDailyRequests : settings.personalDailyRequests);
   const tokenLimit = account.tokenAllowanceOverride ?? (professional ? settings.professionalTokenAllowance : settings.personalTokenAllowance);
