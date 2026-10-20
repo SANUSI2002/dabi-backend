@@ -43,6 +43,7 @@ import platformPackageRoutes, { publicPackageRoutes } from './modules/platform/p
 import { platformApplicationRoutes, publicApplicationRoutes } from './modules/platform/platform.applications.routes.js';
 import emrRoutes from './modules/emr/emr.routes.js';
 import workforceRoutes from './modules/workforce/workforce.routes.js';
+import orgConfigRoutes from './modules/org-config/orgConfig.routes.js';
 import hospitalEnrollmentRoutes from './modules/hospital-enrollments/hospital-enrollments.routes.js';
 import hospitalAppointmentRoutes from './modules/hospital-appointments/hospital-appointments.routes.js';
 import wellnessRoutes from './modules/wellness/wellness.routes.js';
@@ -116,6 +117,7 @@ app.use('/api/v1', caregiverRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/emr', emrRoutes);
 app.use('/api/v1/workforce', workforceRoutes);
+app.use('/api/v1/org-config', orgConfigRoutes);
 app.use('/api/v1/platform', platformRoutes);
 app.use('/api/v1/command-centre', commandCentreRoutes);
 app.use('/api/v1/public/runtime', publicRuntimeRoutes);

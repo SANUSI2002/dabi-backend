@@ -5972,3 +5972,61 @@ model WfQuery {
   version Int @default(1)
   @@map("wf_queries")
 }
+
+model PlatformMasterItem {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  category String @db.VarChar(40)
+  label String @db.VarChar(120)
+  code String? @db.VarChar(40)
+  active Boolean @default(true)
+  system Boolean @default(false)
+  meta Json @default("{}")
+  sort Int @default(0)
+  removedAt DateTime? @map("removed_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("platform_master_items")
+}
+
+model PlatformTerms {
+  organizationId String @id @map("organization_id")
+  overrides Json @default("{}")
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("platform_terms")
+}
+
+model PlatformLetterTemplate {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  key String @db.VarChar(60)
+  name String @db.VarChar(160)
+  category String @db.VarChar(12)
+  body String @db.VarChar(20000)
+  signatories String[] @default([])
+  active Boolean @default(true)
+  system Boolean @default(false)
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("platform_letter_templates")
+}
+
+model PlatformLetter {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  templateKey String @map("template_key") @db.VarChar(60)
+  title String @db.VarChar(200)
+  subjectEmployeeId String? @map("subject_employee_id")
+  reference String? @db.VarChar(100)
+  data Json
+  rendered String @db.VarChar(40000)
+  generatedByUserId String @map("generated_by_user_id")
+  generatedAt DateTime @default(now()) @map("generated_at")
+  sentAt DateTime? @map("sent_at")
+  sentTo String? @map("sent_to") @db.VarChar(160)
+  sentByUserId String? @map("sent_by_user_id")
+  @@map("platform_letters")
+}
