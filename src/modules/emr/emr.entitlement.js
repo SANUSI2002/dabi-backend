@@ -19,3 +19,5 @@ export const approvedEmrFor = (context, db = prisma) => approvedProductFor(conte
 
 // The Workforce API (people, time & attendance, HR) follows the EMR switch unless switched on alone.
 export const workforceApiEnabled = () => process.env.WORKFORCE_API_ENABLED === 'true' || emrPatientRegistryEnabled();
+// Accounting likewise: its own switch, or the EMR's.
+export const accountingApiEnabled = () => process.env.ACCOUNTING_API_ENABLED === 'true' || emrPatientRegistryEnabled();

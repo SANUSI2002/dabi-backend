@@ -6030,3 +6030,149 @@ model PlatformLetter {
   sentByUserId String? @map("sent_by_user_id")
   @@map("platform_letters")
 }
+
+model AcctAccount {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number Int
+  name String @db.VarChar(120)
+  type String @db.VarChar(9)
+  subtype String @db.VarChar(24)
+  parentNumber Int? @map("parent_number")
+  description String? @db.VarChar(500)
+  isActive Boolean @default(true) @map("is_active")
+  allowManualEntry Boolean @default(true) @map("allow_manual_entry")
+  currency String @default("NGN") @db.VarChar(3)
+  system Boolean @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_accounts")
+}
+
+model AcctBranch {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(12)
+  name String @db.VarChar(160)
+  isHeadOffice Boolean @default(false) @map("is_head_office")
+  baseCurrency String @default("NGN") @map("base_currency") @db.VarChar(3)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_branches")
+}
+
+model AcctConsolidationGroup {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  branchIds String[] @map("branch_ids")
+  eliminate Json @default("[]")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_consolidation_groups")
+}
+
+model AcctFiscalYear {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  year Int
+  status String @default("Open") @db.VarChar(6)
+  @@map("acct_fiscal_years")
+}
+
+model AcctPeriod {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  fiscalYear Int @map("fiscal_year")
+  month Int
+  status String @default("Open") @db.VarChar(6)
+  @@map("acct_periods")
+}
+
+model AcctLedgerSettings {
+  organizationId String @id @map("organization_id")
+  booksLockedBefore DateTime? @map("books_locked_before")
+  fxRates Json @default("[]") @map("fx_rates")
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("acct_ledger_settings")
+}
+
+model AcctJournalEntry {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(30)
+  entryDate DateTime @map("entry_date")
+  branchId String @map("branch_id")
+  source String @db.VarChar(20)
+  reference String? @db.VarChar(100)
+  memo String @db.VarChar(500)
+  status String @db.VarChar(16)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  postedByUserId String? @map("posted_by_user_id")
+  postedAt DateTime? @map("posted_at")
+  reversedByEntryId String? @map("reversed_by_entry_id")
+  reversesEntryId String? @map("reverses_entry_id")
+  approvalRef String? @map("approval_ref") @db.VarChar(100)
+  version Int @default(1)
+  @@map("acct_journal_entries")
+}
+
+model AcctJournalLine {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  entryId String @map("entry_id")
+  lineNo Int @map("line_no")
+  accountNumber Int @map("account_number")
+  debit Decimal @default(0) @db.Decimal(16, 2)
+  credit Decimal @default(0) @db.Decimal(16, 2)
+  description String? @db.VarChar(300)
+  costCenter String? @map("cost_center") @db.VarChar(60)
+  customerId String? @map("customer_id")
+  vendorId String? @map("vendor_id")
+  projectId String? @map("project_id")
+  @@map("acct_journal_lines")
+}
+
+model AcctRecurringJournal {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  memo String @db.VarChar(500)
+  lines Json
+  everyMonths Int @map("every_months")
+  nextDate DateTime @map("next_date")
+  endDate DateTime? @map("end_date")
+  lastPostedDate DateTime? @map("last_posted_date")
+  postedCount Int @default(0) @map("posted_count")
+  active Boolean @default(true)
+  branchId String @map("branch_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_recurring_journals")
+}
+
+model AcctYearEndClosing {
+  organizationId String @map("organization_id")
+  year Int
+  closedAt DateTime @default(now()) @map("closed_at")
+  closedByUserId String @map("closed_by_user_id")
+  netIncome Decimal @map("net_income") @db.Decimal(16, 2)
+  journalEntryId String @map("journal_entry_id")
+  @@id([organizationId, year])
+  @@map("acct_year_end_closings")
+}
+
+model AcctApprovalRule {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  docType String @map("doc_type") @db.VarChar(24)
+  minAmount Decimal @map("min_amount") @db.Decimal(16, 2)
+  maxAmount Decimal? @map("max_amount") @db.Decimal(16, 2)
+  approverRole String @map("approver_role") @db.VarChar(20)
+  level Int
+  active Boolean @default(true)
+  version Int @default(1)
+  @@map("acct_approval_rules")
+}

@@ -5,7 +5,7 @@
 //   3. require the EMR API to be switched on,
 // then expose req.emr = { organizationId, userId, requestId, roles, permissions }.
 import { documented } from '../../../docs/routeMeta.js';
-import { approvedProductFor, emrPatientRegistryEnabled, workforceApiEnabled } from '../emr.entitlement.js';
+import { accountingApiEnabled, approvedProductFor, emrPatientRegistryEnabled, workforceApiEnabled } from '../emr.entitlement.js';
 import { EmrError } from './errors.js';
 
 export const emrApiEnabled = emrPatientRegistryEnabled;
@@ -53,8 +53,9 @@ const productTenant = (product, deniedCode, enabled, disabledCode) => async (req
 
 export const emrTenant = productTenant('emr', 'EMR_ACCESS_DENIED', emrApiEnabled, 'EMR_PATIENT_REGISTRY_DISABLED');
 export const workforceTenant = productTenant('workforce', 'WORKFORCE_ACCESS_DENIED', workforceApiEnabled, 'WORKFORCE_API_DISABLED');
+export const accountingTenant = productTenant('accounting', 'ACCOUNTING_ACCESS_DENIED', accountingApiEnabled, 'ACCOUNTING_API_DISABLED');
 // Organization configuration shared by every product (master data, terminology, letters).
-export const orgConfigTenant = productTenant(['emr', 'workforce'], 'ORG_CONFIG_ACCESS_DENIED', () => emrApiEnabled() || workforceApiEnabled(), 'WORKFORCE_API_DISABLED');
+export const orgConfigTenant = productTenant(['emr', 'workforce', 'accounting'], 'ORG_CONFIG_ACCESS_DENIED', () => emrApiEnabled() || workforceApiEnabled() || accountingApiEnabled(), 'WORKFORCE_API_DISABLED');
 
 export const requireEmrPermission = (...codes) => documented((req, res, next) =>
   (codes.some((code) => req.emr?.permissions.includes(code)) ? next() : next(new EmrError('PERMISSION_DENIED'))), { permissions: codes, emr: true });
@@ -62,3 +63,4 @@ export const requireEmrPermission = (...codes) => documented((req, res, next) =>
 documented(emrTenant, { emrTenant: true });
 documented(workforceTenant, { emrTenant: true });
 documented(orgConfigTenant, { emrTenant: true });
+documented(accountingTenant, { emrTenant: true });
