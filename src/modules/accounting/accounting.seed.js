@@ -175,3 +175,51 @@ export const STARTER_FX_RATES = [
   { code: "GBP", name: "Pound Sterling", symbol: "£", rateToNgn: 2_000 },
   { code: "EUR", name: "Euro", symbol: "€", rateToNgn: 1_700 },
 ];
+
+// Settings a new organization starts with: numbering from 1, the standard payment terms and reminder
+// ladder, and a blank company profile and tax registration for the finance team to fill in.
+export const STARTER_SEQUENCES = [
+  { key: "journal", label: "Journal Entry", prefix: "JE-", padding: 6, next: 1 },
+  { key: "estimate", label: "Quotation / Estimate", prefix: "EST-", padding: 6, next: 1 },
+  { key: "sales-order", label: "Sales Order", prefix: "SO-", padding: 6, next: 1 },
+  { key: "invoice", label: "Sales Invoice", prefix: "INV-", padding: 6, next: 1 },
+  { key: "sales-receipt", label: "Sales Receipt (cash sale)", prefix: "SR-", padding: 6, next: 1 },
+  { key: "receipt", label: "Customer Receipt", prefix: "RCT-", padding: 6, next: 1 },
+  { key: "refund-receipt", label: "Refund Receipt", prefix: "REF-", padding: 6, next: 1 },
+  { key: "credit-note", label: "Credit Note", prefix: "CN-", padding: 6, next: 1 },
+  { key: "requisition", label: "Purchase Requisition", prefix: "PR-", padding: 6, next: 1 },
+  { key: "po", label: "Purchase Order", prefix: "PO-", padding: 6, next: 1 },
+  { key: "goods-receipt", label: "Goods Receipt Note", prefix: "GRN-", padding: 6, next: 1 },
+  { key: "bill", label: "Vendor Bill", prefix: "BILL-", padding: 6, next: 1 },
+  { key: "payment", label: "Vendor Payment", prefix: "PMT-", padding: 6, next: 1 },
+  { key: "vendor-credit", label: "Vendor Credit", prefix: "VC-", padding: 6, next: 1 },
+  { key: "expense", label: "Expense Claim", prefix: "EXP-", padding: 6, next: 1 },
+];
+
+export const STARTER_PAYMENT_TERMS = [
+  { id: "pt-receipt", name: "Due on receipt", netDays: 0, eom: false, active: true },
+  { id: "pt-net15", name: "Net 15", netDays: 15, eom: false, active: true },
+  { id: "pt-net30", name: "Net 30", netDays: 30, eom: false, active: true },
+  { id: "pt-net45", name: "Net 45", netDays: 45, eom: false, active: true },
+  { id: "pt-net60", name: "Net 60", netDays: 60, eom: false, active: true },
+  { id: "pt-2-10-30", name: "2/10 Net 30", netDays: 30, eom: false, discountPercent: 2, discountDays: 10, active: true },
+  { id: "pt-eom", name: "Net 30 EOM", netDays: 30, eom: true, active: true },
+];
+
+export const STARTER_REMINDER_RULES = [
+  { id: "rr-1", level: 1, daysOverdue: 3, tone: "Friendly", subject: "Gentle reminder — invoice {number}", body: "We noticed invoice {number} for {amount} became due on {dueDate}. If payment is already on its way, thank you. Otherwise a prompt settlement would be appreciated.", active: true },
+  { id: "rr-2", level: 2, daysOverdue: 14, tone: "Firm", subject: "Overdue — invoice {number} ({daysOverdue} days)", body: "Invoice {number} for {amount} is now {daysOverdue} days overdue. Please arrange payment within 5 working days to keep the account in good standing.", active: true },
+  { id: "rr-3", level: 3, daysOverdue: 30, tone: "Final Notice", subject: "FINAL NOTICE — invoice {number}", body: "Invoice {number} for {amount} is {daysOverdue} days overdue. Unless settled within 7 days the account will be placed on credit hold and referred for collection.", active: true },
+];
+
+export const STARTER_TAX_RATES = [
+  { id: "tax-vat-standard", name: "VAT 7.5%", kind: "VAT", rate: 7.5, accountNumber: 2200, isCompound: false, isActive: true, description: "Standard Nigerian VAT" },
+  { id: "tax-vat-exempt", name: "VAT Exempt", kind: "Exempt", rate: 0, accountNumber: 2200, isCompound: false, isActive: true, description: "Medical services exempt from VAT" },
+  { id: "tax-vat-zero", name: "Zero-rated", kind: "Zero-rated", rate: 0, accountNumber: 2200, isCompound: false, isActive: true },
+  { id: "tax-wht-5", name: "WHT 5%", kind: "WHT", rate: 5, accountNumber: 2210, isCompound: false, isActive: true, description: "Withholding tax — goods/rent" },
+  { id: "tax-wht-10", name: "WHT 10%", kind: "WHT", rate: 10, accountNumber: 2210, isCompound: false, isActive: true, description: "Withholding tax — professional services" },
+  { id: "tax-levy-1", name: "NHIS Levy 1%", kind: "VAT", rate: 1, accountNumber: 2220, isCompound: false, isActive: true, description: "Statutory health levy on non-exempt services — stacks on top of VAT" },
+];
+
+export const STARTER_ORG_PROFILE = { legalName: '', tradingName: '', tin: '', rcNumber: '', address: '', reportingCurrency: 'NGN', fiscalYearStartMonth: 1 };
+export const STARTER_TAX_REGISTRATION = { vatTin: '', wht: false, payeStateId: '', vatRegistered: false };

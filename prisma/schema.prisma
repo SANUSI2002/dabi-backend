@@ -6176,3 +6176,171 @@ model AcctApprovalRule {
   version Int @default(1)
   @@map("acct_approval_rules")
 }
+
+model AcctSettings {
+  organizationId String @id @map("organization_id")
+  orgProfile Json @map("org_profile")
+  sequences Json
+  paymentTerms Json @map("payment_terms")
+  reminderRules Json @map("reminder_rules")
+  taxRegistration Json @map("tax_registration")
+  setupSteps Json @default("{}") @map("setup_steps")
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("acct_settings")
+}
+
+model AcctTaxRate {
+  organizationId String @map("organization_id")
+  id String @db.VarChar(60)
+  name String @db.VarChar(80)
+  kind String @db.VarChar(10)
+  rate Decimal @db.Decimal(7, 4)
+  description String? @db.VarChar(300)
+  accountNumber Int @map("account_number")
+  isCompound Boolean @default(false) @map("is_compound")
+  isActive Boolean @default(true) @map("is_active")
+  version Int @default(1)
+  @@id([organizationId, id])
+  @@map("acct_tax_rates")
+}
+
+model AcctCustomer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(160)
+  type String @db.VarChar(9)
+  email String? @db.VarChar(160)
+  phone String? @db.VarChar(30)
+  address String? @db.VarChar(300)
+  city String? @db.VarChar(80)
+  arAccountNumber Int @map("ar_account_number")
+  currency String @default("NGN") @db.VarChar(3)
+  paymentTermsDays Int @default(30) @map("payment_terms_days")
+  paymentTermId String? @map("payment_term_id") @db.VarChar(60)
+  creditLimit Decimal @default(0) @map("credit_limit") @db.Decimal(16, 2)
+  creditHold Boolean @default(false) @map("credit_hold")
+  patientRef String? @map("patient_ref") @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_customers")
+}
+
+model AcctSalesDoc {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  kind String @db.VarChar(14)
+  number String @db.VarChar(40)
+  customerId String? @map("customer_id")
+  customerName String? @map("customer_name") @db.VarChar(160)
+  docDate DateTime @map("doc_date")
+  dueDate DateTime? @map("due_date")
+  expiryDate DateTime? @map("expiry_date")
+  lines Json
+  notes String? @db.VarChar(2000)
+  reason String? @db.VarChar(500)
+  status String @db.VarChar(20)
+  currency String @default("NGN") @db.VarChar(3)
+  exchangeRate Decimal @default(1) @map("exchange_rate") @db.Decimal(16, 6)
+  amountPaid Decimal @default(0) @map("amount_paid") @db.Decimal(16, 2)
+  refundedAmount Decimal @default(0) @map("refunded_amount") @db.Decimal(16, 2)
+  method String? @db.VarChar(16)
+  cashAccountNumber Int? @map("cash_account_number")
+  sourceDocId String? @map("source_doc_id")
+  convertedToId String? @map("converted_to_id")
+  convertedToInvoiceId String? @map("converted_to_invoice_id")
+  journalEntryId String? @map("journal_entry_id")
+  source String @default("Manual") @db.VarChar(12)
+  sourceRef String? @map("source_ref") @db.VarChar(100)
+  projectId String? @map("project_id")
+  recurEveryMonths Int? @map("recur_every_months")
+  recurNextDate DateTime? @map("recur_next_date")
+  recurEndDate DateTime? @map("recur_end_date")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  issuedAt DateTime? @map("issued_at")
+  version Int @default(1)
+  @@map("acct_sales_docs")
+}
+
+model AcctReceipt {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(40)
+  customerId String @map("customer_id")
+  receiptDate DateTime @map("receipt_date")
+  method String @db.VarChar(16)
+  depositAccountNumber Int @map("deposit_account_number")
+  amount Decimal @db.Decimal(16, 2)
+  allocations Json
+  settlementRate Decimal? @map("settlement_rate") @db.Decimal(16, 6)
+  reference String? @db.VarChar(100)
+  notes String? @db.VarChar(2000)
+  journalEntryId String @map("journal_entry_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_receipts")
+}
+
+model AcctCreditApplication {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  creditNoteId String @map("credit_note_id")
+  invoiceId String? @map("invoice_id")
+  kind String @db.VarChar(6)
+  amount Decimal @db.Decimal(16, 2)
+  cashAccountNumber Int? @map("cash_account_number")
+  journalEntryId String? @map("journal_entry_id")
+  appliedByUserId String @map("applied_by_user_id")
+  appliedAt DateTime @default(now()) @map("applied_at")
+  @@map("acct_credit_applications")
+}
+
+model AcctRevenueSchedule {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  invoiceId String @map("invoice_id")
+  customerId String @map("customer_id")
+  totalAmount Decimal @map("total_amount") @db.Decimal(16, 2)
+  startPeriod String @map("start_period") @db.VarChar(7)
+  months Int
+  deferredAccountNumber Int @map("deferred_account_number")
+  revenueAccountNumber Int @map("revenue_account_number")
+  entries Json
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_revenue_schedules")
+}
+
+model AcctDelayedCharge {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  customerId String @map("customer_id")
+  chargeDate DateTime @map("charge_date")
+  accountNumber Int @map("account_number")
+  description String @db.VarChar(300)
+  qty Decimal @db.Decimal(14, 3)
+  unitPrice Decimal @map("unit_price") @db.Decimal(16, 2)
+  taxRateId String? @map("tax_rate_id") @db.VarChar(60)
+  status String @default("Unbilled") @db.VarChar(8)
+  invoiceId String? @map("invoice_id")
+  removedAt DateTime? @map("removed_at")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_delayed_charges")
+}
+
+model AcctCustomerNotice {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  kind String @db.VarChar(9)
+  customerId String @map("customer_id")
+  invoiceId String? @map("invoice_id")
+  level Int?
+  tone String? @db.VarChar(40)
+  sentTo String? @map("sent_to") @db.VarChar(160)
+  sentByUserId String @map("sent_by_user_id")
+  sentAt DateTime @default(now()) @map("sent_at")
+  @@map("acct_customer_notices")
+}

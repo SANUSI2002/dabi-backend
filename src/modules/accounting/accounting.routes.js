@@ -14,12 +14,15 @@ import { tenantRateLimit } from '../emr/core/rateLimit.js';
 import { EmrError, emrErrorHandler } from '../emr/core/errors.js';
 import { validateEmr } from '../emr/core/validate.js';
 import { ledgerRoutes } from './ledger/ledger.routes.js';
+import { receivableRoutes, settingsRoutes } from './receivables/receivables.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
 
 const tenant = express.Router({ mergeParams: true });
 tenant.use('/ledger', ledgerRoutes);
+tenant.use('/settings', settingsRoutes);
+tenant.use('/receivables', receivableRoutes);
 
 router.use('/organizations/:organizationId', protect, validateEmr(z.object({ params: z.object({ organizationId: z.uuid() }) })), requireOrganization, accountingTenant, tenantRateLimit, tenant);
 router.use((req, res, next) => next(new EmrError('NOT_FOUND')));
