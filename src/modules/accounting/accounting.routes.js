@@ -21,6 +21,7 @@ import { approvalRuleRoutes, payableRoutes } from './payables/payables.routes.js
 import { bankingRoutes, expenseRoutes } from './banking/banking.routes.js';
 import { assetRoutes, planningRoutes } from './assets/assets.routes.js';
 import { prefsRoutes, projectRoutes } from './projects/projects.routes.js';
+import { integrationRoutes } from './integrations/integrations.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -37,6 +38,7 @@ tenant.use('/fixed-assets', assetRoutes);
 tenant.use('/planning', planningRoutes);
 tenant.use('/projects', projectRoutes);
 tenant.use('/notification-prefs', prefsRoutes);
+tenant.use('/integrations', integrationRoutes);
 tenant.get('/audit-events', validateEmr(z.object({ params: z.object({ organizationId: z.uuid() }).strict(), query: z.object({ limit: z.coerce.number().int().min(1).max(500).default(200) }).strict() })),
   handle(async (req, res) => send(res, await accountingAuditEvents(req.emr, req.query))));
 

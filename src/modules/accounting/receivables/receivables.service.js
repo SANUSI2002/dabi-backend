@@ -72,7 +72,7 @@ export async function overview(context) {
     const [customers, docs, receipts, applications, schedules, charges, notices] = await Promise.all([
       tx.acctCustomer.findMany({ where: org(context), orderBy: { name: 'asc' } }),
       tx.acctSalesDoc.findMany({ where: org(context), orderBy: [{ docDate: 'desc' }, { createdAt: 'desc' }] }),
-      tx.acctReceipt.findMany({ where: org(context), orderBy: { receiptDate: 'desc' } }),
+      tx.acctReceipt.findMany({ where: { ...org(context), voidedAt: null }, orderBy: { receiptDate: 'desc' } }),
       tx.acctCreditApplication.findMany({ where: org(context), orderBy: { appliedAt: 'asc' } }),
       tx.acctRevenueSchedule.findMany({ where: org(context), orderBy: { createdAt: 'desc' } }),
       tx.acctDelayedCharge.findMany({ where: { ...org(context), removedAt: null }, orderBy: { chargeDate: 'desc' } }),
@@ -115,7 +115,7 @@ export async function overview(context) {
 }
 
 // ---- customers --------------------------------------------------------------------------------------
-async function addCustomerInTx(tx, context, c) {
+export async function addCustomerInTx(tx, context, c) {
   const settings = await ensureSettings(tx, context);
   if (c.paymentTermId && !settings.paymentTerms.some((t) => t.id === c.paymentTermId)) throw new EmrError('VALIDATION_FAILED', { message: 'Unknown payment term.' });
   const row = await tx.acctCustomer.create({
@@ -231,7 +231,7 @@ export async function setOrderStatus(context, id, { status }) {
 }
 
 // ---- invoices ---------------------------------------------------------------------------------------
-async function createInvoiceInTx(tx, context, input) {
+export async function createInvoiceInTx(tx, context, input) {
   const settings = await ensureSettings(tx, context);
   const rates = await taxRates(tx, context);
   const cust = await customerOf(tx, context, input.customerId);
@@ -305,10 +305,14 @@ async function postInvoiceEntry(tx, context, rates, inv, cust, schedule) {
   const suffix = inv.currency !== 'NGN' ? ` (${inv.currency} ${total(rates, inv).toLocaleString('en-NG')} @ ${rate})` : '';
   const lines = [{ accountNumber: cust.arAccountNumber, debit: gross, credit: 0, description: `${inv.number} — ${cust.name}${suffix}`, customerId: cust.id }];
   if (schedule) lines.push({ accountNumber: schedule.deferredAccountNumber, debit: 0, credit: net, description: `Deferred revenue — ${inv.number}`, customerId: cust.id, projectId: inv.projectId ?? undefined });
-  else for (const l of inv.lines) lines.push({ accountNumber: l.accountNumber, debit: 0, credit: round2(lineAmount(l) * rate), description: l.description, customerId: cust.id, projectId: inv.projectId ?? undefined });
+  else for (const l of inv.lines) {
+    // a negative line (a discount carried over from EMR billing) is a debit to its contra-revenue account
+    const amt = round2(lineAmount(l) * rate);
+    lines.push({ accountNumber: l.accountNumber, debit: amt < 0 ? -amt : 0, credit: amt > 0 ? amt : 0, description: l.description, customerId: cust.id, projectId: inv.projectId ?? undefined });
+  }
   for (const b of docTaxBreakdown(rates, inv.lines)) if (b.amount > 0) lines.push({ accountNumber: b.accountNumber, debit: 0, credit: round2(b.amount * rate), description: `Output ${b.label} — ${inv.number}`, customerId: cust.id });
   // rounding across lines: settle any kobo difference on the receivable line so the entry balances
-  const credits = round2(lines.slice(1).reduce((n, l) => n + l.credit, 0));
+  const credits = round2(lines.slice(1).reduce((n, l) => n + l.credit - l.debit, 0));
   lines[0].debit = credits;
   return postEntry(tx, context, { date: inv.docDate, source: 'Invoice', memo: `Invoice ${inv.number} — ${cust.name}`, reference: inv.number, lines });
 }
@@ -339,16 +343,17 @@ export async function issueInvoice(context, id, opts) {
 }
 export async function voidDoc(context, kind, id) {
   requireAcct(context, 'acct.post');
-  return withTenant(context, async (tx) => {
-    const d = await docOf(tx, context, id, kind);
-    if (d.status === 'Void') throw new EmrError('INVALID_STATE', { message: 'Already void.' });
-    if (kind === 'invoice' && Number(d.amountPaid) > 0) throw new EmrError('INVALID_STATE', { message: 'Un-apply receipts and credit notes before voiding.' });
-    if (d.journalEntryId) await reverseInTx(tx, context, d.journalEntryId, { memo: `Void ${kind.replace('-', ' ')} ${d.number}` });
-    await changeDoc(tx, context, d, { status: 'Void' }, `${kind.replace('-', '_')}.voided`);
-    if (kind === 'invoice') await tx.acctDelayedCharge.updateMany({ where: { ...org(context), invoiceId: id }, data: { status: 'Unbilled', invoiceId: null } });
-    if (kind === 'invoice') await tx.acctTimeEntry.updateMany({ where: { ...org(context), invoiceId: id }, data: { status: 'Unbilled', invoiceId: null } }); // the time can be billed again
-    return { id, status: 'Void' };
-  });
+  return withTenant(context, (tx) => voidDocInTx(tx, context, kind, id));
+}
+export async function voidDocInTx(tx, context, kind, id) {
+  const d = await docOf(tx, context, id, kind);
+  if (d.status === 'Void') throw new EmrError('INVALID_STATE', { message: 'Already void.' });
+  if (kind === 'invoice' && Number(d.amountPaid) > 0) throw new EmrError('INVALID_STATE', { message: 'Un-apply receipts and credit notes before voiding.' });
+  if (d.journalEntryId) await reverseInTx(tx, context, d.journalEntryId, { memo: `Void ${kind.replace('-', ' ')} ${d.number}` });
+  await changeDoc(tx, context, d, { status: 'Void' }, `${kind.replace('-', '_')}.voided`);
+  if (kind === 'invoice') await tx.acctDelayedCharge.updateMany({ where: { ...org(context), invoiceId: id }, data: { status: 'Unbilled', invoiceId: null } });
+  if (kind === 'invoice') await tx.acctTimeEntry.updateMany({ where: { ...org(context), invoiceId: id }, data: { status: 'Unbilled', invoiceId: null } }); // the time can be billed again
+  return { id, status: 'Void' };
 }
 
 // ---- receipts ---------------------------------------------------------------------------------------
@@ -361,50 +366,67 @@ async function discountAllowed(tx, context, rates, inv, cust, date) {
 }
 export async function recordReceipt(context, input) {
   requireAcct(context, 'acct.post');
-  return withTenant(context, async (tx) => {
-    const rates = await taxRates(tx, context);
-    const cust = await customerOf(tx, context, input.customerId);
-    const date = new Date(input.date);
-    const depositAcct = await tx.acctAccount.findFirst({ where: { ...org(context), number: input.depositAccountNumber } });
-    if (!depositAcct || !['cash', 'bank', 'current_asset'].includes(depositAcct.subtype)) throw new EmrError('VALIDATION_FAILED', { message: 'Deposit into a cash, bank or undeposited-funds account.' });
-    const allocations = input.allocations.filter((a) => a.amount > 0 || (a.discount ?? 0) > 0);
-    const invoices = new Map();
-    let arReliefNgn = 0; let fxDiff = 0; let bankFromAlloc = 0; let discountNgn = 0;
-    for (const a of allocations) {
-      const inv = await docOf(tx, context, a.invoiceId, 'invoice');
-      if (inv.customerId !== cust.id) throw new EmrError('VALIDATION_FAILED', { message: `${inv.number} belongs to another customer.` });
-      if (!OPEN.includes(inv.status)) throw new EmrError('INVALID_STATE', { message: `${inv.number} is not open for payment.` });
-      const disc = a.discount ?? 0;
-      if (disc > 0 && disc > (await discountAllowed(tx, context, rates, inv, cust, date)) + 0.01) throw new EmrError('VALIDATION_FAILED', { message: `No early-payment discount of that size is due on ${inv.number}.` });
-      if (a.amount + disc > balanceOf(rates, inv) + 0.01) throw new EmrError('VALIDATION_FAILED', { message: `That is more than the ${balanceOf(rates, inv).toLocaleString('en-NG')} left on ${inv.number}.` });
-      const bookRate = Number(inv.exchangeRate);
-      const setRate = inv.currency !== 'NGN' ? input.settlementRate ?? bookRate : 1;
-      arReliefNgn += (a.amount + disc) * bookRate;
-      discountNgn += disc * bookRate;
-      fxDiff += a.amount * (setRate - bookRate);
-      bankFromAlloc += a.amount * setRate;
-      invoices.set(inv.id, { inv, paid: round2(Number(inv.amountPaid) + a.amount + disc) });
-    }
-    const unallocated = round2(input.amount - bankFromAlloc);
-    if (unallocated < -0.01) throw new EmrError('VALIDATION_FAILED', { message: 'The receipt is less than the amounts applied to invoices.' });
-    fxDiff = round2(fxDiff); discountNgn = round2(discountNgn);
-    const lines = [{ accountNumber: input.depositAccountNumber, debit: input.amount, credit: 0, description: `${input.method} — ${cust.name}` }];
-    if (discountNgn > 0.005) lines.push({ accountNumber: ACCT.discounts, debit: discountNgn, credit: 0, description: 'Early-payment discount', customerId: cust.id });
-    lines.push({ accountNumber: cust.arAccountNumber, debit: 0, credit: round2(arReliefNgn + Math.max(unallocated, 0)), description: `Applied to ${allocations.length} invoice(s)`, customerId: cust.id });
-    if (fxDiff > 0.005) lines.push({ accountNumber: ACCT.fxGain, debit: 0, credit: fxDiff, description: 'Realised FX gain on settlement' });
-    else if (fxDiff < -0.005) lines.push({ accountNumber: ACCT.fxLoss, debit: -fxDiff, credit: 0, description: 'Realised FX loss on settlement' });
-    const number = await nextDocNumber(tx, context, 'receipt');
-    const entry = await postEntry(tx, context, { date, source: 'Customer Payment', memo: `Receipt ${number} — ${cust.name}`, reference: number, lines });
-    const r = await tx.acctReceipt.create({
-      data: {
-        ...(input.id ? { id: input.id } : {}), ...org(context), number, customerId: cust.id, receiptDate: date, method: input.method, depositAccountNumber: input.depositAccountNumber, amount: input.amount,
-        allocations, settlementRate: input.settlementRate ?? null, reference: input.reference ?? null, notes: input.notes ?? null, journalEntryId: entry.id, createdByUserId: context.userId,
-      },
-    });
-    for (const { inv, paid } of invoices.values()) await changeDoc(tx, context, inv, { amountPaid: paid, status: statusAfterPayment(rates, inv, paid) }, 'invoice.payment_applied');
-    await audited(tx, context, 'receipt.recorded', 'receipt', r.id);
-    return { id: r.id, number };
+  return withTenant(context, (tx) => recordReceiptInTx(tx, context, input));
+}
+export async function recordReceiptInTx(tx, context, input) {
+  const rates = await taxRates(tx, context);
+  const cust = await customerOf(tx, context, input.customerId);
+  const date = new Date(input.date);
+  const depositAcct = await tx.acctAccount.findFirst({ where: { ...org(context), number: input.depositAccountNumber } });
+  if (!depositAcct || !['cash', 'bank', 'current_asset'].includes(depositAcct.subtype)) throw new EmrError('VALIDATION_FAILED', { message: 'Deposit into a cash, bank or undeposited-funds account.' });
+  const allocations = input.allocations.filter((a) => a.amount > 0 || (a.discount ?? 0) > 0);
+  const invoices = new Map();
+  let arReliefNgn = 0; let fxDiff = 0; let bankFromAlloc = 0; let discountNgn = 0;
+  for (const a of allocations) {
+    const inv = await docOf(tx, context, a.invoiceId, 'invoice');
+    if (inv.customerId !== cust.id) throw new EmrError('VALIDATION_FAILED', { message: `${inv.number} belongs to another customer.` });
+    if (!OPEN.includes(inv.status)) throw new EmrError('INVALID_STATE', { message: `${inv.number} is not open for payment.` });
+    const disc = a.discount ?? 0;
+    if (disc > 0 && disc > (await discountAllowed(tx, context, rates, inv, cust, date)) + 0.01) throw new EmrError('VALIDATION_FAILED', { message: `No early-payment discount of that size is due on ${inv.number}.` });
+    if (a.amount + disc > balanceOf(rates, inv) + 0.01) throw new EmrError('VALIDATION_FAILED', { message: `That is more than the ${balanceOf(rates, inv).toLocaleString('en-NG')} left on ${inv.number}.` });
+    const bookRate = Number(inv.exchangeRate);
+    const setRate = inv.currency !== 'NGN' ? input.settlementRate ?? bookRate : 1;
+    arReliefNgn += (a.amount + disc) * bookRate;
+    discountNgn += disc * bookRate;
+    fxDiff += a.amount * (setRate - bookRate);
+    bankFromAlloc += a.amount * setRate;
+    invoices.set(inv.id, { inv, paid: round2(Number(inv.amountPaid) + a.amount + disc) });
+  }
+  const unallocated = round2(input.amount - bankFromAlloc);
+  if (unallocated < -0.01) throw new EmrError('VALIDATION_FAILED', { message: 'The receipt is less than the amounts applied to invoices.' });
+  fxDiff = round2(fxDiff); discountNgn = round2(discountNgn);
+  const lines = [{ accountNumber: input.depositAccountNumber, debit: input.amount, credit: 0, description: `${input.method} — ${cust.name}` }];
+  if (discountNgn > 0.005) lines.push({ accountNumber: ACCT.discounts, debit: discountNgn, credit: 0, description: 'Early-payment discount', customerId: cust.id });
+  lines.push({ accountNumber: cust.arAccountNumber, debit: 0, credit: round2(arReliefNgn + Math.max(unallocated, 0)), description: `Applied to ${allocations.length} invoice(s)`, customerId: cust.id });
+  if (fxDiff > 0.005) lines.push({ accountNumber: ACCT.fxGain, debit: 0, credit: fxDiff, description: 'Realised FX gain on settlement' });
+  else if (fxDiff < -0.005) lines.push({ accountNumber: ACCT.fxLoss, debit: -fxDiff, credit: 0, description: 'Realised FX loss on settlement' });
+  const number = await nextDocNumber(tx, context, 'receipt');
+  const entry = await postEntry(tx, context, { date, source: 'Customer Payment', memo: `Receipt ${number} — ${cust.name}`, reference: number, lines });
+  const r = await tx.acctReceipt.create({
+    data: {
+      ...(input.id ? { id: input.id } : {}), ...org(context), number, customerId: cust.id, receiptDate: date, method: input.method, depositAccountNumber: input.depositAccountNumber, amount: input.amount,
+      allocations, settlementRate: input.settlementRate ?? null, reference: input.reference ?? null, notes: input.notes ?? null, journalEntryId: entry.id, createdByUserId: context.userId,
+    },
   });
+  for (const { inv, paid } of invoices.values()) await changeDoc(tx, context, inv, { amountPaid: paid, status: statusAfterPayment(rates, inv, paid) }, 'invoice.payment_applied');
+  await audited(tx, context, 'receipt.recorded', 'receipt', r.id);
+  return { id: r.id, number };
+}
+/** Voids a receipt whose payment was reversed at source: its entry is reversed and the invoices reopen. */
+export async function voidReceiptInTx(tx, context, id, memo) {
+  const rates = await taxRates(tx, context);
+  const r = await tx.acctReceipt.findFirst({ where: { ...org(context), id } });
+  if (!r) throw new EmrError('HR_RECORD_NOT_FOUND', { message: 'Receipt not found.' });
+  if (r.voidedAt) return { id };
+  await reverseInTx(tx, context, r.journalEntryId, { memo });
+  for (const a of r.allocations) {
+    const inv = await docOf(tx, context, a.invoiceId, 'invoice');
+    const paid = Math.max(0, round2(Number(inv.amountPaid) - a.amount - (a.discount ?? 0)));
+    await changeDoc(tx, context, inv, { amountPaid: paid, status: statusAfterPayment(rates, inv, paid) }, 'invoice.payment_reversed');
+  }
+  await tx.acctReceipt.updateMany({ where: { ...org(context), id }, data: { voidedAt: new Date() } });
+  await audited(tx, context, 'receipt.voided', 'receipt', id);
+  return { id };
 }
 
 // ---- credit notes -----------------------------------------------------------------------------------

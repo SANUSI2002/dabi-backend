@@ -6280,6 +6280,7 @@ model AcctReceipt {
   journalEntryId String @map("journal_entry_id")
   createdByUserId String @map("created_by_user_id")
   createdAt DateTime @default(now()) @map("created_at")
+  voidedAt DateTime? @map("voided_at")
   @@map("acct_receipts")
 }
 
@@ -6689,4 +6690,16 @@ model AcctNotificationPrefs {
   updatedAt DateTime @default(now()) @map("updated_at")
   @@id([organizationId, userId])
   @@map("acct_notification_prefs")
+}
+
+model AcctIntegrationEvent {
+  organizationId String @map("organization_id")
+  kind String @db.VarChar(24)
+  sourceRef String @map("source_ref")
+  data Json @default("{}")
+  journalEntryId String? @map("journal_entry_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@id([organizationId, kind, sourceRef])
+  @@map("acct_integration_events")
 }
