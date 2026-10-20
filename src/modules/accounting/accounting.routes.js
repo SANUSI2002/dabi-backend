@@ -12,7 +12,9 @@ import { requestContext } from '../emr/core/logging.js';
 import { accountingTenant } from '../emr/core/context.js';
 import { tenantRateLimit } from '../emr/core/rateLimit.js';
 import { EmrError, emrErrorHandler } from '../emr/core/errors.js';
-import { validateEmr } from '../emr/core/validate.js';
+import { handle, validateEmr } from '../emr/core/validate.js';
+import { send } from '../emr/core/http.js';
+import { accountingAuditEvents } from './audit.js';
 import { ledgerRoutes } from './ledger/ledger.routes.js';
 import { receivableRoutes, settingsRoutes } from './receivables/receivables.routes.js';
 import { approvalRuleRoutes, payableRoutes } from './payables/payables.routes.js';
@@ -32,6 +34,8 @@ tenant.use('/banking', bankingRoutes);
 tenant.use('/expenses', expenseRoutes);
 tenant.use('/fixed-assets', assetRoutes);
 tenant.use('/planning', planningRoutes);
+tenant.get('/audit-events', validateEmr(z.object({ params: z.object({ organizationId: z.uuid() }).strict(), query: z.object({ limit: z.coerce.number().int().min(1).max(500).default(200) }).strict() })),
+  handle(async (req, res) => send(res, await accountingAuditEvents(req.emr, req.query))));
 
 router.use('/organizations/:organizationId', protect, validateEmr(z.object({ params: z.object({ organizationId: z.uuid() }) })), requireOrganization, accountingTenant, tenantRateLimit, tenant);
 router.use((req, res, next) => next(new EmrError('NOT_FOUND')));

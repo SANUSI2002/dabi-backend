@@ -116,4 +116,11 @@ describe('payables', () => {
     const b = ok(await as(finance).post('/payables/bills', { vendorId: vendor.id, date: today(), lines: [pl(5230, 'Service', 1, 200000)] }), 201);
     expect(ok(await as(finance).post(`/payables/bills/${b.id}/submit`)).status).toBe('Pending Approval');
   });
+
+  it("keeps the Accounting audit trail to the books, with purchasing apart from HR's hiring requisitions", async () => {
+    const { items } = ok(await as(finance).get('/audit-events?limit=500'));
+    expect(items.find((e) => e.action === 'requisition.submitted')).toMatchObject({ module: 'bills', resourceType: 'purchase_requisition', actorName: expect.any(String) });
+    expect(items.some((e) => e.resourceType === 'requisition')).toBe(false);
+    expect(new Set(items.map((e) => e.module)).has(undefined)).toBe(false);
+  });
 });

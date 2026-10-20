@@ -25,6 +25,8 @@ const audited = (tx, context, action, resourceType, resourceId, changedFields = 
 const ACCT = { apTrade: 2000, wht: 2210, fxGain: 4110, fxLoss: 5610, openingEquity: 3900 };
 const OPEN_BILL = ['Awaiting Payment', 'Partially Paid'];
 const NAMES = { requisition: 'Requisition', po: 'Purchase order', bill: 'Bill', 'vendor-credit': 'Vendor credit' };
+// audit resource types — never plain "requisition", which is HR's (hiring requisitions)
+const AUDIT_TYPE = { requisition: 'purchase_requisition', po: 'purchase_order', bill: 'bill', 'vendor-credit': 'vendor_credit' };
 const monthsAdd = (d, m) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + m, d.getUTCDate(), 12));
 const rid = () => Math.random().toString(36).slice(2, 10);
 
@@ -58,7 +60,7 @@ async function createDoc(tx, context, kind, seqKey, fields) {
 }
 async function changeDoc(tx, context, d, data, action) {
   await updateVersioned(tx.acctPurchaseDoc, { organizationId: context.organizationId, id: d.id, expectedVersion: d.version, data, notFoundCode: 'HR_RECORD_NOT_FOUND' });
-  await audited(tx, context, action, d.kind.replace('-', '_'), d.id, Object.keys(data));
+  await audited(tx, context, action, AUDIT_TYPE[d.kind], d.id, Object.keys(data));
 }
 
 // ---- reading ----------------------------------------------------------------------------------------
