@@ -5430,3 +5430,182 @@ model WfWorkflowEvent {
   createdAt DateTime @default(now()) @map("created_at")
   @@map("wf_workflow_events")
 }
+
+model WfRequisition {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  title String @db.VarChar(160)
+  description String @default("") @db.VarChar(2000)
+  departmentId String? @map("department_id")
+  jobPositionId String? @map("job_position_id")
+  vacancy Int
+  managerIds String[] @default([]) @map("manager_ids")
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime? @map("end_date") @db.Date
+  closed Boolean @default(false)
+  createdByUserId String @map("created_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_requisitions")
+}
+
+model WfPipelineStage {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  requisitionId String @map("requisition_id")
+  name String @db.VarChar(80)
+  type String @db.VarChar(9)
+  sequence Int
+  @@map("wf_pipeline_stages")
+}
+
+model WfCandidate {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  requisitionId String @map("requisition_id")
+  stageId String @map("stage_id")
+  name String @db.VarChar(160)
+  email String @db.VarChar(160)
+  phone String @default("") @db.VarChar(30)
+  source String @db.VarChar(15)
+  referredByEmployeeId String? @map("referred_by_employee_id")
+  rating Int @default(0)
+  hired Boolean @default(false)
+  canceled Boolean @default(false)
+  cancelReason String? @map("cancel_reason") @db.VarChar(200)
+  convertedEmployeeId String? @map("converted_employee_id")
+  appliedAt DateTime @default(now()) @map("applied_at")
+  version Int @default(1)
+  @@map("wf_candidates")
+}
+
+model WfInterview {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  scheduledAt DateTime @map("scheduled_at")
+  interviewerIds String[] @map("interviewer_ids")
+  notes String? @db.VarChar(1000)
+  status String @default("Scheduled") @db.VarChar(9)
+  feedback String? @db.VarChar(2000)
+  createdByUserId String @map("created_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_interviews")
+}
+
+model WfTalentPool {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  skillZone String @map("skill_zone") @db.VarChar(80)
+  candidateName String @map("candidate_name") @db.VarChar(160)
+  email String @default("") @db.VarChar(160)
+  phone String @default("") @db.VarChar(30)
+  reason String @db.VarChar(500)
+  fromCandidateId String? @map("from_candidate_id")
+  profile Json @default("{}")
+  takenRequisitionId String? @map("taken_requisition_id")
+  takenCandidateId String? @map("taken_candidate_id")
+  takenStatusCode String? @map("taken_status_code") @db.VarChar(40)
+  takenAt DateTime? @map("taken_at")
+  addedByUserId String @map("added_by_user_id")
+  addedAt DateTime @default(now()) @map("added_at")
+  @@map("wf_talent_pool")
+}
+
+model WfTalentEntry {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  talentId String @map("talent_id")
+  kind String @db.VarChar(8)
+  text String @db.VarChar(2000)
+  detail String? @db.VarChar(300)
+  sizeKb Int? @map("size_kb")
+  byUserId String @map("by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_talent_entries")
+}
+
+model WfVacancy {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  departmentId String @map("department_id")
+  jobPositionId String? @map("job_position_id")
+  roleTitle String @map("role_title") @db.VarChar(160)
+  headcount Int
+  vacancyTypeId String? @map("vacancy_type_id") @db.VarChar(60)
+  reason String @db.VarChar(2000)
+  requirements String? @db.VarChar(2000)
+  salaryMin Decimal? @map("salary_min") @db.Decimal(14, 2)
+  salaryMax Decimal? @map("salary_max") @db.Decimal(14, 2)
+  raisedByUserId String @map("raised_by_user_id")
+  raisedByEmployeeId String? @map("raised_by_employee_id")
+  status String @default("Draft") @db.VarChar(9)
+  rejectionReason String? @map("rejection_reason") @db.VarChar(500)
+  requisitionId String? @map("requisition_id")
+  submittedAt DateTime? @map("submitted_at")
+  decidedAt DateTime? @map("decided_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_vacancies")
+}
+
+model WfOnboarding {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  candidateName String @map("candidate_name") @db.VarChar(160)
+  requisitionId String @map("requisition_id")
+  jobPositionId String? @map("job_position_id")
+  departmentId String? @map("department_id")
+  currentStageId String @map("current_stage_id") @db.VarChar(20)
+  taskDone Json @default("{}") @map("task_done")
+  resumptionDate DateTime? @map("resumption_date") @db.Date
+  basicSalary Decimal? @map("basic_salary") @db.Decimal(14, 2)
+  employeeId String? @map("employee_id")
+  startedByUserId String @map("started_by_user_id")
+  startedAt DateTime @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  version Int @default(1)
+  @@map("wf_onboarding")
+}
+
+model WfOnboardingDocument {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  onboardingId String @map("onboarding_id")
+  taskId String @map("task_id") @db.VarChar(20)
+  title String @db.VarChar(200)
+  uploadedByUserId String @map("uploaded_by_user_id")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+  @@map("wf_onboarding_documents")
+}
+
+model WfHrSettings {
+  organizationId String @id @map("organization_id")
+  offerLetterTemplate String @map("offer_letter_template") @db.VarChar(20000)
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("wf_hr_settings")
+}
+
+model WfOffboarding {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  reason String @db.VarChar(120)
+  noticeDate DateTime @default(now()) @map("notice_date")
+  lastWorkingDate DateTime @map("last_working_date") @db.Date
+  currentStageId String @map("current_stage_id") @db.VarChar(20)
+  status String @default("Ongoing") @db.VarChar(9)
+  exitInterviewNotes String? @map("exit_interview_notes") @db.VarChar(4000)
+  handoverNotes String? @map("handover_notes") @db.VarChar(4000)
+  fnfAmount Decimal? @map("fnf_amount") @db.Decimal(14, 2)
+  fnfSettled Boolean @default(false) @map("fnf_settled")
+  startedByUserId String @map("started_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+  version Int @default(1)
+  @@map("wf_offboarding")
+}

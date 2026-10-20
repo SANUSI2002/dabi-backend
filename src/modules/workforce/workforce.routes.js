@@ -16,6 +16,7 @@ import { validateEmr } from '../emr/core/validate.js';
 import { peopleRoutes } from './people/people.routes.js';
 import { timeRoutes } from './time/time.routes.js';
 import { workflowRoutes } from './workflows/workflows.routes.js';
+import { hiringRoutes } from './hiring/hiring.routes.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -24,6 +25,7 @@ const tenant = express.Router({ mergeParams: true });
 tenant.use('/people', peopleRoutes);
 tenant.use('/time', timeRoutes);
 tenant.use('/workflows', workflowRoutes);
+tenant.use('/hiring', hiringRoutes);
 
 router.use(
   '/organizations/:organizationId',

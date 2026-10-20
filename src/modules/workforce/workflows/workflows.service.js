@@ -37,8 +37,9 @@ const roleCodes = (ref) => ROLE_LABELS[ref.trim().toLowerCase()] ?? [ref.trim().
 const FALLBACK = [{ codes: ['HR_OFFICER'], to: 'HR' }, { codes: ['HOSPITAL_ADMIN', 'ORGANISATION_OWNER'], to: 'the hospital administrator' }];
 
 // ---- triggers: the modules whose documents go through approval ------------------------------------
-// handler.load(tx, context, reference) → { subject, subjectEmployeeId?, departmentId?, facts }
-// handler.complete?(tx, context, instance, outcome)  outcome: 'approved' | 'rejected' | 'cancelled'
+// handler.load(tx, context, reference) → { subject, subjectEmployeeId?, departmentId?, facts }  (checks the caller may raise it)
+// handler.started?(tx, context, instance)              the request is now in flight (or already decided)
+// handler.complete?(tx, context, instance, outcome)    outcome: 'approved' | 'rejected' | 'cancelled'
 const TRIGGERS = new Map();
 export function registerTrigger(type, handler) { TRIGGERS.set(type, handler); }
 export const connectedTriggers = () => [...TRIGGERS.keys()];
@@ -118,7 +119,8 @@ async function finish(tx, context, instance, outcome) {
 
 // ---- starting ---------------------------------------------------------------------------------------
 /** Starts a request inside the caller's tenant transaction. `holders` from loadRoleHolders(). */
-export async function startInTx(tx, context, holders, { triggerType, reference, subject, subjectEmployeeId, departmentId, facts = {}, defId, testContext }) {
+export async function startInTx(tx, context, holders, { id, triggerType, reference, subject, subjectEmployeeId, departmentId, facts = {}, defId, testContext }) {
+  await ensureStarters(tx, context);
   const people = await peopleOf(tx, context);
   const def = defId
     ? await tx.wfWorkflowDef.findFirst({ where: { ...org(context), id: defId } })
@@ -141,7 +143,7 @@ export async function startInTx(tx, context, holders, { triggerType, reference, 
   try {
     instance = await tx.wfWorkflowInstance.create({
       data: {
-        ...org(context), defId: def.id, defName: def.name, defVersion: def.version, graph, triggerType: def.triggerType, subject: subject.slice(0, 300), reference, context: ctx,
+        ...(id ? { id } : {}), ...org(context), defId: def.id, defName: def.name, defVersion: def.version, graph, triggerType: def.triggerType, subject: subject.slice(0, 300), reference, context: ctx,
         isTest: !!testContext, initiatedByUserId: context.userId, initiatedByEmployeeId: people.me?.id ?? null, status, active: res.active, completedAt: res.ended ? new Date() : null,
       },
     });
@@ -155,7 +157,7 @@ export async function startInTx(tx, context, holders, { triggerType, reference, 
 }
 
 /** Starts approval for a document of a connected kind, or a Builder test run. */
-export async function start(context, { triggerType, reference, subject, defId, context: testContext }) {
+export async function start(context, { id, triggerType, reference, subject, defId, context: testContext }) {
   const test = !!testContext;
   if (test && !canManage(context)) throw new EmrError('PERMISSION_DENIED');
   const handler = TRIGGERS.get(triggerType);
@@ -164,8 +166,9 @@ export async function start(context, { triggerType, reference, subject, defId, c
   return withTenant(context, async (tx) => {
     const facts = test ? {} : await handler.load(tx, context, reference);
     const instance = await startInTx(tx, context, holders, test
-      ? { triggerType, reference: `test-${randomUUID()}`, subject: subject ?? 'Test run', defId, testContext }
-      : { triggerType, reference, subject: facts.subject ?? subject ?? reference, subjectEmployeeId: facts.subjectEmployeeId, departmentId: facts.departmentId, facts: facts.facts });
+      ? { id, triggerType, reference: `test-${randomUUID()}`, subject: subject ?? 'Test run', defId, testContext }
+      : { id, triggerType, reference, subject: facts.subject ?? subject ?? reference, subjectEmployeeId: facts.subjectEmployeeId, departmentId: facts.departmentId, facts: facts.facts });
+    if (!test) await handler.started?.(tx, context, instance);
     return { instanceId: instance.id, status: instance.status, autoApproved: instance.status === 'Approved' };
   });
 }
@@ -240,6 +243,11 @@ export async function cancel(context, instanceId, { reason }) {
 export async function cancelForReference(tx, context, triggerType, reference, reason) {
   const inst = await tx.wfWorkflowInstance.findFirst({ where: { ...org(context), triggerType, reference, status: 'Running' } });
   if (inst) await cancelInTx(tx, context, inst, reason);
+}
+/** The comment on the last rejection of an instance (the reason a document was sent back). */
+export async function rejectionComment(tx, context, instanceId) {
+  const event = await tx.wfWorkflowEvent.findFirst({ where: { ...org(context), instanceId, action: 'rejected' }, orderBy: { createdAt: 'desc' } });
+  return event?.comment ?? null;
 }
 export const instanceForReference = (tx, context, triggerType, reference) =>
   tx.wfWorkflowInstance.findFirst({ where: { ...org(context), triggerType, reference }, orderBy: { createdAt: 'desc' } });

@@ -48,7 +48,7 @@ const v = {
   start: z.object({
     params: z.object(org).strict(), query: noQuery,
     body: z.object({
-      triggerType: trigger, reference: z.string().trim().min(1).max(100).optional(), subject: text(300).optional(), defId: z.uuid().optional(),
+      id: z.uuid().optional(), triggerType: trigger, reference: z.string().trim().min(1).max(100).optional(), subject: text(300).optional(), defId: z.uuid().optional(),
       context: z.record(key, contextValue).refine((c) => Object.keys(c).length <= 40, 'At most 40 context fields').optional(),
     }).strict().refine((b) => b.context || b.reference, 'Send the document reference (or a test-run context)'),
   }),
