@@ -2,7 +2,7 @@
 //
 // Only pharmacist-approved, not-cancelled lines prescribed in the admission's own visit can be
 // charted. A GIVEN dose passes the administration guard (dose/unit, minimum interval, daily count,
-// one-off STAT, as-needed daily maximum). The prescription line is locked while checking, so two
+// one-off STAT, as-needed daily maximum), and never for a medicine held on a ward round. The prescription line is locked while checking, so two
 // nurses charting the same medicine at once are serialized and the second sees the first's dose.
 // Every chart entry needs an Idempotency-Key: a repeated tap must never chart a dose twice.
 import { withTenant } from '../core/db.js';
@@ -49,7 +49,7 @@ export async function marView(context, admissionId) {
       return {
         prescriptionItemId: item.id, drugCode: item.drugCode, drugName: item.drugName, strength: item.strength,
         dose: num(item.dose), doseUnit: item.doseUnit, frequency: item.frequency, route: item.route, prn: item.prn, controlled: item.controlled,
-        instructions: item.instructions, lastGivenAt: last, nextAllowedAt: policy.nextAllowedAt(item, last),
+        instructions: item.instructions, lastGivenAt: last, nextAllowedAt: policy.nextAllowedAt(item, last), heldAt: item.heldAt, heldReason: item.heldReason,
         givenLast24h: given.filter((g) => g.administeredAt.getTime() > now - 24 * 3_600_000).reduce((sum, g) => sum + Number(g.dose), 0),
       };
     });
@@ -100,6 +100,7 @@ export async function recordAdministration(context, admissionId, input, { idempo
 
     let fields = { dose: null, doseUnit: null, route: null };
     if (input.status === 'GIVEN') {
+      if (item.heldAt) throw new EmrError('ADMINISTRATION_NOT_ALLOWED', { message: `${item.drugName} is on hold${item.heldReason ? ` (${item.heldReason})` : ''}; restart it on a ward round before giving a dose.`, details: { rule: 'HELD' } });
       if (item.controlled && !input.witnessUserId) throw new EmrError('WITNESS_REQUIRED');
       const drug = await tx.emrFormularyItem.findFirst({ where: { organizationId: context.organizationId, id: item.formularyItemId }, select: { maxDailyDose: true } });
       const given = (await activeGiven(tx, context, item.id)).map((g) => ({ administeredAt: g.administeredAt, dose: Number(g.dose) }));

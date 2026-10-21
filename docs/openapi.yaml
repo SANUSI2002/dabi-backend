@@ -23110,6 +23110,113 @@ paths:
         "500":
           $ref: "#/components/responses/EmrServerError"
       x-generated: true
+  /api/v1/emr/organizations/{organizationId}/admissions/{admissionId}/ward-rounds:
+    get:
+      tags:
+        - EMR · Admissions and wards
+      summary: List ward rounds of admission
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `clinical.read`.
+      operationId: get_api_v1_emr_organizations_organizationId_admissions_admissionId_ward_rounds
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: admissionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+    post:
+      tags:
+        - EMR · Admissions and wards
+      summary: Create ward round for admission
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `diagnosis.record`.
+      operationId: post_api_v1_emr_organizations_organizationId_admissions_admissionId_ward_rounds
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: admissionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              additionalProperties: false
+      responses:
+        "201":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
   /api/v1/emr/organizations/{organizationId}/antenatal:
     get:
       tags:
@@ -40385,6 +40492,878 @@ paths:
           $ref: "#/components/responses/EmrPreconditionFailed"
         "428":
           $ref: "#/components/responses/EmrPreconditionRequired"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/ward-rounds/{id}:
+    patch:
+      tags:
+        - EMR
+      summary: Update ward round
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `diagnosis.record`.
+
+        Optimistic concurrency: send the record’s current version in `If-Match` (e.g. `W/"3"`). A stale version returns 412 with the current version in `ETag`.
+      operationId: patch_api_v1_emr_organizations_organizationId_ward_rounds_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: If-Match
+          in: header
+          required: true
+          description: The record version from your last read, e.g. W/"3".
+          schema:
+            type: string
+            examples:
+              - W/"3"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                participants:
+                  maxItems: 30
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        maxLength: 40
+                      role:
+                        type: string
+                        enum:
+                          - Consultant
+                          - Resident/Medical Officer
+                          - Nurse
+                          - Pharmacist
+                          - Physiotherapist
+                          - Dietician
+                          - Other
+                      name:
+                        type: string
+                        minLength: 1
+                        maxLength: 120
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                    required:
+                      - id
+                      - role
+                      - name
+                    additionalProperties: false
+                clinicalProgress:
+                  type: string
+                  enum:
+                    - ""
+                    - Improving
+                    - Stable
+                    - No significant change
+                    - Deteriorating
+                    - Critical
+                progressNote:
+                  type: string
+                  maxLength: 10000
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                devices:
+                  maxItems: 30
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        maxLength: 40
+                      kind:
+                        type: string
+                        enum:
+                          - IV cannula
+                          - Central line
+                          - Urinary catheter
+                          - NG tube
+                          - Drain
+                          - Chest tube
+                          - Oxygen device
+                          - Other
+                      label:
+                        type: string
+                        maxLength: 120
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                      insertedAt:
+                        type: string
+                        maxLength: 40
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                      removedAt:
+                        type: string
+                        maxLength: 40
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                    required:
+                      - id
+                      - kind
+                    additionalProperties: false
+                problems:
+                  maxItems: 40
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        maxLength: 40
+                      conditionId:
+                        type: string
+                        maxLength: 64
+                      problem:
+                        type: string
+                        minLength: 1
+                        maxLength: 300
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                      status:
+                        type: string
+                        maxLength: 60
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                      update:
+                        type: string
+                        maxLength: 2000
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                      plan:
+                        type: string
+                        maxLength: 2000
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                    required:
+                      - id
+                      - problem
+                      - status
+                      - update
+                      - plan
+                    additionalProperties: false
+                tasks:
+                  maxItems: 60
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        maxLength: 40
+                      type:
+                        type: string
+                        minLength: 1
+                        maxLength: 40
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                      description:
+                        type: string
+                        minLength: 1
+                        maxLength: 1000
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                      assignedTo:
+                        type: string
+                        maxLength: 120
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                      priority:
+                        type: string
+                        enum:
+                          - Routine
+                          - Urgent
+                          - STAT
+                      dueAt:
+                        type: string
+                        maxLength: 40
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                      status:
+                        type: string
+                        enum:
+                          - Pending
+                          - In Progress
+                          - Completed
+                          - Cancelled
+                    required:
+                      - id
+                      - type
+                      - description
+                      - priority
+                      - status
+                    additionalProperties: false
+                safetyChecklist:
+                  type: object
+                  properties:
+                    medicationReconciliationReviewed:
+                      type: boolean
+                    drugAllergiesReviewed:
+                      type: boolean
+                    antibioticsReviewed:
+                      type: boolean
+                    anticoagulationReviewed:
+                      type: boolean
+                    highRiskMedicinesReviewed:
+                      type: boolean
+                    prnMedicinesReviewed:
+                      type: boolean
+                    ivMedicationReviewed:
+                      type: boolean
+                    monitoringRequired:
+                      type: boolean
+                    changesCommunicated:
+                      type: boolean
+                  required:
+                    - medicationReconciliationReviewed
+                    - drugAllergiesReviewed
+                    - antibioticsReviewed
+                    - anticoagulationReviewed
+                    - highRiskMedicinesReviewed
+                    - prnMedicinesReviewed
+                    - ivMedicationReviewed
+                    - monitoringRequired
+                    - changesCommunicated
+                  additionalProperties: false
+                escalationPlan:
+                  type: string
+                  maxLength: 2000
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                dischargeReadiness:
+                  type: object
+                  properties:
+                    fit:
+                      anyOf:
+                        - type: boolean
+                        - type: "null"
+                    expectedDate:
+                      type: string
+                      maxLength: 40
+                      pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                    barriers:
+                      maxItems: 20
+                      type: array
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 120
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                    criteria:
+                      type: string
+                      maxLength: 2000
+                      pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                    followUp:
+                      type: string
+                      maxLength: 2000
+                      pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                  required:
+                    - fit
+                    - barriers
+                  additionalProperties: false
+                communication:
+                  type: object
+                  properties:
+                    patientUpdated:
+                      anyOf:
+                        - type: boolean
+                        - type: "null"
+                    medicationChangesExplained:
+                      anyOf:
+                        - type: boolean
+                        - type: "null"
+                    planDiscussed:
+                      anyOf:
+                        - type: boolean
+                        - type: "null"
+                    caregiverUpdated:
+                      anyOf:
+                        - type: string
+                          enum:
+                            - Yes
+                            - No
+                            - Not applicable
+                        - type: "null"
+                    interpreterRequired:
+                      anyOf:
+                        - type: boolean
+                        - type: "null"
+                    questions:
+                      type: string
+                      maxLength: 2000
+                      pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                    notes:
+                      type: string
+                      maxLength: 2000
+                      pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                  required:
+                    - patientUpdated
+                    - medicationChangesExplained
+                    - planDiscussed
+                    - caregiverUpdated
+                    - interpreterRequired
+                  additionalProperties: false
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "412":
+          $ref: "#/components/responses/EmrPreconditionFailed"
+        "428":
+          $ref: "#/components/responses/EmrPreconditionRequired"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/ward-rounds/{id}/amendments:
+    post:
+      tags:
+        - EMR
+      summary: Create amendment for ward round
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `clinical.note.sign`.
+      operationId: post_api_v1_emr_organizations_organizationId_ward_rounds_id_amendments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+              required:
+                - note
+              additionalProperties: false
+      responses:
+        "201":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/ward-rounds/{id}/examination:
+    post:
+      tags:
+        - EMR
+      summary: Record examination for ward round
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `diagnosis.record`.
+      operationId: post_api_v1_emr_organizations_organizationId_ward_rounds_id_examination
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                systems:
+                  minItems: 1
+                  maxItems: 11
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      system:
+                        type: string
+                        enum:
+                          - general
+                          - cardiovascular
+                          - respiratory
+                          - abdominal
+                          - neurological
+                          - musculoskeletal
+                          - headAndNeck
+                          - skin
+                          - peripheralVascular
+                          - genitourinary
+                          - other
+                      status:
+                        type: string
+                        enum:
+                          - Not Examined
+                          - Normal
+                          - Abnormal
+                      findings:
+                        type: object
+                        propertyNames:
+                          type: string
+                          maxLength: 60
+                        additionalProperties:
+                          type: string
+                          maxLength: 500
+                          pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                      laterality:
+                        type: string
+                        enum:
+                          - Left
+                          - Right
+                          - Bilateral
+                          - N/A
+                      notes:
+                        type: string
+                        maxLength: 2000
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                      consentDocumented:
+                        type: boolean
+                      chaperoneDocumented:
+                        type: boolean
+                    required:
+                      - system
+                      - status
+                    additionalProperties: false
+              required:
+                - systems
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/ward-rounds/{id}/medication-changes:
+    post:
+      tags:
+        - EMR
+      summary: Create medication change for ward round
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `prescription.create`.
+      operationId: post_api_v1_emr_organizations_organizationId_ward_rounds_id_medication_changes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prescriptionItemId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                action:
+                  type: string
+                  enum:
+                    - STOPPED
+                    - HELD
+                    - RESTARTED
+                    - DOSE_INCREASED
+                    - DOSE_DECREASED
+                    - FREQUENCY_CHANGED
+                    - ROUTE_CHANGED
+                    - REPLACED
+                newDose:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 1000000
+                newFrequency:
+                  type: string
+                  enum:
+                    - OD
+                    - MANE
+                    - NOCTE
+                    - BD
+                    - TDS
+                    - QDS
+                    - Q4H
+                    - Q6H
+                    - Q8H
+                    - Q12H
+                    - WEEKLY
+                    - STAT
+                    - PRN
+                newRoute:
+                  type: string
+                  enum:
+                    - PO
+                    - SL
+                    - IV
+                    - IM
+                    - SC
+                    - INHALED
+                    - TOPICAL
+                    - PR
+                    - PV
+                    - OPHTHALMIC
+                    - OTIC
+                    - NASAL
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                clinicalNote:
+                  type: string
+                  maxLength: 2000
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                monitoringRequired:
+                  type: string
+                  maxLength: 1000
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                overrides:
+                  maxItems: 10
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      drugCode:
+                        type: string
+                        maxLength: 40
+                      type:
+                        type: string
+                        enum:
+                          - ALLERGY
+                          - MAX_DOSE
+                          - DUPLICATE_THERAPY
+                      reason:
+                        type: string
+                        minLength: 1
+                        maxLength: 500
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                    required:
+                      - drugCode
+                      - type
+                      - reason
+                    additionalProperties: false
+              required:
+                - prescriptionItemId
+                - action
+                - reason
+              additionalProperties: false
+      responses:
+        "201":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/ward-rounds/{id}/medications:
+    post:
+      tags:
+        - EMR · Patient record
+      summary: Create medication for ward round
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `prescription.create`.
+      operationId: post_api_v1_emr_organizations_organizationId_ward_rounds_id_medications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                drugCode:
+                  type: string
+                  maxLength: 40
+                dose:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 1000000
+                doseUnit:
+                  type: string
+                  minLength: 1
+                  maxLength: 20
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                frequency:
+                  type: string
+                  enum:
+                    - OD
+                    - MANE
+                    - NOCTE
+                    - BD
+                    - TDS
+                    - QDS
+                    - Q4H
+                    - Q6H
+                    - Q8H
+                    - Q12H
+                    - WEEKLY
+                    - STAT
+                    - PRN
+                route:
+                  type: string
+                  enum:
+                    - PO
+                    - SL
+                    - IV
+                    - IM
+                    - SC
+                    - INHALED
+                    - TOPICAL
+                    - PR
+                    - PV
+                    - OPHTHALMIC
+                    - OTIC
+                    - NASAL
+                durationDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 365
+                quantity:
+                  type: integer
+                  minimum: 1
+                  maximum: 10000
+                prn:
+                  type: boolean
+                prnReason:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                instructions:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                indication:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                overrides:
+                  maxItems: 10
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      drugCode:
+                        type: string
+                        maxLength: 40
+                      type:
+                        type: string
+                        enum:
+                          - ALLERGY
+                          - MAX_DOSE
+                          - DUPLICATE_THERAPY
+                      reason:
+                        type: string
+                        minLength: 1
+                        maxLength: 500
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                    required:
+                      - drugCode
+                      - type
+                      - reason
+                    additionalProperties: false
+              required:
+                - drugCode
+                - dose
+                - doseUnit
+                - frequency
+              additionalProperties: false
+      responses:
+        "201":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/emr/organizations/{organizationId}/ward-rounds/{id}/sign:
+    post:
+      tags:
+        - EMR
+      summary: Sign ward round
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Requires the permission `clinical.note.sign`.
+      operationId: post_api_v1_emr_organizations_organizationId_ward_rounds_id_sign
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
         "429":
           $ref: "#/components/responses/EmrRateLimited"
         "500":

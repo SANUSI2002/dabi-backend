@@ -40,43 +40,47 @@ async function currentItems(tx, context, patientId) {
 }
 
 export async function prescribe(context, encounterId, input, { idempotencyKey } = {}) {
-  return withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: `prescription:${encounterId}`, body: input }, async () => {
-    const encounter = await tx.emrEncounter.findFirst({
-      where: { organizationId: context.organizationId, id: encounterId },
-      select: { id: true, status: true, patientId: true, patient: { select: { status: true } } },
-    });
-    if (!encounter) throw new EmrError('ENCOUNTER_NOT_FOUND');
-    requireOpen(encounter);
-    if (encounter.patient.status !== 'ACTIVE') throw new EmrError('PATIENT_INACTIVE');
+  return withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: `prescription:${encounterId}`, body: input }, async () => (
+    { statusCode: 201, body: toPrescription(await prescribeInTx(tx, context, encounterId, input)) }
+  )));
+}
+/** Prescribes inside the caller's transaction (a ward round's medication changes use it); same checks. */
+export async function prescribeInTx(tx, context, encounterId, input) {
+  const encounter = await tx.emrEncounter.findFirst({
+    where: { organizationId: context.organizationId, id: encounterId },
+    select: { id: true, status: true, patientId: true, patient: { select: { status: true } } },
+  });
+  if (!encounter) throw new EmrError('ENCOUNTER_NOT_FOUND');
+  requireOpen(encounter);
+  if (encounter.patient.status !== 'ACTIVE') throw new EmrError('PATIENT_INACTIVE');
 
-    await ensureFormulary(tx, context);
-    const codes = input.items.map((line) => line.drugCode);
-    const drugs = await tx.emrFormularyItem.findMany({ where: { organizationId: context.organizationId, code: { in: codes }, active: true } });
-    const unknown = codes.filter((code) => !drugs.some((d) => d.code === code));
-    if (unknown.length) throw new EmrError('VALIDATION_FAILED', { message: `Not in the active formulary: ${unknown.join(', ')}.` });
+  await ensureFormulary(tx, context);
+  const codes = input.items.map((line) => line.drugCode);
+  const drugs = await tx.emrFormularyItem.findMany({ where: { organizationId: context.organizationId, code: { in: codes }, active: true } });
+  const unknown = codes.filter((code) => !drugs.some((d) => d.code === code));
+  if (unknown.length) throw new EmrError('VALIDATION_FAILED', { message: `Not in the active formulary: ${unknown.join(', ')}.` });
 
-    const lines = input.items.map((line) => policy.prepareLine(line, drugs.find((d) => d.code === line.drugCode)));
-    const allergies = await tx.emrPatientAllergy.findMany({ where: { organizationId: context.organizationId, patientId: encounter.patientId, status: 'ACTIVE' } });
-    const alerts = policy.applyOverrides(
-      policy.safetyAlerts({ lines, drugs, allergies, activeItems: await currentItems(tx, context, encounter.patientId) }),
-      input.overrides,
-    );
+  const lines = input.items.map((line) => policy.prepareLine(line, drugs.find((d) => d.code === line.drugCode)));
+  const allergies = await tx.emrPatientAllergy.findMany({ where: { organizationId: context.organizationId, patientId: encounter.patientId, status: 'ACTIVE' } });
+  const alerts = policy.applyOverrides(
+    policy.safetyAlerts({ lines, drugs, allergies, activeItems: await currentItems(tx, context, encounter.patientId) }),
+    input.overrides,
+  );
 
-    const prescription = await tx.emrPrescription.create({
-      data: {
-        organizationId: context.organizationId, encounterId, patientId: encounter.patientId, notes: input.notes, prescriberUserId: context.userId,
-        items: { create: lines.map((line) => ({ ...line, safetyAlerts: alerts.filter((a) => a.drugCode === line.drugCode) })) },
-      },
-      include: { items: ITEM_ORDER },
-    });
-    const overridden = alerts.filter((a) => a.overrideReason).map((a) => `${a.drugCode}:${a.type}`);
-    await recordAudit(tx, context, { action: 'prescription.created', resourceType: 'prescription', resourceId: prescription.id, changedFields: overridden.length ? ['safetyOverride', ...overridden] : [] });
-    await enqueueEvent(tx, context, {
-      type: 'prescription.created', aggregateType: 'prescription', aggregateId: prescription.id,
-      data: { encounterId, patientId: encounter.patientId, items: lines.length, controlled: lines.some((l) => l.controlled), overrides: overridden.length },
-    });
-    return { statusCode: 201, body: toPrescription(prescription) };
-  }));
+  const prescription = await tx.emrPrescription.create({
+    data: {
+      organizationId: context.organizationId, encounterId, patientId: encounter.patientId, notes: input.notes, prescriberUserId: context.userId,
+      items: { create: lines.map((line) => ({ ...line, safetyAlerts: alerts.filter((a) => a.drugCode === line.drugCode) })) },
+    },
+    include: { items: ITEM_ORDER },
+  });
+  const overridden = alerts.filter((a) => a.overrideReason).map((a) => `${a.drugCode}:${a.type}`);
+  await recordAudit(tx, context, { action: 'prescription.created', resourceType: 'prescription', resourceId: prescription.id, changedFields: overridden.length ? ['safetyOverride', ...overridden] : [] });
+  await enqueueEvent(tx, context, {
+    type: 'prescription.created', aggregateType: 'prescription', aggregateId: prescription.id,
+    data: { encounterId, patientId: encounter.patientId, items: lines.length, controlled: lines.some((l) => l.controlled), overrides: overridden.length },
+  });
+  return prescription;
 }
 
 export async function listEncounterPrescriptions(context, encounterId) {
