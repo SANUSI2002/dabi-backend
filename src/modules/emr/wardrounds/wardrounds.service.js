@@ -48,10 +48,17 @@ async function draftOf(tx, context, id) {
   return r;
 }
 
+// Summaries are part of the permanent record, so they show the hospital's local time, not UTC.
+const TIME_ZONE = 'Africa/Lagos';
+const localStamp = (date) => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(date).map((p) => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+};
+
 /** Never invents clinical content: lines only from what the clinician entered. */
 export function buildSummary(round, clinicianName) {
-  const at = round.roundAt.toISOString();
-  const lines = [`Ward round — ${at.slice(0, 10)} ${at.slice(11, 16)} — ${clinicianName}`];
+  const lines = [`Ward round — ${localStamp(round.roundAt)} — ${clinicianName}`];
   if (round.clinicalProgress) lines.push(`Progress: ${round.clinicalProgress}`);
   if (round.progressNote) lines.push(round.progressNote);
   if (round.problems.length) {
