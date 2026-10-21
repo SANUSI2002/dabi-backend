@@ -3081,6 +3081,9 @@ model EmrFormularyItem {
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  referenceSource String? @map("reference_source") @db.VarChar(10)
+  referenceId String? @map("reference_id") @db.VarChar(80)
+  addedByUserId String? @map("added_by_user_id")
   batches EmrStockBatch[]
 
   @@unique([organizationId, id])

@@ -15,6 +15,8 @@ export const listFormulary = z.object({
   params: z.object(org).strict(),
   query: z.object({ includeInactive: z.enum(['true', 'false']).optional(), q: z.string().trim().max(60).optional() }).strict(),
 });
+export const drugSearch = z.object({ params: z.object(org).strict(), query: z.object({ q: z.string().trim().min(2).max(120) }).strict() });
+export const fromReference = z.object({ params: z.object(org).strict(), query: noQuery, body: z.object({ kind: z.enum(['brand', 'generic']), id: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/) }).strict() });
 export const createFormulary = z.object({
   params: z.object(org).strict(), query: noQuery,
   body: z.object({ code: formularyCode, ...formularyFields }).strict(),

@@ -16,6 +16,7 @@ import { send, sendResult, sendItems } from '../core/http.js';
 import { readIdempotencyKey } from '../core/idempotency.js';
 import * as v from './pharmacy.validator.js';
 import * as stock from './stock.service.js';
+import * as reference from './drugreference.service.js';
 import * as prescriptions from './prescriptions.service.js';
 import * as dispensing from './dispensing.service.js';
 import * as allergies from './allergies.service.js';
@@ -25,6 +26,12 @@ export const pharmacyRoutes = express.Router({ mergeParams: true });
 
 pharmacyRoutes.get('/formulary', check(v.listFormulary), allow('emr.stock.view', 'prescription.create', 'prescription.read'),
   handle(async (req, res) => sendItems(res, await stock.listFormulary(req.emr, req.query))));
+// Drug search for prescribers: the formulary and the EMDEX index together; picking an EMDEX product
+// resolves (or adds, not stocked) its formulary code.
+pharmacyRoutes.get('/drug-search', check(v.drugSearch), allow('prescription.create', 'prescription.read'),
+  handle(async (req, res) => send(res, await reference.searchDrugs(req.emr, req.query))));
+pharmacyRoutes.post('/formulary/from-reference', check(v.fromReference), allow('prescription.create'),
+  handle(async (req, res) => send(res, await reference.fromReference(req.emr, req.body))));
 pharmacyRoutes.post('/formulary', check(v.createFormulary), allow('emr.formulary.manage'),
   handle(async (req, res) => send(res, await stock.createFormularyItem(req.emr, req.body), 201)));
 pharmacyRoutes.patch('/formulary/:code', check(v.updateFormulary), allow('emr.formulary.manage'),
