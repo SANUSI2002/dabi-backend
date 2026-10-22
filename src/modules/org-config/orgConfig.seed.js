@@ -28,10 +28,19 @@ export const MASTER_CATEGORIES = [
   { key: "ncd-conditions", label: "NCD Conditions", product: "emr", description: "Long-term conditions the NCD clinic enrols patients for; the starter ones are counted in NCD reports", editors: ["ncd.enrol"] },
   { key: "outreach-activity-types", label: "Outreach Activity Types", product: "emr", description: "What community health workers record doing in the community", editors: ["outreach.record"] },
   { key: "receiving-accounts", label: "Receiving Accounts", product: "emr", description: "Where a patient payment was received, recorded with the payment", editors: ["billing.payment.record"] },
+  { key: "inpatient-services", label: "Inpatient Services", product: "emr", description: "The service (specialty) a patient is admitted under; shown on the ward census and handover" },
   { key: "expense-categories", label: "Expense Categories", product: "accounting", description: "Categories for staff expense claims" },
 ];
 
 export const MASTER_SEED = {
+  "inpatient-services": [
+    { label: "General Medicine", active: true },
+    { label: "Paediatrics", active: true },
+    { label: "Obstetrics", active: true },
+    { label: "Surgery", active: true },
+    { label: "Isolation", active: true },
+    { label: "Observation", active: true },
+  ],
   "ncd-conditions": [
     { label: "Essential hypertension", active: true, system: true },
     { label: "Type 2 Diabetes Mellitus", active: true, system: true },

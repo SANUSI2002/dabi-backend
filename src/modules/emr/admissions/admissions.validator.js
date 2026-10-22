@@ -14,7 +14,7 @@ const RISK = z.enum(['Low', 'Moderate', 'High']);
 // How the ward describes the stay (not used by any rule; shown on the census and handover).
 const stayDetails = {
   admittingDiagnosis: optionalText(300),
-  service: optionalText(80),
+  service: optionalText(120), // usually an Inpatient Services item (Settings → Master Data)
   isolation: optionalText(120),
 };
 
