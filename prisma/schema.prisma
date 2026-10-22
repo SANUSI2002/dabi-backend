@@ -5059,7 +5059,7 @@ model WfQualification {
 model WfPolicy {
   id String @id @default(uuid())
   organizationId String @map("organization_id")
-  category String @db.VarChar(30)
+  category String @db.VarChar(120)
   title String @db.VarChar(160)
   purpose String @db.VarChar(500)
   body String @db.VarChar(20000)
@@ -5473,7 +5473,7 @@ model WfCandidate {
   name String @db.VarChar(160)
   email String @db.VarChar(160)
   phone String @default("") @db.VarChar(30)
-  source String @db.VarChar(15)
+  source String @db.VarChar(120)
   referredByEmployeeId String? @map("referred_by_employee_id")
   rating Int @default(0)
   hired Boolean @default(false)
@@ -5928,7 +5928,7 @@ model WfTicket {
   id String @id @default(uuid())
   organizationId String @map("organization_id")
   seq Int
-  type String @db.VarChar(12)
+  type String @db.VarChar(120)
   title String @db.VarChar(160)
   description String @db.VarChar(4000)
   raisedByUserId String @map("raised_by_user_id")

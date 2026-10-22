@@ -9,6 +9,7 @@ import { recordAudit } from '../../emr/core/audit.js';
 import { updateVersioned } from '../../emr/core/concurrency.js';
 import { EmrError, uniqueViolation } from '../../emr/core/errors.js';
 import { userNameMap } from '../../emr/core/people.js';
+import { requireListed } from '../../org-config/orgConfig.service.js';
 
 const STARTER_EMPLOYEE_TYPES = ['Permanent', 'Contract', 'Locum', 'NYSC / Corps Member', 'Volunteer'];
 const STARTER_ACTION_TYPES = [['Verbal Warning', false], ['Written Warning', false], ['Suspension', true], ['Termination Notice', true]];
@@ -358,6 +359,7 @@ export const addQualification = appendFor((tx) => tx.wfQualification, 'employee.
 
 export async function publishPolicy(context, input) {
   return withTenant(context, async (tx) => {
+    await requireListed(tx, context, 'policy-categories', input.category, { what: 'The category' });
     const row = await tx.wfPolicy.create({ data: { ...org(context), ...input, publishedByUserId: context.userId } });
     await recordAudit(tx, context, { action: 'policy.published', resourceType: 'policy', resourceId: row.id });
     return { id: row.id };

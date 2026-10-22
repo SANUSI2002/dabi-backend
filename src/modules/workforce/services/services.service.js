@@ -14,6 +14,7 @@ import { updateVersioned } from '../../emr/core/concurrency.js';
 import { EmrError, uniqueViolation } from '../../emr/core/errors.js';
 import { nextSequence } from '../../emr/core/sequence.js';
 import { instanceForReference, loadRoleHolders, registerTrigger, startInTx } from '../workflows/workflows.service.js';
+import { requireListed } from '../../org-config/orgConfig.service.js';
 
 const org = (context) => ({ organizationId: context.organizationId });
 const can = (context, permission) => context.permissions.includes(permission);
@@ -157,6 +158,7 @@ export async function returnAsset(context, allocationId, { condition, note }) {
 // ---- helpdesk ---------------------------------------------------------------------------------------
 export async function createTicket(context, input) {
   return withTenant(context, async (tx) => {
+    await requireListed(tx, context, 'helpdesk-ticket-types', input.type, { what: 'The ticket type' });
     const self = await me(tx, context);
     if (input.assigningType === 'Individual') await activeEmployee(tx, context, input.raisedOn);
     const seq = await nextSequence(tx, context, 'helpdesk-ticket');

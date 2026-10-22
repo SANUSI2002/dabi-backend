@@ -65,7 +65,7 @@ const v = {
   note: body({ note: text(4000) }, withId('employeeId')),
   bonus: body({ delta: z.number().int().min(-10000).max(10000).refine((n) => n !== 0, 'Cannot be zero'), reason: text(500) }, withId('employeeId')),
   qualification: body({ title: text(160), issuingBody: text(160), dateObtained: date, certificateRef: text(80).optional() }, withId('employeeId')),
-  policy: body({ ...clientId, category: z.enum(['Conduct', 'Safety & Clinical', 'Data & Security', 'IT & Assets', 'Leave & Attendance', 'Other']), title: text(160), purpose: text(500), body: text(20000) }),
+  policy: body({ ...clientId, category: z.string().trim().min(1).max(120) /* a Policy Categories item, checked by the service */, title: text(160), purpose: text(500), body: text(20000) }),
 };
 
 export const peopleRoutes = express.Router({ mergeParams: true });

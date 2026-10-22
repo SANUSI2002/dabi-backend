@@ -16,6 +16,7 @@ import { updateVersioned } from '../../emr/core/concurrency.js';
 import { EmrError, uniqueViolation } from '../../emr/core/errors.js';
 import { userNameMap } from '../../emr/core/people.js';
 import { cancelForReference, instanceForReference, registerTrigger, rejectionComment } from '../workflows/workflows.service.js';
+import { requireListed } from '../../org-config/orgConfig.service.js';
 
 const org = (context) => ({ organizationId: context.organizationId });
 const can = (context, permission) => context.permissions.includes(permission);
@@ -207,6 +208,7 @@ export async function addCandidate(context, input) {
   requireManage(context);
   return withTenant(context, async (tx) => {
     await openRequisition(tx, context, input.requisitionId);
+    await requireListed(tx, context, 'recruitment-sources', input.source, { what: 'The source' });
     await employeeExists(tx, context, input.referredBy);
     const [first] = await stagesOf(tx, context, input.requisitionId);
     let c;

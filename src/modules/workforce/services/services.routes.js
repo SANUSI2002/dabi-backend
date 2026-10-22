@@ -31,7 +31,7 @@ const v = {
   allocate: body({ assetId: z.uuid(), employeeId: z.uuid(), requestId: z.uuid().optional() }),
   return: body({ condition: z.enum(['Good', 'Damaged', 'Lost']), note: free(500).optional() }, withId),
   ticket: body({
-    ...clientId, type: z.enum(['IT Support', 'HR Complaint', 'Facilities', 'Benefits', 'General']), title: text(160), description: text(4000),
+    ...clientId, type: z.string().trim().min(1).max(120) /* a Helpdesk Ticket Types item, checked by the service */, title: text(160), description: text(4000),
     assigningType: z.enum(['Individual', 'Department', 'Job Position']), raisedOn: text(160), priority: z.number().int().min(1).max(3),
   }).refine((r) => r.body.assigningType !== 'Individual' || z.uuid().safeParse(r.body.raisedOn).success, 'Choose the person to send it to'),
   ticketStatus: body({ status: z.enum(['New', 'In Progress', 'On Hold', 'Resolved']) }, withId),

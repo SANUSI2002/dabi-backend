@@ -36,7 +36,7 @@ const v = {
   overview: z.object({ params: z.object(org).strict(), query: noQuery }),
   empty: body({}, withId),
   requisition: body({ ...clientId, title: text(160), description: free(2000).optional(), departmentId: z.uuid().optional(), jobPositionId: z.uuid().optional(), vacancy: z.number().int().min(1).max(500), startDate: date, endDate: date.optional(), managerIds: z.array(z.uuid()).max(10).optional() }),
-  candidate: body({ ...clientId, requisitionId: z.uuid(), name: text(160), email: z.email().max(160), phone: free(30).optional(), source: z.enum(['Application', 'Referral', 'Inside software']), referredBy: z.uuid().optional() }),
+  candidate: body({ ...clientId, requisitionId: z.uuid(), name: text(160), email: z.email().max(160), phone: free(30).optional(), source: z.string().trim().min(1).max(120) /* a Recruitment Sources item, checked by the service */, referredBy: z.uuid().optional() }),
   move: body({ stageId: z.uuid() }, withId),
   rate: body({ rating: z.number().int().min(0).max(5) }, withId),
   reject: body({ reason: text(200) }, withId),
