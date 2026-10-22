@@ -25053,7 +25053,7 @@ paths:
                 receivingAccount:
                   type: string
                   minLength: 1
-                  maxLength: 60
+                  maxLength: 120
                   pattern: ^[^\p{Cc}]+$
                 notes:
                   type: string
@@ -32554,12 +32554,8 @@ paths:
                   maxLength: 64
                 activityType:
                   type: string
-                  enum:
-                    - Household visit
-                    - Health talk
-                    - Immunization campaign
-                    - Defaulter tracing
-                    - Community screening
+                  minLength: 1
+                  maxLength: 120
                 ward:
                   type: string
                   minLength: 1
@@ -37039,12 +37035,8 @@ paths:
                   pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
                 condition:
                   type: string
-                  enum:
-                    - Essential hypertension
-                    - Type 2 Diabetes Mellitus
-                    - Hypertension + Diabetes
-                    - Asthma
-                    - Sickle Cell Disease
+                  minLength: 1
+                  maxLength: 120
                 systolic:
                   type: integer
                   minimum: 50

@@ -25,7 +25,7 @@ const v = {
     params: z.object(org).strict(),
     query: noQuery,
     body: z.object({
-      chwUserId: z.string().min(1).max(64), activityType: z.enum(outreach.OUTREACH_TYPES), ward: text(120),
+      chwUserId: z.string().min(1).max(64), activityType: z.string().trim().min(1).max(120) /* an Outreach Activity Types item, checked by the service */, ward: text(120),
       households: z.number().int().min(0).max(100000), referrals: z.number().int().min(0).max(100000), activityDate: z.iso.date(), notes: text(2000).optional(),
     }).strict(),
   }),

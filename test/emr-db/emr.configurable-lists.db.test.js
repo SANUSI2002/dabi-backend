@@ -23,7 +23,7 @@ const ok = (res, status = 200) => { expect(res.status, JSON.stringify(res.body))
 const daysAgo = (n) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 const soon = () => new Date(Date.now() + 3 * 3_600_000).toISOString();
 
-let A; let admin; let desk; let officer; let engineer;
+let A; let admin; let desk; let officer; let engineer; let doctor;
 const member = async (tenant, roles) => ({ ...(await addMember(tenant, roles)), organizationId: tenant.organizationId });
 const addTo = async (list, body) => ok(await config(admin).post(`/master-data/${list}`, body), 201);
 const refused = (res) => { expect(res.status, JSON.stringify(res.body)).toBe(400); expect(res.body.error.message).toMatch(/Master Data/); };
@@ -34,6 +34,7 @@ beforeAll(async () => {
   desk = await member(A, ['RECEPTIONIST']);
   officer = await member(A, ['INVENTORY_OFFICER']);
   engineer = await member(A, ['HOSPITAL_ADMIN']);
+  doctor = await member(A, ['DOCTOR']);
 });
 
 describe("the hospital's own lists", () => {
@@ -63,5 +64,13 @@ describe("the hospital's own lists", () => {
     refused(await asset('Dental'));
     await addTo('equipment-categories', { label: 'Dental' });
     ok(await asset('Dental'), 201);
+  });
+
+  it('enrols patients for an NCD condition the hospital added', async () => {
+    const patient = ok(await emr(desk).post('/patients', newPatient()), 201);
+    const enrol = () => emr(doctor).post('/programmes/ncd', { patientId: patient.id, condition: 'Chronic kidney disease', control: 'UNCONTROLLED', nextVisitDate: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10) }, key());
+    refused(await enrol());
+    await addTo('ncd-conditions', { label: 'Chronic kidney disease' });
+    expect(ok(await enrol(), 201)).toMatchObject({ condition: 'Chronic kidney disease' });
   });
 });

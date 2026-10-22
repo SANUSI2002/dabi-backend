@@ -3,6 +3,7 @@
 // (visits whose reason mentions fever, or with a malaria diagnosis), tested (malaria lab tests), positive
 // (a current result reading positive/present), confirmed (active malaria diagnoses) and treated with ACT
 // (an artemisinin-based prescription in the same visit) — plus a weekly testing trend.
+import { requireListed } from '../../org-config/orgConfig.service.js';
 import { withTenant } from '../core/db.js';
 import { recordAudit } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
@@ -11,6 +12,7 @@ import { EmrError, uniqueViolation } from '../core/errors.js';
 import { userNameMap } from '../core/people.js';
 import { findPatient } from '../patients/patients.repository.js';
 
+// The starter NCD Conditions (Settings → Master Data), counted in NCD reports; hospitals add their own.
 export const NCD_CONDITIONS = ['Essential hypertension', 'Type 2 Diabetes Mellitus', 'Hypertension + Diabetes', 'Asthma', 'Sickle Cell Disease'];
 const isoDay = (value) => (value ? value.toISOString().slice(0, 10) : null);
 const patientSummary = { select: { id: true, medicalRecordNumber: true, givenName: true, familyName: true, dateOfBirth: true, sex: true } };
@@ -38,6 +40,7 @@ export async function listNcd(context, { dueWithinDays, limit }) {
 
 export async function enrolNcd(context, input, { idempotencyKey } = {}) {
   return withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: 'ncd.enrol', body: input }, async () => {
+    await requireListed(tx, context, 'ncd-conditions', input.condition, { what: 'The condition' });
     const patient = await findPatient(tx, context.organizationId, input.patientId, { id: true, status: true });
     if (!patient) throw new EmrError('PATIENT_NOT_FOUND');
     if (patient.status !== 'ACTIVE') throw new EmrError('PATIENT_INACTIVE');

@@ -78,7 +78,7 @@ export const recordPayment = z.object({
     reference: text(80).optional(),
     // The date on the transaction itself; never in the future (a day's grace for time zones).
     transactionDate: z.iso.date().refine((d) => new Date(`${d}T00:00:00.000Z`).getTime() <= Date.now() + 86_400_000, 'The transaction date cannot be in the future').optional(),
-    receivingAccount: text(60).optional(),
+    receivingAccount: text(120).optional(), // a Receiving Accounts item (checked by the service)
     notes: text(500).optional(),
   }).strict().refine((b) => ['CASH'].includes(b.method) || b.reference, { message: 'Non-cash payments need a reference (e.g. the transfer or POS reference)', path: ['reference'] }),
 });

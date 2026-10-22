@@ -25,10 +25,33 @@ export const MASTER_CATEGORIES = [
   { key: "equipment-categories", label: "Equipment Categories", product: "emr", description: "How equipment assets are grouped", editors: ["equipment.manage"] },
   { key: "prescription-rejection-reasons", label: "Prescription Rejection Reasons", product: "emr", description: "Why the pharmacy returns a prescription to the prescriber", editors: ["emr.formulary.manage"] },
   { key: "specimen-rejection-reasons", label: "Specimen Rejection Reasons", product: "emr", description: "Why the laboratory rejects a specimen", editors: ["lab.catalog.manage"] },
+  { key: "ncd-conditions", label: "NCD Conditions", product: "emr", description: "Long-term conditions the NCD clinic enrols patients for; the starter ones are counted in NCD reports", editors: ["ncd.enrol"] },
+  { key: "outreach-activity-types", label: "Outreach Activity Types", product: "emr", description: "What community health workers record doing in the community", editors: ["outreach.record"] },
+  { key: "receiving-accounts", label: "Receiving Accounts", product: "emr", description: "Where a patient payment was received, recorded with the payment", editors: ["billing.payment.record"] },
   { key: "expense-categories", label: "Expense Categories", product: "accounting", description: "Categories for staff expense claims" },
 ];
 
 export const MASTER_SEED = {
+  "ncd-conditions": [
+    { label: "Essential hypertension", active: true, system: true },
+    { label: "Type 2 Diabetes Mellitus", active: true, system: true },
+    { label: "Hypertension + Diabetes", active: true, system: true },
+    { label: "Asthma", active: true, system: true },
+    { label: "Sickle Cell Disease", active: true, system: true },
+  ],
+  "outreach-activity-types": [
+    { label: "Household visit", active: true },
+    { label: "Health talk", active: true },
+    { label: "Immunization campaign", active: true },
+    { label: "Defaulter tracing", active: true },
+    { label: "Community screening", active: true },
+  ],
+  "receiving-accounts": [
+    { label: "Main cash account", active: true },
+    { label: "POS clearing account", active: true },
+    { label: "Primary bank account", active: true },
+    { label: "Mobile money clearing", active: true },
+  ],
   "appointment-types": [
     { label: "General", code: "GENERAL", active: true, system: true },
     { label: "ANC", active: true, system: true },

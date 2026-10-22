@@ -1,6 +1,7 @@
 // Community outreach. Each activity names the CHW who carried it out (an active member who holds
 // outreach.chw) and is logged by that CHW or a supervising nurse. Entries are never edited; a mistaken
 // one is marked entered in error and drops out of the totals.
+import { requireListed } from '../../org-config/orgConfig.service.js';
 import { withTenant } from '../core/db.js';
 import { recordAudit } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
@@ -9,6 +10,7 @@ import { EmrError } from '../core/errors.js';
 import { activeMemberWithPermission } from '../core/membership.js';
 import { userNameMap } from '../core/people.js';
 
+// The starter Outreach Activity Types (Settings → Master Data).
 export const OUTREACH_TYPES = ['Household visit', 'Health talk', 'Immunization campaign', 'Defaulter tracing', 'Community screening'];
 const isoDay = (value) => (value ? value.toISOString().slice(0, 10) : null);
 
@@ -38,6 +40,7 @@ export async function logActivity(context, input, { idempotencyKey } = {}) {
   }
   if (input.activityDate > new Date().toISOString().slice(0, 10)) throw new EmrError('VALIDATION_FAILED', { message: 'The activity date cannot be in the future.' });
   return withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: 'outreach.log', body: input }, async () => {
+    await requireListed(tx, context, 'outreach-activity-types', input.activityType, { what: 'The activity type' });
     const row = await tx.emrOutreachActivity.create({
       data: {
         organizationId: context.organizationId, chwUserId: input.chwUserId, activityType: input.activityType, ward: input.ward, households: input.households,

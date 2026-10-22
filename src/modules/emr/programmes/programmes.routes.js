@@ -22,7 +22,7 @@ const v = {
     params: z.object(org).strict(),
     query: z.object({}).strict(),
     body: z.object({
-      patientId: z.uuid(), condition: z.enum(programmes.NCD_CONDITIONS),
+      patientId: z.uuid(), condition: z.string().trim().min(1).max(120) /* an NCD Conditions item, checked by the service */,
       systolic: z.number().int().min(50).max(260).optional(), diastolic: z.number().int().min(30).max(180).optional(),
       fastingGlucoseMmol: z.number().min(1).max(40).multipleOf(0.1).optional(), control: z.enum(['CONTROLLED', 'UNCONTROLLED']), nextVisitDate: z.iso.date(),
     }).strict()

@@ -3774,7 +3774,7 @@ model EmrPayment {
   reference String?
   /** Date on the transfer, POS slip or cheque (may differ from when it was entered). */
   transactionDate DateTime? @map("transaction_date") @db.Date
-  receivingAccount String? @map("receiving_account") @db.VarChar(60)
+  receivingAccount String? @map("receiving_account") @db.VarChar(120)
   notes String? @db.VarChar(500)
   status EmrPaymentStatus @default(POSTED)
   receivedByUserId String @map("received_by_user_id")
@@ -4439,7 +4439,7 @@ model EmrNcdClient {
   id String @id @default(uuid())
   organizationId String @map("organization_id")
   patientId String @map("patient_id")
-  condition String @db.VarChar(40)
+  condition String @db.VarChar(120)
   systolic Int?
   diastolic Int?
   fastingGlucoseMmol Decimal? @map("fasting_glucose_mmol") @db.Decimal(4, 1)
@@ -4524,7 +4524,7 @@ model EmrOutreachActivity {
   id String @id @default(uuid())
   organizationId String @map("organization_id")
   chwUserId String @map("chw_user_id")
-  activityType String @map("activity_type") @db.VarChar(30)
+  activityType String @map("activity_type") @db.VarChar(120)
   ward String @db.VarChar(120)
   households Int
   referrals Int
