@@ -9,12 +9,13 @@ import { etagFor, updateVersioned } from '../core/concurrency.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
 import { toDateString } from './pharmacy.policy.js';
 import { userNameMap } from '../core/people.js';
+import { listCodes } from '../../org-config/orgConfig.service.js';
 import { ensureFormulary, inDateTotal, lockBatches, moveStock, pharmacyPatient, signalLowStock, toBatch, toFormulary, toPatientSummary, todayUtc } from './pharmacy.shared.js';
 
 // ---------------------------------------------------------------------------------------------
 // Formulary
 // ---------------------------------------------------------------------------------------------
-export async function listFormulary(context, { includeInactive, q }) {
+export async function listFormulary(context, { includeInactive, q, category }) {
   return withTenant(context, async (tx) => {
     await ensureFormulary(tx, context);
     const items = await tx.emrFormularyItem.findMany({
@@ -22,6 +23,7 @@ export async function listFormulary(context, { includeInactive, q }) {
         organizationId: context.organizationId,
         ...(includeInactive === 'true' ? {} : { active: true }),
         ...(q ? { OR: [{ code: { startsWith: q.toUpperCase() } }, { genericName: { contains: q, mode: 'insensitive' } }, { brandName: { contains: q, mode: 'insensitive' } }] } : {}),
+        ...(category ? { category } : {}),
       },
       orderBy: { genericName: 'asc' },
     });
@@ -35,10 +37,28 @@ export async function listFormulary(context, { includeInactive, q }) {
   });
 }
 
+/**
+ * A drug's category and classes come from the organization's own lists (Settings → Master Data, kept by
+ * the pharmacy). A new value must be an active item; one the drug already has may stay while switched off.
+ */
+async function checkDrugLists(tx, context, { category, drugClasses }, current = { category: null, drugClasses: [] }) {
+  if (category && category !== current.category) {
+    const { active } = await listCodes(tx, context, 'drug-categories');
+    if (!active.has(category)) throw new EmrError('VALIDATION_FAILED', { message: `${category} is not an active drug category. Add it under Settings → Master Data → Drug Categories first.` });
+  }
+  const added = (drugClasses ?? []).filter((c) => !current.drugClasses.includes(c));
+  if (added.length) {
+    const { active } = await listCodes(tx, context, 'drug-classes');
+    const unknown = added.filter((c) => !active.has(c));
+    if (unknown.length) throw new EmrError('VALIDATION_FAILED', { message: `Not active drug classes: ${unknown.join(', ')}. Add them under Settings → Master Data → Drug Classes first.` });
+  }
+}
+
 export async function createFormularyItem(context, input) {
   try {
     return await withTenant(context, async (tx) => {
       await ensureFormulary(tx, context);
+      await checkDrugLists(tx, context, input);
       const item = await tx.emrFormularyItem.create({ data: { ...input, organizationId: context.organizationId } });
       await recordAudit(tx, context, { action: 'formulary.created', resourceType: 'formulary_item', resourceId: item.id });
       return toFormulary(item);
@@ -53,6 +73,7 @@ export async function updateFormularyItem(context, code, expectedVersion, change
     await ensureFormulary(tx, context);
     const current = await tx.emrFormularyItem.findFirst({ where: { organizationId: context.organizationId, code } });
     if (!current) throw new EmrError('FORMULARY_ITEM_NOT_FOUND');
+    await checkDrugLists(tx, context, changes, current);
     const item = await updateVersioned(tx.emrFormularyItem, { organizationId: context.organizationId, id: current.id, expectedVersion, data: changes, notFoundCode: 'FORMULARY_ITEM_NOT_FOUND' });
     await recordAudit(tx, context, { action: 'formulary.updated', resourceType: 'formulary_item', resourceId: item.id, changedFields: changedFieldNames(toFormulary(current), changes) });
     return toFormulary(item);

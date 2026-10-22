@@ -4,7 +4,8 @@
 // Rules enforced here:
 //   - every member reads the lists and the terminology (they fill dropdowns and labels);
 //   - a list is edited by whoever owns its product: Workforce lists hr.manage, EMR lists catalog.manage,
-//     platform-wide and Accounting lists platform.config; starter ("system") items can be switched off
+//     platform-wide and Accounting lists platform.config; a list may add editors (the drug categories and
+//     drug classes: the pharmacy, emr.formulary.manage); starter ("system") items can be switched off
 //     but not removed; removing an item keeps it on record (soft) so older records still resolve;
 //   - terminology: platform.config or hr.manage; letter templates and generating letters: hr.manage or
 //     platform.config; generated letters are HR records (hr.read) and keep the text as rendered;
@@ -25,15 +26,17 @@ const categoryOf = (key) => {
   if (!c) throw new EmrError('HR_RECORD_NOT_FOUND', { message: 'Unknown list.' });
   return c;
 };
+// A list may name extra editors beside its product's owner (the pharmacy edits the drug lists).
+const editorsOf = (c) => [...EDIT[c.product ?? 'platform'], ...(c.editors ?? [])];
 const requireListEditor = (context, key) => {
-  if (!can(context, ...EDIT[categoryOf(key).product ?? 'platform'])) throw new EmrError('PERMISSION_DENIED');
+  if (!can(context, ...editorsOf(categoryOf(key)))) throw new EmrError('PERMISSION_DENIED');
 };
 const requireLetters = (context) => { if (!can(context, 'hr.manage', 'platform.config')) throw new EmrError('PERMISSION_DENIED'); };
 
 /** Replaces {{tokens}} from `data`; an unknown token becomes a blank line to fill in by hand. */
 export const renderTemplate = (body, data) => body.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, k) => (data[k] === undefined || data[k] === '' ? '________' : String(data[k])));
 
-async function ensureSeeded(tx, context) {
+export async function ensureSeeded(tx, context) {
   const present = new Set((await tx.platformMasterItem.groupBy({ by: ['category'], where: org(context) })).map((g) => g.category));
   const missing = MASTER_CATEGORIES.filter((c) => !present.has(c.key));
   if (missing.length) {
@@ -58,7 +61,7 @@ export async function overview(context) {
     const data = Object.fromEntries(MASTER_CATEGORIES.map((c) => [c.key, []]));
     for (const i of items) (data[i.category] ??= []).push({ id: i.id, label: i.label, code: i.code ?? undefined, active: i.active, system: i.system || undefined, meta: Object.keys(i.meta).length ? i.meta : undefined, version: i.version });
     return {
-      categories: MASTER_CATEGORIES.map((c) => ({ ...c, editable: can(context, ...EDIT[c.product ?? 'platform']) })),
+      categories: MASTER_CATEGORIES.map((c) => ({ ...c, editable: can(context, ...editorsOf(c)) })),
       data,
       terms: { overrides: terms?.overrides ?? {}, version: terms?.version ?? 0, editable: can(context, 'platform.config', 'hr.manage') },
       templates: templates.map((t) => ({ key: t.key, name: t.name, category: t.category, body: t.body, signatories: t.signatories, active: t.active, system: t.system || undefined, version: t.version })),
@@ -173,4 +176,11 @@ export async function markLetterSent(context, id, { to }) {
     await audited(tx, context, 'letter.sent', 'letter', id);
     return { id, sent: true };
   });
+}
+
+/** The codes on one of the organization's lists (seeding the starter lists first), for checking a record against it. */
+export async function listCodes(tx, context, category) {
+  await ensureSeeded(tx, context);
+  const rows = await tx.platformMasterItem.findMany({ where: { ...org(context), category, removedAt: null }, select: { code: true, active: true } });
+  return { all: new Set(rows.map((r) => r.code).filter(Boolean)), active: new Set(rows.filter((r) => r.active).map((r) => r.code).filter(Boolean)) };
 }

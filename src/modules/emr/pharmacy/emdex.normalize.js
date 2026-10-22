@@ -3,7 +3,7 @@
 // refused (EMDEX_RESPONSE_UNRECOGNISED), never guessed into a medicine.
 import { emdexError } from './emdex.transport.js';
 
-/** { kind, referenceId, genericName, brandName, form, strength, manufacturer } for each search hit. */
+/** { kind, referenceId, genericName, brandName, form, strength, manufacturer, therapeuticClass? } for each search hit (the class, when EMDEX gives one, lets a prescriber's category filter apply). */
 export function normalizeResults(kind, data) {
   throw emdexError('EMDEX_RESPONSE_UNRECOGNISED');
 }

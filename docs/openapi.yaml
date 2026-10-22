@@ -34380,11 +34380,27 @@ paths:
             pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
         - name: q
           in: query
-          required: true
+          required: false
           schema:
             type: string
             minLength: 2
             maxLength: 120
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Z][A-Z0-9_]{0,23}$
+        - name: source
+          in: query
+          required: false
+          schema:
+            default: both
+            type: string
+            enum:
+              - formulary
+              - emdex
+              - both
       responses:
         "200":
           description: Success.
@@ -34439,6 +34455,12 @@ paths:
           schema:
             type: string
             maxLength: 60
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Z][A-Z0-9_]{0,23}$
       responses:
         "200":
           description: Success.
@@ -34558,8 +34580,7 @@ paths:
                 category:
                   anyOf:
                     - type: string
-                      minLength: 1
-                      maxLength: 60
+                      pattern: ^[A-Z][A-Z0-9_]{0,23}$
                     - type: "null"
                 manufacturer:
                   anyOf:
@@ -34727,8 +34748,7 @@ paths:
                 category:
                   anyOf:
                     - type: string
-                      minLength: 1
-                      maxLength: 60
+                      pattern: ^[A-Z][A-Z0-9_]{0,23}$
                     - type: "null"
                 manufacturer:
                   anyOf:

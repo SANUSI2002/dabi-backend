@@ -409,9 +409,9 @@ describe('pharmacy desk', () => {
 
   it('keeps catalogue details with each product, and lists pharmacy staff for witnessing', async () => {
     const updated = await as(pharmacist).patch('/pharmacy/formulary/IBU400', {
-      category: 'Analgesic', manufacturer: 'Emzor', prescriptionRequired: false, minStock: 50, patientDescription: 'Take with food', pharmacistNotes: 'Check renal function',
+      category: 'other', manufacturer: 'Emzor', prescriptionRequired: false, minStock: 50, patientDescription: 'Take with food', pharmacistNotes: 'Check renal function',
     }, ifMatch(1));
-    expect(updated.body.data).toMatchObject({ category: 'Analgesic', prescriptionRequired: false, minStock: 50 });
+    expect(updated.body.data).toMatchObject({ category: 'OTHER', prescriptionRequired: false, minStock: 50 });
     expect((await as(pharmacist).patch('/pharmacy/formulary/IBU400', { minStock: -1 }, ifMatch(2))).status).toBe(400);
     const witnesses = (await as(pharmacist).get('/staff?permission=prescription.dispense')).body.data.items.map((s) => s.userId);
     expect(witnesses).toEqual(expect.arrayContaining([pharmacist.userId, pharmacist2.userId]));

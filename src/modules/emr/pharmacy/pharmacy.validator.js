@@ -11,11 +11,17 @@ const uniqueBy = (key) => (list) => new Set(list.map((entry) => entry[key])).siz
 const cursorQuery = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(200).optional() };
 
 // ---- formulary ----
+const drugCategory = z.string().trim().toUpperCase().regex(/^[A-Z][A-Z0-9_]{0,23}$/);
 export const listFormulary = z.object({
   params: z.object(org).strict(),
-  query: z.object({ includeInactive: z.enum(['true', 'false']).optional(), q: z.string().trim().max(60).optional() }).strict(),
+  query: z.object({ includeInactive: z.enum(['true', 'false']).optional(), q: z.string().trim().max(60).optional(), category: drugCategory.optional() }).strict(),
 });
-export const drugSearch = z.object({ params: z.object(org).strict(), query: z.object({ q: z.string().trim().min(2).max(120) }).strict() });
+// A prescriber searches the pharmacy's formulary or EMDEX, by name and/or drug category.
+export const drugSearch = z.object({
+  params: z.object(org).strict(),
+  query: z.object({ q: z.string().trim().min(2).max(120).optional(), category: drugCategory.optional(), source: z.enum(['formulary', 'emdex', 'both']).default('both') }).strict()
+    .refine((x) => x.q || x.category, 'Search by name or choose a category'),
+});
 export const fromReference = z.object({ params: z.object(org).strict(), query: noQuery, body: z.object({ kind: z.enum(['brand', 'generic']), id: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/) }).strict() });
 export const createFormulary = z.object({
   params: z.object(org).strict(), query: noQuery,

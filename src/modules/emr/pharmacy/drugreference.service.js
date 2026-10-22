@@ -17,10 +17,17 @@ import { ensureFormulary } from './pharmacy.shared.js';
 const org = (context) => ({ organizationId: context.organizationId });
 const key = (s) => (s ?? '').toLowerCase().replace(/\s+/g, '');
 
-/** What the prescriber sees: formulary matches first (with stock), then EMDEX products not yet in it. */
-export async function searchDrugs(context, { q }) {
-  const formulary = await listFormulary(context, { q });
+/**
+ * What the prescriber sees, from the source they chose: the pharmacy's formulary (with stock) and/or EMDEX
+ * products not yet in it, by name and/or drug category. EMDEX is searched by name only; within a category
+ * an EMDEX product is kept unless EMDEX gives it a class that the category's "EMDEX class names" (or its
+ * name) does not match — `categoryChecked` says whether EMDEX gave a class to check.
+ */
+export async function searchDrugs(context, { q, category, source = 'both' }) {
+  const formulary = source === 'emdex' ? [] : await listFormulary(context, { q, category });
+  if (source === 'formulary') return { formulary, reference: [], referenceStatus: 'ok' };
   if (!emdexCapabilities().credentialsConfigured) return { formulary, reference: [], referenceStatus: 'not_configured' };
+  if (!q) return { formulary, reference: [], referenceStatus: 'needs_name' }; // EMDEX can't be browsed by category alone
   let reference = [];
   let referenceStatus = 'ok';
   try {
@@ -29,15 +36,28 @@ export async function searchDrugs(context, { q }) {
   } catch (error) {
     referenceStatus = error.code === 'EMDEX_NOT_CONFIGURED' ? 'not_configured' : 'unavailable';
   }
-  // say which EMDEX products the formulary already has, so they are prescribed from it
-  const linked = await withTenant(context, (tx) => tx.emrFormularyItem.findMany({ where: { ...org(context), referenceSource: 'EMDEX', referenceId: { in: reference.map((r) => r.referenceId) } }, select: { code: true, referenceId: true } }));
+  const { linked, terms } = await withTenant(context, async (tx) => ({
+    // say which EMDEX products the formulary already has, so they are prescribed from it
+    linked: await tx.emrFormularyItem.findMany({ where: { ...org(context), referenceSource: 'EMDEX', referenceId: { in: reference.map((r) => r.referenceId) } }, select: { code: true, referenceId: true } }),
+    terms: category ? categoryTerms(await tx.platformMasterItem.findFirst({ where: { ...org(context), category: 'drug-categories', code: category, removedAt: null } })) : [],
+  }));
+  if (category) reference = reference.filter((r) => !r.therapeuticClass || terms.some((t) => r.therapeuticClass.toLowerCase().includes(t)));
   const byRef = new Map(linked.map((l) => [l.referenceId, l.code]));
   const byName = new Map(formulary.map((f) => [`${key(f.genericName)}|${key(f.strength)}|${key(f.form)}`, f.code]));
   return {
     formulary,
-    reference: reference.slice(0, 20).map((r) => ({ ...r, formularyCode: byRef.get(r.referenceId) ?? byName.get(`${key(r.genericName)}|${key(r.strength)}|${key(r.form)}`) ?? null })),
+    reference: reference.slice(0, 20).map((r) => ({
+      ...r, formularyCode: byRef.get(r.referenceId) ?? byName.get(`${key(r.genericName)}|${key(r.strength)}|${key(r.form)}`) ?? null,
+      ...(category ? { categoryChecked: !!r.therapeuticClass } : {}),
+    })),
     referenceStatus,
   };
+}
+/** What an EMDEX class must contain to fall in a category: its "EMDEX class names", else its own name's words. */
+function categoryTerms(item) {
+  if (!item) return [];
+  const listed = String(item.meta?.emdexClasses ?? '').split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+  return listed.length ? listed : [item.label.toLowerCase().split(/[(&,]/)[0].trim().replace(/s$/, '')];
 }
 
 const ROUTE_BY_FORM = [
