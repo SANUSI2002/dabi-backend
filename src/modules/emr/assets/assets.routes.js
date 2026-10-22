@@ -23,7 +23,7 @@ const job = { ...org, jobId: z.uuid() };
 const v = {
   list: z.object({ params: z.object(org).strict(), query: noQuery }),
   add: body({
-    tag: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_\-/]{0,29}$/, 'Tags are letters, digits, -, / and _'), name: text(120), category: z.enum(assets.ASSET_CATEGORIES),
+    tag: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_\-/]{0,29}$/, 'Tags are letters, digits, -, / and _'), name: text(120), category: text(40), // an Equipment Categories item
     location: text(120), serialNumber: text(60).optional(), costMinor: z.number().int().min(0).max(1_000_000_000_000).optional(),
     commissionedOn: z.iso.date(), lastServicedOn: z.iso.date(), serviceIntervalDays: z.number().int().min(1).max(3650), status: STATUS.optional(),
   }),

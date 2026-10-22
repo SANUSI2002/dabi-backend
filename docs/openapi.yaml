@@ -23948,13 +23948,7 @@ paths:
                 type:
                   default: GENERAL
                   type: string
-                  enum:
-                    - GENERAL
-                    - ANC
-                    - PNC
-                    - FOLLOW_UP
-                    - IMMUNIZATION
-                    - SPECIALIST
+                  pattern: ^[A-Z][A-Z0-9_]{0,19}$
                 providerUserId:
                   type: string
                   format: uuid
@@ -24302,13 +24296,7 @@ paths:
                   pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
                 type:
                   type: string
-                  enum:
-                    - GENERAL
-                    - ANC
-                    - PNC
-                    - FOLLOW_UP
-                    - IMMUNIZATION
-                    - SPECIALIST
+                  pattern: ^[A-Z][A-Z0-9_]{0,19}$
                 providerUserId:
                   type: string
                   format: uuid
@@ -28855,13 +28843,9 @@ paths:
                   pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 category:
                   type: string
-                  enum:
-                    - Cold chain
-                    - Maternity
-                    - Diagnostics
-                    - Power
-                    - IT
-                    - General
+                  minLength: 1
+                  maxLength: 40
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 location:
                   type: string
                   minLength: 1
@@ -29537,14 +29521,8 @@ paths:
               properties:
                 reason:
                   type: string
-                  enum:
-                    - Wants to conceive
-                    - Side effects
-                    - Method failure
-                    - Moved away
-                    - Partner objection
-                    - Switched method
-                    - Removal
+                  minLength: 1
+                  maxLength: 120
               required:
                 - reason
               additionalProperties: false
@@ -41087,15 +41065,9 @@ paths:
                   pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 category:
                   type: string
-                  enum:
-                    - Drugs
-                    - Consumables
-                    - Reagents
-                    - Other
-                    - PPE
-                    - Surgical Supplies
-                    - Linen
-                    - Medical Devices
+                  minLength: 1
+                  maxLength: 40
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 unit:
                   type: string
                   minLength: 1
@@ -41196,15 +41168,9 @@ paths:
                   pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 category:
                   type: string
-                  enum:
-                    - Drugs
-                    - Consumables
-                    - Reagents
-                    - Other
-                    - PPE
-                    - Surgical Supplies
-                    - Linen
-                    - Medical Devices
+                  minLength: 1
+                  maxLength: 40
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 unit:
                   type: string
                   minLength: 1
@@ -42610,12 +42576,9 @@ paths:
                   pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 reason:
                   type: string
-                  enum:
-                    - Relocation
-                    - Catchment reassignment
-                    - Service not available here
-                    - Patient request
-                    - Higher level of care
+                  minLength: 1
+                  maxLength: 120
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 summary:
                   type: string
                   minLength: 1

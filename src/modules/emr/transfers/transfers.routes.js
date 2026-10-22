@@ -26,7 +26,7 @@ const v = {
     query: noQuery,
     body: z.object({
       direction: z.enum(['IN', 'OUT']), patientId: z.uuid().optional(), patientName: text(160).optional(), facility: text(200),
-      reason: z.enum(transfers.TRANSFER_REASONS), summary: text(4000).optional(),
+      reason: text(120), summary: text(4000).optional(), // a Transfer Reasons item (checked by the service)
     }).strict()
       .refine((b) => b.direction !== 'OUT' || !!b.patientId, { path: ['patientId'], message: 'Choose the patient being transferred out.' })
       .refine((b) => b.direction !== 'IN' || (!!b.patientName && !b.patientId), { path: ['patientName'], message: 'Give the name of the person received.' }),

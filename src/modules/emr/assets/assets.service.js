@@ -3,12 +3,14 @@
 // in-service asset under repair; resolving its last open job returns it to service and stamps today
 // as the service date. Logging a preventive service resets the PM clock and closes the open PM job.
 import { withTenant } from '../core/db.js';
+import { requireListed } from '../../org-config/orgConfig.service.js';
 import { recordAudit } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
 import { updateVersioned } from '../core/concurrency.js';
 import { EmrError, uniqueViolation } from '../core/errors.js';
 import { userNameMap } from '../core/people.js';
 
+// The starter Equipment Categories (Settings → Master Data).
 export const ASSET_CATEGORIES = ['Cold chain', 'Maternity', 'Diagnostics', 'Power', 'IT', 'General'];
 const isoDay = (value) => (value ? value.toISOString().slice(0, 10) : null);
 const toDate = (iso) => new Date(`${iso}T00:00:00.000Z`);
@@ -43,6 +45,7 @@ export async function addAsset(context, input, { idempotencyKey } = {}) {
   if (input.lastServicedOn < input.commissionedOn) throw new EmrError('VALIDATION_FAILED', { message: 'The last service cannot be before the asset was commissioned.' });
   if (input.lastServicedOn > todayIso() || input.commissionedOn > todayIso()) throw new EmrError('VALIDATION_FAILED', { message: 'Commissioning and service dates cannot be in the future.' });
   return withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: 'asset.add', body: input }, async () => {
+    await requireListed(tx, context, 'equipment-categories', input.category, { what: 'The category' });
     let asset;
     try {
       asset = await tx.emrAsset.create({

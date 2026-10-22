@@ -22,7 +22,7 @@ const qty = z.number().int().min(1).max(10_000_000);
 const body = (shape, params = org) => z.object({ params: z.object(params).strict(), query: noQuery, body: z.object(shape).strict() });
 const withId = (key) => ({ ...org, [key]: z.uuid() });
 const itemFields = {
-  name: text(120), category: z.enum(stores.ITEM_CATEGORIES), unit: text(20),
+  name: text(120), category: text(40), unit: text(20), // a Store Item Categories item (checked by the service)
   minLevel: z.number().int().min(0).max(10_000_000).nullable().optional(), reorderLevel: z.number().int().min(0).max(10_000_000).optional(),
   reorderQty: z.number().int().min(1).max(10_000_000).nullable().optional(),
 };

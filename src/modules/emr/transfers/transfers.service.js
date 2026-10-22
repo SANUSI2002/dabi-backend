@@ -3,6 +3,7 @@
 // received from another facility, recorded by name (registration opens their chart). PENDING →
 // COMPLETED | CANCELLED.
 import { withTenant } from '../core/db.js';
+import { requireListed } from '../../org-config/orgConfig.service.js';
 import { recordAudit } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
 import { enqueueEvent } from '../core/outbox.js';
@@ -11,6 +12,7 @@ import { EmrError, uniqueViolation } from '../core/errors.js';
 import { userNameMap } from '../core/people.js';
 import { findPatient } from '../patients/patients.repository.js';
 
+// The starter Transfer Reasons list (Settings → Master Data); hospitals add and switch off their own.
 export const TRANSFER_REASONS = ['Relocation', 'Catchment reassignment', 'Service not available here', 'Patient request', 'Higher level of care'];
 const patientSummary = { select: { id: true, medicalRecordNumber: true, givenName: true, familyName: true, dateOfBirth: true, sex: true } };
 const isoDay = (value) => (value ? value.toISOString().slice(0, 10) : null);
@@ -44,6 +46,7 @@ export async function listTransfers(context, { direction, status, limit }) {
 
 export async function createTransfer(context, input, { idempotencyKey } = {}) {
   return withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: 'transfer.create', body: input }, async () => {
+    await requireListed(tx, context, 'transfer-reasons', input.reason, { what: 'The reason' });
     let patientId = null;
     let patientName = input.patientName ?? null;
     if (input.direction === 'OUT') {

@@ -4,6 +4,7 @@
 // changes to the same item. Issues, transfers and negative adjustments take First-Expiry-First-Out
 // from usable batches (active, not expired); a quarantined batch is only touched when named for
 // write-off. Requisitions move stock from a store to the requesting ward or department.
+import { requireListed } from '../../org-config/orgConfig.service.js';
 import { randomUUID } from 'node:crypto';
 import { withTenant } from '../core/db.js';
 import { recordAudit } from '../core/audit.js';
@@ -13,6 +14,7 @@ import { EmrError, uniqueViolation } from '../core/errors.js';
 import { nextSequence } from '../core/sequence.js';
 import { userNameMap } from '../core/people.js';
 
+// The starter Store Item Categories (Settings → Master Data). 'Drugs' posts to the drug inventory accounts.
 export const ITEM_CATEGORIES = ['Drugs', 'Consumables', 'Reagents', 'Other', 'PPE', 'Surgical Supplies', 'Linen', 'Medical Devices'];
 // The usual stock-holding points of a hospital; each organization gets them on first use and can add more.
 const STARTER_LOCATIONS = [
@@ -134,6 +136,7 @@ export async function overview(context, { movementLimit }) {
 // ---- items and locations --------------------------------------------------------------------------
 export async function createItem(context, input) {
   return withTenant(context, async (tx) => {
+    await requireListed(tx, context, 'store-item-categories', input.category, { what: 'The category' });
     try {
       const item = await tx.emrStoreItem.create({ data: { organizationId: context.organizationId, ...input } });
       await recordAudit(tx, context, { action: 'store_item.created', resourceType: 'store_item', resourceId: item.id });
@@ -145,6 +148,10 @@ export async function createItem(context, input) {
 }
 export async function updateItem(context, itemId, expectedVersion, changes) {
   return withTenant(context, async (tx) => {
+    if (changes.category !== undefined) {
+      const current = await tx.emrStoreItem.findFirst({ where: { organizationId: context.organizationId, id: itemId }, select: { category: true } });
+      await requireListed(tx, context, 'store-item-categories', changes.category, { current: current?.category, what: 'The category' });
+    }
     const item = await updateVersioned(tx.emrStoreItem, { organizationId: context.organizationId, id: itemId, expectedVersion, data: { ...changes, updatedAt: new Date() }, notFoundCode: 'STORE_ITEM_NOT_FOUND' });
     await recordAudit(tx, context, { action: 'store_item.updated', resourceType: 'store_item', resourceId: itemId, changedFields: Object.keys(changes) });
     return item;

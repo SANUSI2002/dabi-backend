@@ -42,7 +42,7 @@ const v = {
       visitDate: z.iso.date().optional(), nextVisitDate: z.iso.date().optional(), notes: prose.optional(),
     }).strict().refine((b) => b.visitType !== 'SWITCH_METHOD' || !!b.method, { path: ['method'], message: 'Choose the new method.' }),
   }),
-  discontinue: z.object({ params: z.object(one).strict(), query: noQuery, body: z.object({ reason: z.enum(fp.DISCONTINUE_REASONS) }).strict() }),
+  discontinue: z.object({ params: z.object(one).strict(), query: noQuery, body: z.object({ reason: z.string().trim().min(1).max(120) }).strict() }), // a reasons-for-stopping item
 };
 
 export const familyPlanningRoutes = express.Router({ mergeParams: true });

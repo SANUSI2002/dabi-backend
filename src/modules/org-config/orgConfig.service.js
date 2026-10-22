@@ -178,9 +178,26 @@ export async function markLetterSent(context, id, { to }) {
   });
 }
 
-/** The codes on one of the organization's lists (seeding the starter lists first), for checking a record against it. */
+/**
+ * The values on one of the organization's lists (seeding the starter lists first), for checking a record
+ * against it. An item's value is its code, or its name when it has none.
+ */
 export async function listCodes(tx, context, category) {
   await ensureSeeded(tx, context);
-  const rows = await tx.platformMasterItem.findMany({ where: { ...org(context), category, removedAt: null }, select: { code: true, active: true } });
-  return { all: new Set(rows.map((r) => r.code).filter(Boolean)), active: new Set(rows.filter((r) => r.active).map((r) => r.code).filter(Boolean)) };
+  const rows = await tx.platformMasterItem.findMany({ where: { ...org(context), category, removedAt: null }, select: { code: true, label: true, active: true } });
+  const value = (r) => r.code || r.label;
+  return { all: new Set(rows.map(value)), active: new Set(rows.filter((r) => r.active).map(value)) };
+}
+
+/**
+ * Refuses a value that is not an active item on the organization's list (Settings → Master Data). A record
+ * that already holds a value may keep it after the item is switched off: pass it as `current`.
+ */
+export async function requireListed(tx, context, category, value, { current, what } = {}) {
+  if (value === undefined || value === null || value === current) return;
+  const { active } = await listCodes(tx, context, category);
+  if (!active.has(value)) {
+    const list = MASTER_CATEGORIES.find((c) => c.key === category)?.label ?? category;
+    throw new EmrError('VALIDATION_FAILED', { message: `${what ?? 'That value'} “${value}” is not on the ${list} list. Add it under Settings → Master Data first.` });
+  }
 }

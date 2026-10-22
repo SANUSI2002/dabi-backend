@@ -1,6 +1,7 @@
 // Family planning. Registering a client records the first ("new") visit with the starting method; later
 // visits are revisits, resupply, a switch of method (the registration takes the new method) or removal
 // (the registration is discontinued). Discontinuing needs a reason. One active registration per person.
+import { requireListed } from '../../org-config/orgConfig.service.js';
 import { withTenant } from '../core/db.js';
 import { recordAudit } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
@@ -11,6 +12,7 @@ import { userNameMap } from '../core/people.js';
 import { findPatient } from '../patients/patients.repository.js';
 
 export const FP_METHODS = ['Oral Pill', 'Injectable (DMPA-IM)', 'Injectable (DMPA-SC)', 'Implant', 'IUCD', 'Male Condom', 'Female Condom', 'LAM', 'Natural / Calendar'];
+// The starter reasons for stopping (Settings → Master Data); 'Removal' is what a removal visit records.
 export const DISCONTINUE_REASONS = ['Wants to conceive', 'Side effects', 'Method failure', 'Moved away', 'Partner objection', 'Switched method', 'Removal'];
 const toDate = (iso) => (iso ? new Date(`${iso}T00:00:00.000Z`) : null);
 const isoDay = (value) => (value ? value.toISOString().slice(0, 10) : null);
@@ -104,6 +106,7 @@ export async function discontinue(context, clientId, expectedVersion, { reason }
     const client = await tx.emrFpClient.findFirst({ where: { organizationId: context.organizationId, id: clientId } });
     if (!client) throw new EmrError('FP_CLIENT_NOT_FOUND');
     if (client.status !== 'ACTIVE') throw new EmrError('INVALID_STATE', { message: 'This client is already discontinued.' });
+    await requireListed(tx, context, 'fp-discontinue-reasons', reason, { what: 'The reason' });
     await updateVersioned(tx.emrFpClient, {
       organizationId: context.organizationId, id: client.id, expectedVersion, notFoundCode: 'FP_CLIENT_NOT_FOUND',
       data: { status: 'DISCONTINUED', discontinueReason: reason, discontinuedAt: new Date(), discontinuedByUserId: context.userId, nextVisitDate: null },
