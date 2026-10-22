@@ -193,7 +193,8 @@ export async function overview(context) {
       tx.acctYearEndClosing.findMany({ where: org(context), orderBy: { year: 'desc' } }),
       tx.acctApprovalRule.findMany({ where: org(context), orderBy: [{ docType: 'asc' }, { level: 'asc' }] }),
     ]);
-    const names = await userNameMap(tx, entries.flatMap((e) => [e.createdByUserId, e.postedByUserId]));
+    const { presentApproval, approvalUserIds } = await import('../control/approvals.service.js');
+    const names = await userNameMap(tx, entries.flatMap((e) => [e.createdByUserId, e.postedByUserId, ...approvalUserIds(e.approval)]));
     const byEntry = new Map();
     for (const l of lines) byEntry.set(l.entryId, [...(byEntry.get(l.entryId) ?? []), l]);
     const now = new Date();
@@ -213,6 +214,7 @@ export async function overview(context) {
         id: e.id, number: e.number, date: e.entryDate.toISOString(), branchId: e.branchId, source: e.source, reference: e.reference ?? undefined, memo: e.memo, status: e.status,
         createdBy: names.get(e.createdByUserId) ?? 'Former member', createdAt: e.createdAt, postedBy: e.postedByUserId ? names.get(e.postedByUserId) ?? 'Former member' : undefined, postedAt: e.postedAt ?? undefined,
         reversedByEntryId: e.reversedByEntryId ?? undefined, reversesEntryId: e.reversesEntryId ?? undefined, approvalRef: e.approvalRef ?? undefined, version: e.version,
+        ...(e.approval ? { approval: presentApproval(context, e.approval, names) } : {}),
         lines: (byEntry.get(e.id) ?? []).map((l) => ({
           id: l.id, accountNumber: l.accountNumber, debit: Number(l.debit), credit: Number(l.credit), description: l.description ?? undefined, costCenter: l.costCenter ?? undefined,
           customerId: l.customerId ?? undefined, vendorId: l.vendorId ?? undefined, projectId: l.projectId ?? undefined,
@@ -226,10 +228,19 @@ export async function overview(context) {
 }
 
 // ---- journal entries --------------------------------------------------------------------------------
+/** A manual entry an approval rule covers waits for that approval instead of posting. */
+async function approvalFor(tx, context, lines) {
+  const { buildApproval } = await import('../control/approvals.service.js');
+  return buildApproval(tx, context, 'Journal Entry', round2(lines.reduce((n, l) => n + Number(l.debit || 0), 0)));
+}
 export async function createEntry(context, input) {
   requireAcct(context, 'acct.post');
   return withTenant(context, async (tx) => {
-    const entry = await postEntry(tx, context, { ...input, source: 'Manual', manual: true, status: input.status ?? 'Posted' });
+    const wanted = input.status ?? 'Posted';
+    const approval = wanted === 'Posted' ? await approvalFor(tx, context, input.lines) : null;
+    const status = approval && approval.status !== 'Not Required' ? 'Pending Approval' : wanted;
+    const entry = await postEntry(tx, context, { ...input, source: 'Manual', manual: true, status });
+    if (status === 'Pending Approval') await tx.acctJournalEntry.updateMany({ where: { ...org(context), id: entry.id }, data: { approval } });
     return { id: entry.id, number: entry.number, status: entry.status };
   });
 }
@@ -261,9 +272,31 @@ export async function postDraft(context, id, expectedVersion) {
     const lines = await tx.acctJournalLine.findMany({ where: { ...org(context), entryId: id } });
     await checkLines(tx, context, lines.map((l) => ({ accountNumber: l.accountNumber, debit: Number(l.debit), credit: Number(l.credit) })), { manual: e.source === 'Manual' });
     await requireOpen(tx, context, e.entryDate);
+    const approval = e.source === 'Manual' ? await approvalFor(tx, context, lines) : null;
+    if (approval && approval.status !== 'Not Required') {
+      await updateVersioned(tx.acctJournalEntry, { organizationId: context.organizationId, id, expectedVersion, data: { status: 'Pending Approval', approval }, notFoundCode: 'JOURNAL_NOT_FOUND' });
+      await audited(tx, context, 'journal.submitted', 'journal_entry', id);
+      return { id, status: 'Pending Approval' };
+    }
     await updateVersioned(tx.acctJournalEntry, { organizationId: context.organizationId, id, expectedVersion, data: { status: 'Posted', postedByUserId: context.userId, postedAt: new Date() }, notFoundCode: 'JOURNAL_NOT_FOUND' });
     await audited(tx, context, 'journal.posted', 'journal_entry', id);
     return { id, status: 'Posted' };
+  });
+}
+/** Decides the entry's current approval step; the last approval posts it, a rejection voids it. */
+export async function decideEntry(context, id, { decision, comment }) {
+  const { decideApproval } = await import('../control/approvals.service.js');
+  return withTenant(context, async (tx) => {
+    const e = await tx.acctJournalEntry.findFirst({ where: { ...org(context), id } });
+    if (!e) throw new EmrError('JOURNAL_NOT_FOUND');
+    if (e.status !== 'Pending Approval') throw new EmrError('INVALID_STATE', { message: 'This entry is not waiting for approval.' });
+    const approval = decideApproval(context, e.approval, decision, comment);
+    if (approval.status === 'Approved') await requireOpen(tx, context, e.entryDate);
+    const data = approval.status === 'Approved' ? { approval, status: 'Posted', postedByUserId: context.userId, postedAt: new Date() }
+      : approval.status === 'Rejected' ? { approval, status: 'Void' } : { approval };
+    await updateVersioned(tx.acctJournalEntry, { organizationId: context.organizationId, id, expectedVersion: e.version, data, notFoundCode: 'JOURNAL_NOT_FOUND' });
+    await audited(tx, context, `journal.${decision.toLowerCase()}`, 'journal_entry', id);
+    return { id, status: data.status ?? e.status };
   });
 }
 export async function voidEntry(context, id, expectedVersion) {

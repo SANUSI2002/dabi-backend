@@ -80,8 +80,15 @@ describe('payables', () => {
     const bill = (await ap()).bills.find((b) => b.status === 'Awaiting Payment');
     expect((await as(finance).post('/payables/payments', { vendorId: vendor.id, date: today(), method: 'Bank Transfer', fromAccountNumber: 1010, amount: 2000000, allocations: [{ billId: bill.id, amount: 2000000 }] })).status).toBe(400);
     expect((await as(finance).post('/payables/payments', { vendorId: vendor.id, date: today(), method: 'Bank Transfer', fromAccountNumber: 1100, amount: 1, allocations: [] })).status).toBe(400); // not a bank account
-    // ₦1.5m bill, 5% WHT withheld: ₦1,425,000 leaves the bank, ₦75,000 owed to the tax office
-    ok(await as(finance).post('/payables/payments', { vendorId: vendor.id, date: today(), method: 'Bank Transfer', fromAccountNumber: 1010, amount: 1425000, withheldTax: 75000, allocations: [{ billId: bill.id, amount: 1500000 }], reference: 'NIP-778' }), 201);
+    // ₦1.5m bill, 5% WHT withheld: ₦1,425,000 leaves the bank, ₦75,000 owed to the tax office —
+    // ₦1m and over is the Finance Controller's to approve (starter rule), so nothing moves until then
+    const pay = ok(await as(finance).post('/payables/payments', { vendorId: vendor.id, date: today(), method: 'Bank Transfer', fromAccountNumber: 1010, amount: 1425000, withheldTax: 75000, allocations: [{ billId: bill.id, amount: 1500000 }], reference: 'NIP-778' }), 201);
+    expect(pay.status).toBe('Pending Approval');
+    expect(bal(await tb(), 1010)).toBe(0);
+    expect((await ap()).vendorPayments.find((x) => x.id === pay.id)).toMatchObject({ status: 'Pending Approval', approval: { submittedByMe: true, decidableByMe: false } });
+    expect((await as(finance).post(`/payables/payments/${pay.id}/decide`, { decision: 'Approved' })).body.error.code).toBe('OWN_REQUEST');
+    expect((await as(admin).post(`/payables/payments/${pay.id}/decide`, { decision: 'Approved' })).status).toBe(403); // an approver, not the controller
+    expect(ok(await as(controller).post(`/payables/payments/${pay.id}/decide`, { decision: 'Approved' })).status).toBe('Posted');
     const data = await ap();
     expect(data.bills.find((b) => b.id === bill.id)).toMatchObject({ status: 'Paid', amountPaid: 1500000 });
     expect(data.vendorPayments[0]).toMatchObject({ amount: 1425000, withheldTax: 75000 });
@@ -122,5 +129,23 @@ describe('payables', () => {
     expect(items.find((e) => e.action === 'requisition.submitted')).toMatchObject({ module: 'bills', resourceType: 'purchase_requisition', actorName: expect.any(String) });
     expect(items.some((e) => e.resourceType === 'requisition')).toBe(false);
     expect(new Set(items.map((e) => e.module)).has(undefined)).toBe(false);
+  });
+
+  it('holds a large manual journal entry for the controller, and voids a rejected one', async () => {
+    const lines = (amount) => [{ accountNumber: 5230, debit: amount, credit: 0 }, { accountNumber: 1010, debit: 0, credit: amount }];
+    const small = ok(await as(finance).post('/ledger/entries', { date: today(), memo: 'Plumbing', lines: lines(50000) }), 201);
+    expect(small.status).toBe('Posted');
+    const big = ok(await as(finance).post('/ledger/entries', { date: today(), memo: 'Generator overhaul', lines: lines(1200000) }), 201);
+    expect(big.status).toBe('Pending Approval');
+    const before = bal(await tb(), 5230);
+    const entry = ok(await as(finance).get('/ledger')).entries.find((e) => e.id === big.id);
+    expect(entry.approval).toMatchObject({ status: 'Pending', submittedByMe: true });
+    expect((await as(finance).post(`/ledger/entries/${big.id}/decide`, { decision: 'Approved' })).body.error.code).toBe('OWN_REQUEST');
+    ok(await as(controller).post(`/ledger/entries/${big.id}/decide`, { decision: 'Approved', comment: 'Invoice seen' }));
+    expect(bal(await tb(), 5230)).toBe(before + 1200000);
+    const other = ok(await as(finance).post('/ledger/entries', { date: today(), memo: 'Mystery transfer', lines: lines(2000000) }), 201);
+    expect(ok(await as(controller).post(`/ledger/entries/${other.id}/decide`, { decision: 'Rejected', comment: 'No support' })).status).toBe('Void');
+    expect(bal(await tb(), 5230)).toBe(before + 1200000);
+    expect((await tb()).inBalance).toBe(true);
   });
 });

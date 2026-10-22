@@ -7,7 +7,8 @@
 //     input tax, Cr the vendor's payable — and voiding reverses it (only if nothing has been paid);
 //   - goods are received against a sent order, never beyond what was ordered;
 //   - a payment settles the vendor's own posted bills, never more than their balance; withholding tax goes
-//     to WHT Payable; foreign settlements book the realised FX gain or loss;
+//     to WHT Payable; foreign settlements book the realised FX gain or loss; a payment an approval rule
+//     covers is recorded but posted only once approved (its allocations checked again then);
 //   - a vendor credit applies to the same vendor's bills, within what is left of both;
 //   - acct.view reads, acct.post prepares, submits, posts and pays; FX revaluation is the controller's.
 import { withTenant } from '../../emr/core/db.js';
@@ -75,7 +76,7 @@ export async function overview(context) {
       tx.acctVendorPayment.findMany({ where: org(context), orderBy: { paymentDate: 'desc' } }),
       tx.acctVendorCreditApplication.findMany({ where: org(context), orderBy: { appliedAt: 'asc' } }),
     ]);
-    const names = await userNameMap(tx, [...docs.flatMap((d) => [d.createdByUserId, ...approvalUserIds(d.approval)]), ...receipts.map((g) => g.receivedByUserId), ...payments.map((p) => p.createdByUserId)]);
+    const names = await userNameMap(tx, [...docs.flatMap((d) => [d.createdByUserId, ...approvalUserIds(d.approval)]), ...receipts.map((g) => g.receivedByUserId), ...payments.flatMap((p) => [p.createdByUserId, ...approvalUserIds(p.approval)])]);
     const who = (id) => names.get(id) ?? 'Former member';
     const iso = (d) => (d ? d.toISOString() : undefined);
     const of = (kind) => docs.filter((d) => d.kind === kind);
@@ -101,8 +102,8 @@ export async function overview(context) {
       })),
       vendorPayments: payments.map((p) => ({
         id: p.id, number: p.number, vendorId: p.vendorId, date: iso(p.paymentDate), method: p.method, fromAccountNumber: p.fromAccountNumber, amount: Number(p.amount), allocations: p.allocations,
-        settlementRate: p.settlementRate === null ? undefined : Number(p.settlementRate), reference: p.reference ?? undefined, withheldTax: Number(p.withheldTax) || undefined, journalEntryId: p.journalEntryId,
-        approval: { ...NOT_REQUIRED }, createdBy: who(p.createdByUserId), createdAt: p.createdAt,
+        settlementRate: p.settlementRate === null ? undefined : Number(p.settlementRate), reference: p.reference ?? undefined, withheldTax: Number(p.withheldTax) || undefined, journalEntryId: p.journalEntryId ?? undefined,
+        status: p.status, approval: p.approval ? presentApproval(context, p.approval, names) : { ...NOT_REQUIRED }, createdBy: who(p.createdByUserId), createdAt: p.createdAt,
       })),
       vendorCredits: of('vendor-credit').map((d) => ({
         id: d.id, number: d.number, vendorId: d.vendorId, billId: d.sourceDocId ?? undefined, date: iso(d.docDate), lines: d.lines, reason: d.reason ?? '', status: d.status,
@@ -337,48 +338,86 @@ export async function voidBill(context, id) {
 }
 
 // ---- payments ---------------------------------------------------------------------------------------
+/** Checks a payment against what each bill still owes and works out its journal lines (nothing is written). */
+async function settlement(tx, context, input) {
+  const rates = await taxRates(tx, context);
+  const vendor = await vendorOf(tx, context, input.vendorId);
+  const from = await tx.acctAccount.findFirst({ where: { ...org(context), number: input.fromAccountNumber } });
+  if (!from || !['cash', 'bank'].includes(from.subtype)) throw new EmrError('VALIDATION_FAILED', { message: 'Pay from a cash or bank account.' });
+  const withheld = round2(input.withheldTax ?? 0);
+  const allocations = input.allocations.filter((a) => a.amount > 0);
+  let apRelief = 0; let fxDiff = 0; let bankFromAlloc = 0;
+  const touched = [];
+  for (const a of allocations) {
+    const bill = await docOf(tx, context, a.billId, 'bill');
+    if (bill.vendorId !== vendor.id) throw new EmrError('VALIDATION_FAILED', { message: `${bill.number} belongs to another vendor.` });
+    if (!OPEN_BILL.includes(bill.status)) throw new EmrError('INVALID_STATE', { message: `${bill.number} is not open for payment.` });
+    if (a.amount > billBalance(rates, bill) + 0.01) throw new EmrError('VALIDATION_FAILED', { message: `That is more than the ${billBalance(rates, bill).toLocaleString('en-NG')} left on ${bill.number}.` });
+    const bookRate = Number(bill.exchangeRate);
+    const setRate = bill.currency !== 'NGN' ? input.settlementRate ?? bookRate : 1;
+    apRelief += a.amount * bookRate;
+    fxDiff += a.amount * (bookRate - setRate); // paying less naira than booked is a gain
+    bankFromAlloc += a.amount * setRate;
+    touched.push({ bill, paid: round2(Number(bill.amountPaid) + a.amount) });
+  }
+  // The tax withheld is part of what settles the bills; the bank pays the rest.
+  const unallocated = round2(input.amount + withheld - bankFromAlloc);
+  if (unallocated < -0.01) throw new EmrError('VALIDATION_FAILED', { message: 'Allocations exceed the payment.' });
+  fxDiff = round2(fxDiff);
+  const lines = [
+    { accountNumber: vendor.apAccountNumber, debit: round2(apRelief + Math.max(unallocated, 0)), credit: 0, description: `Settle ${allocations.length} bill(s) — ${vendor.name}`, vendorId: vendor.id },
+    { accountNumber: input.fromAccountNumber, debit: 0, credit: input.amount, description: `${input.method} to ${vendor.name}` },
+  ];
+  if (withheld > 0) lines.push({ accountNumber: ACCT.wht, debit: 0, credit: withheld, description: `WHT withheld — ${vendor.name}` });
+  if (fxDiff > 0.005) lines.push({ accountNumber: ACCT.fxGain, debit: 0, credit: fxDiff, description: 'Realised FX gain on settlement' });
+  else if (fxDiff < -0.005) lines.push({ accountNumber: ACCT.fxLoss, debit: -fxDiff, credit: 0, description: 'Realised FX loss on settlement' });
+  return { rates, vendor, allocations, withheld, lines, touched };
+}
+/** Posts a payment: the journal entry, and each bill it settles. */
+async function settle(tx, context, s, { number, date }) {
+  const entry = await postEntry(tx, context, { date, source: 'Vendor Payment', memo: `Payment ${number} — ${s.vendor.name}`, reference: number, lines: s.lines });
+  for (const { bill, paid } of s.touched) await changeDoc(tx, context, bill, { amountPaid: paid, status: paidStatus(s.rates, bill, paid) }, 'bill.payment_applied');
+  return entry;
+}
+/** Pays a vendor now, or — when an approval rule covers the amount — records it to post once approved. */
 export async function payVendor(context, input) {
   requireAcct(context, 'acct.post');
   return withTenant(context, async (tx) => {
-    const rates = await taxRates(tx, context);
-    const vendor = await vendorOf(tx, context, input.vendorId);
-    const from = await tx.acctAccount.findFirst({ where: { ...org(context), number: input.fromAccountNumber } });
-    if (!from || !['cash', 'bank'].includes(from.subtype)) throw new EmrError('VALIDATION_FAILED', { message: 'Pay from a cash or bank account.' });
-    const withheld = round2(input.withheldTax ?? 0);
-    const allocations = input.allocations.filter((a) => a.amount > 0);
-    let apRelief = 0; let fxDiff = 0; let bankFromAlloc = 0;
-    const touched = [];
-    for (const a of allocations) {
-      const bill = await docOf(tx, context, a.billId, 'bill');
-      if (bill.vendorId !== vendor.id) throw new EmrError('VALIDATION_FAILED', { message: `${bill.number} belongs to another vendor.` });
-      if (!OPEN_BILL.includes(bill.status)) throw new EmrError('INVALID_STATE', { message: `${bill.number} is not open for payment.` });
-      if (a.amount > billBalance(rates, bill) + 0.01) throw new EmrError('VALIDATION_FAILED', { message: `That is more than the ${billBalance(rates, bill).toLocaleString('en-NG')} left on ${bill.number}.` });
-      const bookRate = Number(bill.exchangeRate);
-      const setRate = bill.currency !== 'NGN' ? input.settlementRate ?? bookRate : 1;
-      apRelief += a.amount * bookRate;
-      fxDiff += a.amount * (bookRate - setRate); // paying less naira than booked is a gain
-      bankFromAlloc += a.amount * setRate;
-      touched.push({ bill, paid: round2(Number(bill.amountPaid) + a.amount) });
-    }
-    // The tax withheld is part of what settles the bills; the bank pays the rest.
-    const unallocated = round2(input.amount + withheld - bankFromAlloc);
-    if (unallocated < -0.01) throw new EmrError('VALIDATION_FAILED', { message: 'Allocations exceed the payment.' });
-    fxDiff = round2(fxDiff);
-    const lines = [
-      { accountNumber: vendor.apAccountNumber, debit: round2(apRelief + Math.max(unallocated, 0)), credit: 0, description: `Settle ${allocations.length} bill(s) — ${vendor.name}`, vendorId: vendor.id },
-      { accountNumber: input.fromAccountNumber, debit: 0, credit: input.amount, description: `${input.method} to ${vendor.name}` },
-    ];
-    if (withheld > 0) lines.push({ accountNumber: ACCT.wht, debit: 0, credit: withheld, description: `WHT withheld — ${vendor.name}` });
-    if (fxDiff > 0.005) lines.push({ accountNumber: ACCT.fxGain, debit: 0, credit: fxDiff, description: 'Realised FX gain on settlement' });
-    else if (fxDiff < -0.005) lines.push({ accountNumber: ACCT.fxLoss, debit: -fxDiff, credit: 0, description: 'Realised FX loss on settlement' });
+    const s = await settlement(tx, context, input);
+    const approval = await buildApproval(tx, context, 'Vendor Payment', round2(input.amount));
+    const pending = approval.status !== 'Not Required';
     const number = await nextDocNumber(tx, context, 'payment');
-    const entry = await postEntry(tx, context, { date: new Date(input.date), source: 'Vendor Payment', memo: `Payment ${number} — ${vendor.name}`, reference: number, lines });
+    const entry = pending ? null : await settle(tx, context, s, { number, date: new Date(input.date) });
     const p = await tx.acctVendorPayment.create({
-      data: { ...(input.id ? { id: input.id } : {}), ...org(context), number, vendorId: vendor.id, paymentDate: new Date(input.date), method: input.method, fromAccountNumber: input.fromAccountNumber, amount: input.amount, allocations, settlementRate: input.settlementRate ?? null, reference: input.reference ?? null, withheldTax: withheld, journalEntryId: entry.id, createdByUserId: context.userId },
+      data: {
+        ...(input.id ? { id: input.id } : {}), ...org(context), number, vendorId: s.vendor.id, paymentDate: new Date(input.date), method: input.method, fromAccountNumber: input.fromAccountNumber, amount: input.amount,
+        allocations: s.allocations, settlementRate: input.settlementRate ?? null, reference: input.reference ?? null, withheldTax: s.withheld, journalEntryId: entry?.id ?? null, createdByUserId: context.userId,
+        status: pending ? 'Pending Approval' : 'Posted', approval: pending ? approval : null,
+      },
     });
-    for (const { bill, paid } of touched) await changeDoc(tx, context, bill, { amountPaid: paid, status: paidStatus(rates, bill, paid) }, 'bill.payment_applied');
-    await audited(tx, context, 'vendor_payment.recorded', 'vendor_payment', p.id);
-    return { id: p.id, number };
+    await audited(tx, context, pending ? 'vendor_payment.submitted' : 'vendor_payment.recorded', 'vendor_payment', p.id);
+    return { id: p.id, number, status: pending ? 'Pending Approval' : 'Posted' };
+  });
+}
+/** Decides a payment's current approval step; the last approval posts it (checked again against the bills). */
+export async function decideVendorPayment(context, id, { decision, comment }) {
+  return withTenant(context, async (tx) => {
+    const p = await tx.acctVendorPayment.findFirst({ where: { ...org(context), id } });
+    if (!p) throw notFound('Payment');
+    if (p.status !== 'Pending Approval') throw new EmrError('INVALID_STATE', { message: 'This payment is not waiting for approval.' });
+    const approval = decideApproval(context, p.approval, decision, comment);
+    let data = { approval };
+    if (approval.status === 'Approved') {
+      const s = await settlement(tx, context, {
+        vendorId: p.vendorId, fromAccountNumber: p.fromAccountNumber, amount: Number(p.amount), method: p.method, withheldTax: Number(p.withheldTax),
+        settlementRate: p.settlementRate === null ? undefined : Number(p.settlementRate), allocations: p.allocations,
+      });
+      const entry = await settle(tx, context, s, { number: p.number, date: p.paymentDate });
+      data = { approval, status: 'Posted', journalEntryId: entry.id };
+    } else if (approval.status === 'Rejected') data = { approval, status: 'Rejected' };
+    await tx.acctVendorPayment.updateMany({ where: { ...org(context), id }, data });
+    await audited(tx, context, `vendor_payment.${decision.toLowerCase()}`, 'vendor_payment', id);
+    return { id, status: data.status ?? p.status };
   });
 }
 

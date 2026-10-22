@@ -45,6 +45,7 @@ const v = {
   entry: body({ id: z.uuid().optional(), date: when, memo: text(500), reference: free(100).optional(), lines, status: z.enum(['Draft', 'Posted']).optional(), branchId: z.uuid().optional() }),
   updateDraft: changes({ date: when.optional(), memo: text(500).optional(), reference: free(100).optional(), lines: lines.optional() }, withId),
   empty: body({}, withId),
+  decision: body({ decision: z.enum(['Approved', 'Rejected']), comment: free(500).optional() }, withId),
   reverse: body({ date: when.optional(), memo: text(500).optional() }, withId),
   account: body(account),
   import: body({ rows: z.array(z.object(account).strict()).min(1).max(500) }),
@@ -75,6 +76,8 @@ r('get', '/trial-balance', v.trialBalance, (req) => ledger.trialBalance(req.emr,
 r('post', '/entries', v.entry, (req) => ledger.createEntry(req.emr, req.body), 201);
 versioned('patch', '/entries/:id', v.updateDraft, (req, version) => ledger.updateDraft(req.emr, req.params.id, version, req.body));
 versioned('post', '/entries/:id/post', v.empty, (req, version) => ledger.postDraft(req.emr, req.params.id, version));
+// an approval step is decided by whoever holds its finance role, never the person who submitted it
+r('post', '/entries/:id/decide', v.decision, (req) => ledger.decideEntry(req.emr, req.params.id, req.body));
 versioned('post', '/entries/:id/void', v.empty, (req, version) => ledger.voidEntry(req.emr, req.params.id, version));
 r('post', '/entries/:id/reverse', v.reverse, (req) => ledger.reverseEntry(req.emr, req.params.id, req.body), 201);
 r('post', '/accounts', v.account, (req) => ledger.addAccount(req.emr, req.body), 201);

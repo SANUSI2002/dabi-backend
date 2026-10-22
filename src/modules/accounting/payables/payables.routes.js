@@ -89,6 +89,7 @@ r('post', '/bills/:id/decide', v.decision, (req) => ap.decideBill(req.emr, req.p
 r('post', '/bills/:id/void', v.empty, (req) => ap.voidBill(req.emr, req.params.id));
 r('post', '/bills/recurring/run', v.run, (req) => ap.runRecurringBills(req.emr, req.body));
 r('post', '/payments', v.payment, (req) => ap.payVendor(req.emr, req.body), 201);
+r('post', '/payments/:id/decide', v.decision, (req) => ap.decideVendorPayment(req.emr, req.params.id, req.body));
 r('post', '/vendor-credits', v.credit, (req) => ap.createVendorCredit(req.emr, req.body), 201);
 r('post', '/vendor-credits/:id/apply', v.applyCredit, (req) => ap.applyVendorCredit(req.emr, req.params.id, req.body));
 r('post', '/revaluation', v.revalue, (req) => ap.revalueForeign(req.emr, req.body));

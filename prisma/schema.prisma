@@ -6122,6 +6122,7 @@ model AcctJournalEntry {
   reversesEntryId String? @map("reverses_entry_id")
   approvalRef String? @map("approval_ref") @db.VarChar(100)
   version Int @default(1)
+  approval Json?
   @@map("acct_journal_entries")
 }
 
@@ -6434,9 +6435,11 @@ model AcctVendorPayment {
   settlementRate Decimal? @map("settlement_rate") @db.Decimal(16, 6)
   reference String? @db.VarChar(100)
   withheldTax Decimal @default(0) @map("withheld_tax") @db.Decimal(16, 2)
-  journalEntryId String @map("journal_entry_id")
+  journalEntryId String? @map("journal_entry_id")
   createdByUserId String @map("created_by_user_id")
   createdAt DateTime @default(now()) @map("created_at")
+  status String @default("Posted") @db.VarChar(16)
+  approval Json?
   @@map("acct_vendor_payments")
 }
 
