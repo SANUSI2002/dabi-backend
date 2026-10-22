@@ -6780,3 +6780,105 @@ model EmrMedicationChange {
   @@index([organizationId, patientId, createdAt], map: "emr_medication_changes_patient_idx")
   @@map("emr_medication_changes")
 }
+
+model EmrScadaEquipment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  tag String @db.VarChar(30)
+  assetId String? @map("asset_id")
+  name String @db.VarChar(160)
+  category String @db.VarChar(30)
+  manufacturer String @default("") @db.VarChar(120)
+  model String @default("") @db.VarChar(120)
+  serialNumber String @default("") @map("serial_number") @db.VarChar(120)
+  ownership String @default("Owned") @db.VarChar(20)
+  location Json
+  procurement Json @default("{}")
+  lifecycle Json @default("{}")
+  technical Json @default("{}")
+  compliance Json @default("{}")
+  machineState String @default("Unknown") @map("machine_state") @db.VarChar(16)
+  lastHeartbeatAt DateTime? @map("last_heartbeat_at")
+  lastLatencyMs Int? @map("last_latency_ms")
+  decommissionedAt DateTime? @map("decommissioned_at")
+  registeredByUserId String @map("registered_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, id], map: "emr_scada_equipment_org_id_key")
+  @@unique([organizationId, tag], map: "emr_scada_equipment_tag_key")
+  @@map("emr_scada_equipment")
+}
+
+model EmrScadaDeviceKey {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  label String @db.VarChar(80)
+  secretHash String @map("secret_hash") @db.Char(64)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt DateTime? @map("revoked_at")
+  revokedByUserId String? @map("revoked_by_user_id")
+  @@map("emr_scada_device_keys")
+}
+
+model EmrScadaReading {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  parameter String @db.VarChar(40)
+  value Float
+  severity String @db.VarChar(8)
+  recordedAt DateTime @map("recorded_at")
+  receivedAt DateTime @default(now()) @map("received_at")
+  deviceKeyId String @map("device_key_id")
+  @@index([organizationId, equipmentId, parameter, recordedAt], map: "emr_scada_readings_series_idx")
+  @@map("emr_scada_readings")
+}
+
+model EmrScadaEvent {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  type String @db.VarChar(24)
+  at DateTime
+  source String @db.VarChar(14)
+  actor String? @db.VarChar(160)
+  detail String? @db.VarChar(1000)
+  patientId String? @map("patient_id")
+  relatedOrderId String? @map("related_order_id")
+  correlationId String @map("correlation_id") @db.VarChar(80)
+  idempotencyKey String @map("idempotency_key") @db.VarChar(120)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([organizationId, equipmentId, idempotencyKey], map: "emr_scada_events_idempotency_key")
+  @@index([organizationId, equipmentId, at], map: "emr_scada_events_timeline_idx")
+  @@map("emr_scada_events")
+}
+
+model EmrScadaAlarm {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  raisedAt DateTime @default(now()) @map("raised_at")
+  source String @db.VarChar(14)
+  severity String @db.VarChar(13)
+  category String @db.VarChar(22)
+  description String @db.VarChar(1000)
+  parameter String? @db.VarChar(40)
+  value Float?
+  threshold Float?
+  status String @default("Raised") @db.VarChar(13)
+  dedupKey String? @map("dedup_key") @db.VarChar(120)
+  acknowledgedByUserId String? @map("acknowledged_by_user_id")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  investigationNote String? @map("investigation_note") @db.VarChar(2000)
+  escalatedTo String? @map("escalated_to") @db.VarChar(160)
+  escalatedAt DateTime? @map("escalated_at")
+  resolution String? @db.VarChar(2000)
+  resolvedByUserId String? @map("resolved_by_user_id")
+  resolvedAt DateTime? @map("resolved_at")
+  version Int @default(1)
+  @@index([organizationId, equipmentId, raisedAt], map: "emr_scada_alarms_equipment_idx")
+  @@map("emr_scada_alarms")
+}

@@ -24,6 +24,7 @@ import { staffRoutes } from './staff/staff.routes.js';
 import { pharmacyRoutes, encounterPrescriptionRoutes, patientPharmacyRoutes } from './pharmacy/pharmacy.routes.js';
 import { wardRoutes, bedRoutes, encounterAdmissionRoutes, admissionRoutes } from './admissions/admissions.routes.js';
 import { admissionWardRoundRoutes, wardRoundRoutes } from './wardrounds/wardrounds.routes.js';
+import { scadaIngestRoutes, scadaRoutes } from './scada/scada.routes.js';
 import { billingRoutes } from './billing/billing.routes.js';
 import { queueRoutes } from './queue/queue.routes.js';
 import { patientRecordRoutes } from './records/records.routes.js';
@@ -80,6 +81,7 @@ tenant.use('/imaging', imagingRoutes);
 tenant.use('/procedures', procedureRoutes);
 tenant.use('/catalogs', catalogRoutes);
 tenant.use('/equipment', equipmentRoutes);
+tenant.use('/scada', scadaRoutes);
 tenant.use('/stores', storeRoutes);
 tenant.use('/reports', reportRoutes);
 tenant.use('/outreach', outreachRoutes);
@@ -98,6 +100,9 @@ tenant.use('/staff', staffRoutes);
 tenant.use('/webhooks', webhookRoutes);
 tenant.use('/audit-events', auditRoutes);
 tenant.use('/telehealth/designation', telehealthRoutes);
+
+// Devices report with their own key, not a staff sign-in (see scada.routes.js).
+router.use('/scada/ingest', scadaIngestRoutes);
 
 router.use(
   '/organizations/:organizationId',
