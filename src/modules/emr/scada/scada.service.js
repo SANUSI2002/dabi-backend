@@ -21,10 +21,11 @@ import { userNameMap } from '../core/people.js';
 import { nextSequence } from '../core/sequence.js';
 import { approvedEmrFor, emrPatientRegistryEnabled } from '../emr.entitlement.js';
 import { TELEMETRY_PARAMS, severityFor, thresholdCrossed } from './scada.params.js';
+import { trackUsage } from './scada.care.service.js';
 
 const org = (context) => ({ organizationId: context.organizationId });
 const notFound = () => new EmrError('NOT_FOUND', { message: 'Equipment not found.' });
-const OPEN = ['Raised', 'Acknowledged', 'Investigating', 'Escalated'];
+export const OPEN = ['Raised', 'Acknowledged', 'Investigating', 'Escalated'];
 const PREFIX = {
   'Laboratory Analyzer': 'LAB', 'Radiology Imaging': 'RAD', 'ICU Device': 'ICU', 'Theatre Equipment': 'THR', 'Dialysis Equipment': 'DLY', 'Pharmacy Cold Chain': 'CLD',
   Generator: 'GEN', HVAC: 'HVC', 'Medical Gas': 'GAS', 'Water Treatment': 'WTR', 'Solar / Inverter': 'SOL', Elevator: 'ELV', 'Other Infrastructure': 'INF',
@@ -39,19 +40,19 @@ const connectivity = (at, now = Date.now()) => {
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const correlation = () => crypto.randomUUID();
 
-async function equipmentOf(tx, context, id) {
+export async function equipmentOf(tx, context, id) {
   const e = await tx.emrScadaEquipment.findFirst({ where: { ...org(context), id } });
   if (!e) throw notFound();
   return e;
 }
-async function logEvent(tx, context, equipmentId, { type, source, actor, detail, at = new Date(), idempotencyKey = crypto.randomUUID(), correlationId = correlation(), patientId, relatedOrderId }) {
+export async function logEvent(tx, context, equipmentId, { type, source, actor, detail, at = new Date(), idempotencyKey = crypto.randomUUID(), correlationId = correlation(), patientId, relatedOrderId }) {
   // the same event delivered again is kept once (checked first: a failed insert would abort the transaction)
   if (await tx.emrScadaEvent.findFirst({ where: { ...org(context), equipmentId, idempotencyKey }, select: { id: true } })) return null;
   return tx.emrScadaEvent.create({
     data: { ...org(context), equipmentId, type, at, source, actor: actor ?? null, detail: detail?.slice(0, 1000) ?? null, idempotencyKey, correlationId, patientId: patientId ?? null, relatedOrderId: relatedOrderId ?? null },
   });
 }
-const nameOf = async (tx, context) => (await userNameMap(tx, [context.userId])).get(context.userId) ?? 'Staff member';
+export const nameOf = async (tx, context) => (await userNameMap(tx, [context.userId])).get(context.userId) ?? 'Staff member';
 
 // ---- reading ----------------------------------------------------------------------------------------
 export async function overview(context) {
@@ -189,7 +190,7 @@ export async function revokeDeviceKey(context, equipmentId, keyId) {
 }
 
 // ---- alarms -----------------------------------------------------------------------------------------
-async function raiseInTx(tx, context, equipmentId, { actor, ...input }) {
+export async function raiseInTx(tx, context, equipmentId, { actor, ...input }) {
   // already open for this cause: keep it, with the latest value (the open-alarm index is the backstop)
   const open = input.dedupKey ? await tx.emrScadaAlarm.findFirst({ where: { ...org(context), dedupKey: input.dedupKey, status: { in: OPEN } } }) : null;
   if (open) {
@@ -291,8 +292,12 @@ export async function ingest(header, input) {
       }
     }
     for (const ev of input.events ?? []) {
-      const row = await logEvent(tx, context, e.id, { type: ev.type, source: 'DEVICE_GATEWAY', actor, detail: ev.detail, at: ev.at ? new Date(ev.at) : now, idempotencyKey: ev.idempotencyKey, correlationId: ev.correlationId ?? correlation() });
-      if (row) accepted.events += 1;
+      if (['TEST_STARTED', 'TEST_COMPLETED'].includes(ev.type) && !ev.correlationId) throw new EmrError('VALIDATION_FAILED', { message: `${ev.type} needs a correlationId to pair the start and end of a test.` });
+      const at = ev.at ? new Date(ev.at) : now;
+      const row = await logEvent(tx, context, e.id, { type: ev.type, source: 'DEVICE_GATEWAY', actor, detail: ev.detail, at, idempotencyKey: ev.idempotencyKey, correlationId: ev.correlationId ?? correlation(), patientId: ev.patientId, relatedOrderId: ev.orderId });
+      if (!row) continue; // delivered before
+      accepted.events += 1;
+      await trackUsage(tx, context, e.id, { ...ev, at }, { actor });
     }
     return { equipmentId: e.tag, ...accepted, receivedAt: now };
   });

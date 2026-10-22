@@ -1,7 +1,8 @@
 // Equipment intelligence (SCADA) against real Postgres with RLS on: register equipment, issue a device
 // key (shown once, stored hashed), ingest heartbeats/readings/events from that key only, threshold alarms
 // raised once per cause, the alarm lifecycle by permission, location history on the timeline, revoked
-// and forged keys refused, and other hospitals kept out.
+// and forged keys refused, other hospitals kept out — and looking after the equipment: work orders, calibration,
+// consumables used by device tests, usage sessions and warranty claims.
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../../src/app.js';
@@ -14,6 +15,7 @@ const as = (who) => {
     get: (path) => request(app).get(url(path)).set('Authorization', who.auth),
     post: (path, body = {}, headers = {}) => request(app).post(url(path)).set('Authorization', who.auth).set(headers).send(body),
     patch: (path, body, headers = {}) => request(app).patch(url(path)).set('Authorization', who.auth).set(headers).send(body),
+    put: (path, body) => request(app).put(url(path)).set('Authorization', who.auth).send(body),
   };
 };
 const device = (key, body) => request(app).post('/api/v1/emr/scada/ingest').set('Authorization', `Device ${key}`).send(body);
@@ -97,5 +99,67 @@ describe('equipment intelligence', () => {
     expect((await device(key, { readings: [{ parameter: 'temperature', value: 5 }] })).status).toBe(401);
     // a key is bound to its own hospital: forging the organization part fails
     expect((await device(key.replace(A.organizationId, B.organizationId), { readings: [] })).status).toBe(401);
+  });
+
+  describe('looking after equipment', () => {
+    let analyzer; let analyzerKey;
+    const care = async (who = admin) => ok(await as(who).get('/care'));
+    it('completes a work order only after a passed return-to-service test, resolving its maintenance alarm', async () => {
+      analyzer = ok(await as(admin).post('/equipment', {
+        category: 'Laboratory Analyzer', name: 'Chemistry analyzer', location: { building: 'Main', department: 'Laboratory' },
+        lifecycle: { commissioningDate: '2025-01-10' }, compliance: { calibrationRequired: true, calibrationIntervalDays: 60, preventiveMaintenanceIntervalDays: 180 },
+      }), 201);
+      // commissioned long ago and never serviced or calibrated: both overdue, raised once each
+      await care();
+      await care();
+      const due = (await centre()).alarms.filter((a) => a.equipmentId === analyzer.id);
+      expect(due.map((a) => a.category).sort()).toEqual(['Calibration', 'Maintenance']);
+      expect((await as(nurse).post(`/equipment/${analyzer.id}/work-orders`, { type: 'Preventive', severity: 'Low', description: 'PM' })).status).toBe(403);
+      const wo = ok(await as(admin).post(`/equipment/${analyzer.id}/work-orders`, { type: 'Preventive', severity: 'Medium', description: 'Six-monthly PM' }), 201);
+      let order = (await care()).workOrders.find((w) => w.id === wo.id);
+      expect(order.checklist.map((i) => i.label)).toContain('QC run');
+      ok(await as(admin).patch(`/work-orders/${wo.id}`, { status: 'In Progress', technician: 'Biomed Eng. Musa' }, ifMatch(order.version)));
+      ok(await as(admin).patch(`/work-orders/${wo.id}`, { status: 'Testing', partsUsed: [{ name: 'Lamp', qty: 1, cost: 45000 }], laborCost: 20000 }, ifMatch(order.version + 1)));
+      expect((await as(admin).patch(`/work-orders/${wo.id}`, { status: 'Completed' }, ifMatch(order.version + 2))).body.error.message).toMatch(/return-to-service/);
+      ok(await as(admin).patch(`/work-orders/${wo.id}`, { status: 'Completed', returnToServiceTested: true, returnToServiceNote: 'QC in range' }, ifMatch(order.version + 2)));
+      order = (await care()).workOrders.find((w) => w.id === wo.id);
+      expect(order).toMatchObject({ status: 'Completed', returnToServiceTested: true, partsUsed: [expect.objectContaining({ name: 'Lamp' })] });
+      const alarms = (await centre()).alarms.filter((a) => a.equipmentId === analyzer.id);
+      expect(alarms.find((a) => a.category === 'Maintenance')).toMatchObject({ status: 'Resolved', resolution: expect.stringMatching(/WO-.* completed and tested/) });
+      expect((await care()).due[analyzer.id].maintenanceDue).toEqual(expect.any(String));
+    });
+
+    it('needs a certificate for a passed calibration, which resolves the calibration alarm', async () => {
+      const cal = ok(await as(admin).post(`/equipment/${analyzer.id}/calibrations`, { scheduledFor: new Date().toISOString(), vendor: 'Beckman Coulter WA' }), 201);
+      const v1 = (await care()).calibrations.find((x) => x.id === cal.id).version;
+      expect((await as(admin).patch(`/calibrations/${cal.id}`, { status: 'Completed', result: 'Pass' }, ifMatch(v1))).status).toBe(400);
+      ok(await as(admin).patch(`/calibrations/${cal.id}`, { status: 'Completed', result: 'Pass', certificateNumber: 'CAL-2026-114', certificateExpiry: new Date(Date.now() + 60 * 86_400_000).toISOString() }, ifMatch(v1)));
+      expect((await centre()).alarms.find((a) => a.equipmentId === analyzer.id && a.category === 'Calibration')).toMatchObject({ status: 'Resolved' });
+    });
+
+    it('uses a consumable per device test, opens and closes usage sessions, and alarms on low stock', async () => {
+      analyzerKey = ok(await as(admin).post(`/equipment/${analyzer.id}/device-keys`, { label: 'AU480 LIS link' }), 201).key;
+      const reagent = ok(await as(admin).post(`/equipment/${analyzer.id}/consumables`, { name: 'Glucose reagent', lotNumber: 'GL-24', expiryDate: '2030-01-31', unit: 'test', quantityOnHand: 3, reorderThreshold: 2, costPerUnit: 350 }), 201);
+      expect(ok(await device(analyzerKey, { events: [{ type: 'TEST_STARTED', idempotencyKey: 'run-0000001', correlationId: 'run-1', operator: 'Kemi Adeola', testName: 'Fasting blood sugar' }] }), 202).events).toBe(1);
+      expect((await device(analyzerKey, { events: [{ type: 'TEST_STARTED', idempotencyKey: 'run-0000002' }] })).status).toBe(400); // no correlationId
+      ok(await device(analyzerKey, { events: [{ type: 'TEST_COMPLETED', idempotencyKey: 'run-0000001-done', correlationId: 'run-1' }] }), 202);
+      const data = await care();
+      expect(data.usageSessions.find((s) => s.equipmentId === analyzer.id)).toMatchObject({ operator: 'Kemi Adeola', testName: 'Fasting blood sugar', outcome: 'Completed', endedAt: expect.any(String) });
+      expect(data.consumables.find((x) => x.id === reagent.id).quantityOnHand).toBe(2);
+      expect((await centre()).alarms.find((a) => a.equipmentId === analyzer.id && a.category === 'Consumable')).toMatchObject({ severity: 'Medium', description: expect.stringMatching(/low on stock/) });
+      const item = (await care()).consumables.find((x) => x.id === reagent.id);
+      ok(await as(admin).post(`/consumables/${reagent.id}/adjust`, { quantityDelta: 50 }, ifMatch(item.version)));
+      expect((await centre()).alarms.find((a) => a.equipmentId === analyzer.id && a.category === 'Consumable')).toMatchObject({ status: 'Resolved' });
+    });
+
+    it('tracks warranty claims only while the warranty is in force', async () => {
+      expect((await as(admin).post(`/equipment/${analyzer.id}/warranty-claims`, { issue: 'Lamp failure' })).status).toBe(409);
+      ok(await as(admin).put(`/equipment/${analyzer.id}/warranty`, { provider: 'Beckman Coulter WA', start: '2025-01-10', end: '2030-01-09', coverage: 'Parts and labour', slaHours: 48 }));
+      const claim = ok(await as(admin).post(`/equipment/${analyzer.id}/warranty-claims`, { issue: 'Lamp failure', claimNumber: 'BC-7781' }), 201);
+      ok(await as(admin).patch(`/warranty-claims/${claim.id}`, { status: 'Approved' }, ifMatch(1)));
+      expect((await as(admin).patch(`/warranty-claims/${claim.id}`, { status: 'Rejected' }, ifMatch(2))).status).toBe(409);
+      ok(await as(admin).patch(`/warranty-claims/${claim.id}`, { status: 'Completed', repairedUnderWarranty: true, costRecovered: 45000 }, ifMatch(2)));
+      expect((await care()).claims[0]).toMatchObject({ status: 'Completed', repairedUnderWarranty: true, costRecovered: 45000, resolvedAt: expect.any(String) });
+    });
   });
 });
