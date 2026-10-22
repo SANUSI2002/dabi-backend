@@ -15,6 +15,18 @@ export async function approvedProductFor(context, key, db = prisma) {
     && application.packageVersion.moduleKeys.includes(key);
 }
 
+/** The organization's approved, set-up, published package — its name, version and the products it includes — or null. */
+export async function approvedPackageFor(context, db = prisma) {
+  if (!context?.organization?.facilityId || context.organization.type === 'PHARMACY') return null;
+  const application = await db.platformApplication.findUnique({
+    where: { approvedOrganisationId: context.organization.facilityId },
+    select: { status: true, setupCompletedAt: true, packageVersion: { select: { status: true, version: true, moduleKeys: true, package: { select: { name: true } } } } },
+  });
+  const version = application?.packageVersion;
+  if (application?.status !== 'APPROVED' || !application.setupCompletedAt || version?.status !== 'PUBLISHED') return null;
+  return { name: version.package.name, version: version.version, moduleKeys: version.moduleKeys };
+}
+
 export const approvedEmrFor = (context, db = prisma) => approvedProductFor(context, 'emr', db);
 
 // The Workforce API (people, time & attendance, HR) follows the EMR switch unless switched on alone.

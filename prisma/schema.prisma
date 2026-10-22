@@ -6004,6 +6004,15 @@ model PlatformTerms {
   @@map("platform_terms")
 }
 
+model PlatformModuleSettings {
+  organizationId String @id @map("organization_id")
+  disabled String[] @default([])
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("platform_module_settings")
+}
+
 model PlatformLetterTemplate {
   id String @id @default(uuid())
   organizationId String @map("organization_id")

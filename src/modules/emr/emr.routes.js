@@ -48,6 +48,7 @@ import { postnatalRoutes } from './postnatal/postnatal.routes.js';
 import { antenatalRoutes } from './antenatal/antenatal.routes.js';
 import { birthRoutes, deliveryRoutes } from './deliveries/deliveries.routes.js';
 import { tenantRuntimeRoutes } from '../command-centre/runtime.routes.js';
+import { moduleGate } from '../org-config/modules.service.js';
 
 const router = express.Router();
 router.use(requestContext);
@@ -58,6 +59,7 @@ router.get('/internal/metrics', protect, requirePlatform, (req, res) => {
 });
 
 const tenant = express.Router({ mergeParams: true });
+tenant.use(moduleGate('emr')); // a module the organization switched off is refused
 tenant.use('/runtime', tenantRuntimeRoutes);
 tenant.use('/patients', patientRoutes);
 tenant.use('/patients/:patientId', patientPharmacyRoutes);

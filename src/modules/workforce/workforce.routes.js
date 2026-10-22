@@ -20,11 +20,13 @@ import { hiringRoutes } from './hiring/hiring.routes.js';
 import { careerRoutes } from './careers/careers.routes.js';
 import { payrollRoutes } from './payroll/payroll.routes.js';
 import { serviceRoutes } from './services/services.routes.js';
+import { moduleGate } from '../org-config/modules.service.js';
 
 const router = express.Router();
 router.use(requestContext);
 
 const tenant = express.Router({ mergeParams: true });
+tenant.use(moduleGate('workforce')); // a module the organization switched off is refused
 tenant.use('/people', peopleRoutes);
 tenant.use('/time', timeRoutes);
 tenant.use('/workflows', workflowRoutes);

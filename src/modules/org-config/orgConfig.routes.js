@@ -7,6 +7,7 @@
 //   every member:                         read lists and terminology
 //   Workforce lists, letters:             hr.manage   ·  EMR lists: catalog.manage
 //   platform-wide lists, terminology:     platform.config (hospital admin, owner)
+//   module switches (within the package): platform.config; every member reads them
 import express from 'express';
 import { z } from 'zod';
 import { protect } from '../../middleware/authMiddleware.js';
@@ -19,6 +20,7 @@ import { handle, validateEmr as check } from '../emr/core/validate.js';
 import { requireVersion } from '../emr/core/concurrency.js';
 import { send } from '../emr/core/http.js';
 import * as config from './orgConfig.service.js';
+import { moduleOverview, saveModules } from './modules.service.js';
 
 const org = { organizationId: z.uuid() };
 const noQuery = z.object({}).strict();
@@ -50,6 +52,7 @@ const v = {
     data: z.record(z.string().regex(/^[\w.-]{1,60}$/), z.union([z.string().max(4000), z.number()]).nullable()).refine((d) => Object.keys(d).length <= 60, 'At most 60 fields'),
   }),
   sent: body({ to: text(160) }, { ...org, id: z.uuid() }),
+  modules: body({ disabled: z.array(z.string().regex(/^[a-z][a-zA-Z0-9.]{1,79}$/)).max(100) }),
 };
 
 const tenant = express.Router({ mergeParams: true });
@@ -64,6 +67,8 @@ r('post', '/letter-templates', v.addTemplate, (req) => config.addTemplate(req.em
 tenant.patch('/letter-templates/:key', check(v.saveTemplate), handle(async (req, res) => send(res, await config.saveTemplate(req.emr, req.params.key, requireVersion(req), req.body))));
 r('post', '/letters', v.letter, (req) => config.generateLetter(req.emr, req.body), 201);
 r('post', '/letters/:id/sent', v.sent, (req) => config.markLetterSent(req.emr, req.params.id, req.body));
+r('get', '/modules', v.overview, (req) => moduleOverview(req.emr, req.accessContext));
+tenant.put('/modules', check(v.modules), handle(async (req, res) => send(res, await saveModules(req.emr, req.accessContext, requireVersion(req), req.body))));
 
 const router = express.Router();
 router.use(requestContext);

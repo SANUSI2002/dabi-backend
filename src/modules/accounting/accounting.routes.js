@@ -23,11 +23,13 @@ import { bankingRoutes, expenseRoutes } from './banking/banking.routes.js';
 import { assetRoutes, planningRoutes } from './assets/assets.routes.js';
 import { prefsRoutes, projectRoutes } from './projects/projects.routes.js';
 import { integrationRoutes } from './integrations/integrations.routes.js';
+import { moduleGate } from '../org-config/modules.service.js';
 
 const router = express.Router();
 router.use(requestContext);
 
 const tenant = express.Router({ mergeParams: true });
+tenant.use(moduleGate('accounting')); // a module the organization switched off is refused
 tenant.use('/ledger', ledgerRoutes);
 tenant.use('/settings', settingsRoutes);
 tenant.use('/receivables', receivableRoutes);
