@@ -127,6 +127,14 @@ describe('expense claims', () => {
     expect(t.inBalance).toBe(true);
   });
 
+  it('refuses a claim reimbursed to staff when there is nobody on record to reimburse', async () => {
+    // finance has no HR record in this hospital, and names no claimant
+    const res = await as(finance).post('/expenses', { date: today(), title: 'Taxi', payMode: 'Reimburse to staff', lines: [line(2000)] });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/staff record/);
+    ok(await as(finance).post('/expenses', { date: today(), title: 'Taxi', payMode: 'Petty Cash', lines: [line(2000)] }), 201);
+  });
+
   it('discards drafts, which then disappear', async () => {
     const c = ok(await as(finance).post('/expenses', { date: today(), title: 'Draft', payMode: 'Petty Cash', lines: [line(500)] }), 201);
     ok(await as(finance).post(`/expenses/${c.id}/discard`));

@@ -50,6 +50,8 @@ async function cleanLines(tx, context, lines, rates) {
     return { id: l.id ?? `el-${rid()}`, accountNumber: l.accountNumber, description: l.description, amount: round2(l.amount), ...(l.taxRateId ? { taxRateId: l.taxRateId } : {}) };
   });
 }
+// A reimbursement is owed to a member of staff: without an HR record there is nobody to pay.
+const noClaimant = () => new EmrError('VALIDATION_FAILED', { message: 'A claim reimbursed to staff needs the claimant’s staff record. You have none in HR yet: ask HR to add you, or choose petty cash or a direct bank payment.' });
 async function claimant(tx, context, employeeId) {
   if (!employeeId) return (await tx.wfEmployee.findFirst({ where: { ...org(context), userId: context.userId }, select: { id: true, name: true } })) ?? null;
   const e = await tx.wfEmployee.findFirst({ where: { ...org(context), id: employeeId }, select: { id: true, name: true } });
@@ -107,6 +109,7 @@ export async function createClaim(context, input) {
   return withTenant(context, async (tx) => {
     const lines = await cleanLines(tx, context, input.lines, await taxRates(tx, context));
     const who = await claimant(tx, context, input.claimantId);
+    if (input.payMode === REIMBURSE && !who) throw noClaimant();
     await checkPayMode(tx, context, input.payMode, input.paidFromAccount);
     const number = await nextDocNumber(tx, context, 'expense');
     try {
@@ -127,6 +130,7 @@ export async function updateClaim(context, id, expectedVersion, patch) {
     const c = await claimOf(tx, context, id);
     if (c.status !== 'Draft') throw new EmrError('INVALID_STATE', { message: 'Only a draft claim can be edited.' });
     const payMode = patch.payMode ?? c.payMode;
+    if (payMode === REIMBURSE && !c.claimantEmployeeId) throw noClaimant();
     const paidFrom = patch.paidFromAccount ?? c.paidFromAccount;
     await checkPayMode(tx, context, payMode, paidFrom);
     const data = Object.fromEntries(Object.entries({
