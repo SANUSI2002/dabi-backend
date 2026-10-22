@@ -38,7 +38,7 @@ async function ensureLocations(tx, context) {
   await tx.emrStoreLocation.createMany({ data: STARTER_LOCATIONS.map(([code, name, type]) => ({ organizationId: context.organizationId, code, name, type })), skipDuplicates: true });
 }
 
-async function lockItem(tx, context, itemId) {
+export async function lockItem(tx, context, itemId) {
   const rows = await tx.$queryRaw`SELECT "id" FROM "emr_store_items" WHERE "organization_id" = ${context.organizationId} AND "id" = ${itemId} FOR UPDATE`;
   if (!rows.length) throw new EmrError('STORE_ITEM_NOT_FOUND');
   return tx.emrStoreItem.findFirst({ where: { organizationId: context.organizationId, id: itemId } });

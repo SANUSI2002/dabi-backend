@@ -154,4 +154,28 @@ describe('payroll and pharmacy → ledger', () => {
     expect(bal(t, 1210)).toBe(-22500 + 45000);
     expect(t.inBalance).toBe(true);
   });
+
+  it('adds landed costs to the stock on hand, and what cannot be carried per unit to cost of goods sold', async () => {
+    const stock = ok(await acct(finance).get('/inventory'));
+    const item = stock.items.find((i) => i.sku === 'GLV-01');
+    const batches = stock.batches.filter((b) => b.itemId === item.id && b.qtyRemaining > 0);
+    const onHand = batches.reduce((n, b) => n + b.qtyRemaining, 0);
+    expect(onHand).toBeGreaterThan(0);
+    const before = await tb();
+    const body = { date: new Date().toISOString().slice(0, 10), description: 'Freight and clearing — Lagos port', allocations: [{ itemId: item.id, amount: 1000.01 }] };
+    expect((await acct(finance).post('/inventory/landed-costs', { ...body, creditAccount: 1100 })).status).toBe(409); // a control account: use a bill
+    const r = ok(await acct(finance).post('/inventory/landed-costs', { ...body, creditAccount: 1000 }), 201);
+    const share = r.allocations[0];
+    const perUnitMinor = Math.floor(100001 / onHand);
+    expect(share).toMatchObject({ onHand, perUnit: perUnitMinor / 100, capitalised: (perUnitMinor * onHand) / 100 });
+    expect(Math.round((share.capitalised + share.expensed) * 100)).toBe(100001);
+    const after = ok(await acct(finance).get('/inventory'));
+    for (const b of batches) expect(after.batches.find((x) => x.id === b.id).unitCostMinor).toBe(b.unitCostMinor + perUnitMinor);
+    expect(after.landedCosts[0]).toMatchObject({ description: body.description, total: 1000.01, creditAccount: 1000 });
+    const t = await tb();
+    expect(Math.round((bal(t, 1210) - bal(before, 1210)) * 100)).toBe(perUnitMinor * onHand);
+    expect(Math.round((bal(t, 5010) - bal(before, 5010)) * 100)).toBe(100001 - perUnitMinor * onHand);
+    expect(Math.round((bal(t, 1000) - bal(before, 1000)) * 100)).toBe(-100001);
+    expect(t.inBalance).toBe(true);
+  });
 });

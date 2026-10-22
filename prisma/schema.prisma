@@ -7028,3 +7028,18 @@ model EmrScadaUsageSession {
   @@unique([organizationId, equipmentId, correlationId], map: "emr_scada_usage_sessions_correlation_key")
   @@map("emr_scada_usage_sessions")
 }
+
+model AcctLandedCost {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  costDate DateTime @map("cost_date")
+  description String @db.VarChar(300)
+  creditAccount Int @map("credit_account")
+  total Decimal @db.Decimal(16, 2)
+  allocations Json
+  journalEntryId String @map("journal_entry_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, costDate])
+  @@map("acct_landed_costs")
+}

@@ -15,7 +15,7 @@ import { EmrError, emrErrorHandler } from '../emr/core/errors.js';
 import { handle, validateEmr } from '../emr/core/validate.js';
 import { send } from '../emr/core/http.js';
 import { accountingAuditEvents } from './audit.js';
-import { inventoryOverview, receiveStock } from './inventory.js';
+import { applyLandedCost, inventoryOverview, receiveStock } from './inventory.js';
 import { ledgerRoutes } from './ledger/ledger.routes.js';
 import { receivableRoutes, settingsRoutes } from './receivables/receivables.routes.js';
 import { approvalRuleRoutes, payableRoutes } from './payables/payables.routes.js';
@@ -51,6 +51,13 @@ tenant.post('/inventory/receipts', validateEmr(z.object({
     batchNumber: z.string().trim().min(1).max(60).optional(), expiryDate: z.iso.date().optional(), reference: z.string().trim().min(1).max(80).optional(), note: z.string().trim().min(1).max(500).optional(),
   }).strict(),
 })), handle(async (req, res) => send(res, await receiveStock(req.emr, req.body), 201)));
+tenant.post('/inventory/landed-costs', validateEmr(z.object({
+  params: z.object({ organizationId: z.uuid() }).strict(), query: z.object({}).strict(),
+  body: z.object({
+    id: z.uuid().optional(), date: z.iso.date(), description: z.string().trim().min(1).max(300), reference: z.string().trim().min(1).max(100).optional(),
+    creditAccount: z.number().int().min(1000).max(9999), allocations: z.array(z.object({ itemId: z.uuid(), amount: z.number().positive().max(1e11) }).strict()).min(1).max(100),
+  }).strict(),
+})), handle(async (req, res) => send(res, await applyLandedCost(req.emr, req.body), 201)));
 tenant.get('/audit-events', validateEmr(z.object({ params: z.object({ organizationId: z.uuid() }).strict(), query: z.object({ limit: z.coerce.number().int().min(1).max(500).default(200) }).strict() })),
   handle(async (req, res) => send(res, await accountingAuditEvents(req.emr, req.query))));
 
