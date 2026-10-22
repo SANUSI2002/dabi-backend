@@ -29,6 +29,7 @@ const depreciation = { method, usefulLifeMonths: z.number().int().min(1).max(120
 
 const v = {
   overview: z.object({ params: z.object(org).strict(), query: noQuery }),
+  one: z.object({ params: z.object(withId).strict(), query: noQuery }),
   asset: body({ id: z.uuid().optional(), name: text(160), category: text(80), acquisitionDate: when, cost: z.number().positive().max(1e13), assetAccountNumber: accountNumber, ...depreciation, fundedFromAccount: accountNumber.optional(), sourceBillId: z.uuid().optional() }),
   construction: body({ id: z.uuid().optional(), name: text(160), category: text(80), assetAccountNumber: accountNumber, startDate: when }),
   cwipCost: body({ amount: z.number().positive().max(1e13), date: when, description: text(300), fromAccount: accountNumber }, withId),
@@ -72,5 +73,6 @@ r(planningRoutes, 'post', '/budgets/:id/status', v.budgetStatus, (req) => plan.s
 r(planningRoutes, 'post', '/budgets/:id/lines', v.line, (req) => plan.upsertLine(req.emr, req.params.id, req.body));
 r(planningRoutes, 'post', '/budgets/:id/lines/:lineId/remove', v.removeLine, (req) => plan.removeLine(req.emr, req.params.id, req.params.lineId));
 r(planningRoutes, 'post', '/tax-returns', v.taxReturn, (req) => plan.prepareReturn(req.emr, req.body), 201);
+r(planningRoutes, 'get', '/tax-returns/:id/schedule', v.one, (req) => plan.returnSchedule(req.emr, req.params.id));
 r(planningRoutes, 'post', '/tax-returns/:id/filing', v.filing, (req) => plan.recordFiling(req.emr, req.params.id, req.body));
 r(planningRoutes, 'post', '/tax-returns/:id/pay', v.pay, (req) => plan.payReturn(req.emr, req.params.id, req.body));

@@ -7,7 +7,8 @@
 //   - a tax return is prepared from the period's movement on its liability account (credits accrue output
 //     tax, debits are reclaims — for VAT); one return per type and period;
 //   - filing is recorded with the acknowledgement the authority's portal issued (there is no direct
-//     e-filing link); remitting posts Dr the liability, Cr the paying bank or cash account;
+//     e-filing link); each return has a supporting schedule — every ledger line behind it, with the
+//     counterparty and TIN where the entry names one — to upload on that portal; remitting posts Dr the liability, Cr the paying bank or cash account;
 //   - acct.view reads; acct.post prepares, files and remits.
 import { withTenant } from '../../emr/core/db.js';
 import { recordAudit } from '../../emr/core/audit.js';
@@ -153,6 +154,39 @@ async function returnOf(tx, context, id) {
   if (!r) throw new EmrError('HR_RECORD_NOT_FOUND', { message: 'Tax return not found.' });
   return r;
 }
+/**
+ * The lines behind a return: every posted movement on its liability account in the period (the same
+ * movements the return was prepared from), with the vendor or customer the entry names and the vendor's TIN.
+ */
+export async function returnSchedule(context, id) {
+  requireAcct(context, 'acct.view');
+  return withTenant(context, async (tx) => {
+    const r = await returnOf(tx, context, id);
+    const lines = await tx.$queryRaw`
+      SELECT e."id" AS "entryId", e."number", e."entry_date" AS "date", e."source", e."reference", e."memo", l."description", l."debit", l."credit",
+        (SELECT COALESCE(o."vendor_id", o."customer_id") FROM "acct_journal_lines" o WHERE o."organization_id" = e."organization_id" AND o."entry_id" = e."id" AND (o."vendor_id" IS NOT NULL OR o."customer_id" IS NOT NULL) ORDER BY o."line_no" LIMIT 1) AS "partyId"
+      FROM "acct_journal_lines" l JOIN "acct_journal_entries" e ON e."organization_id" = l."organization_id" AND e."id" = l."entry_id"
+      WHERE e."status" IN ('Posted', 'Reversed') AND l."account_number" = ${r.liabilityAccount}
+        AND e."entry_date" >= ${r.periodStart} AND e."entry_date" <= ${r.periodEnd}
+      ORDER BY e."entry_date", e."number", l."line_no"`;
+    const ids = [...new Set(lines.map((l) => l.partyId).filter(Boolean))];
+    const [vendors, customers] = ids.length
+      ? await Promise.all([tx.acctVendor.findMany({ where: { ...org(context), id: { in: ids } }, select: { id: true, name: true, taxId: true } }), tx.acctCustomer.findMany({ where: { ...org(context), id: { in: ids } }, select: { id: true, name: true } })])
+      : [[], []];
+    const party = new Map([...vendors.map((v) => [v.id, v]), ...customers.map((c) => [c.id, c])]);
+    const rows = lines.map((l) => ({
+      date: l.date.toISOString(), entryNumber: l.number, source: l.source, reference: l.reference ?? undefined, description: l.description ?? l.memo,
+      counterparty: party.get(l.partyId)?.name, counterpartyTin: party.get(l.partyId)?.taxId ?? undefined,
+      tax: round2(Number(l.credit)), reclaimed: round2(Number(l.debit)),
+    }));
+    return {
+      reference: r.reference, returnType: r.returnType, authority: r.authority, periodStart: iso(r.periodStart), periodEnd: iso(r.periodEnd),
+      outputTax: Number(r.outputTax), inputTax: Number(r.inputTax), netPayable: Number(r.netPayable), rows,
+      totals: { tax: round2(rows.reduce((n, x) => n + x.tax, 0)), reclaimed: round2(rows.reduce((n, x) => n + x.reclaimed, 0)) },
+    };
+  });
+}
+
 /** Records a filing made on the authority's portal, with the acknowledgement it issued. */
 export async function recordFiling(context, id, { submissionRef, filedVia }) {
   requireAcct(context, 'acct.post');

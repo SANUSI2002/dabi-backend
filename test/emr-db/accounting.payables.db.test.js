@@ -97,6 +97,13 @@ describe('payables', () => {
     expect(bal(t, 2210)).toBe(-75000);
     expect(bal(t, 1010)).toBe(-1425000);
     expect(t.inBalance).toBe(true);
+
+    // the WHT return's schedule for the portal: each deduction, with the vendor and TIN, adding up to the return
+    const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString();
+    const wht = ok(await as(finance).post('/planning/tax-returns', { returnType: 'WHT', periodStart: monthStart, periodEnd: new Date(Date.now() + 60_000).toISOString() }), 201);
+    const schedule = ok(await as(finance).get(`/planning/tax-returns/${wht.id}/schedule`));
+    expect(schedule).toMatchObject({ returnType: 'WHT', authority: 'FIRS', outputTax: 75000, totals: { tax: 75000, reclaimed: 0 } });
+    expect(schedule.rows).toEqual([expect.objectContaining({ source: 'Vendor Payment', counterparty: 'Emzor Pharmaceuticals', counterpartyTin: '0123-4567', tax: 75000 })]);
   });
 
   it('applies vendor credits and voids only unpaid bills', async () => {

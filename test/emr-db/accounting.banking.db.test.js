@@ -56,11 +56,11 @@ describe('banking', () => {
   });
 
   it('imports a statement, books lines by hand and by rule', async () => {
-    ok(await as(finance).post('/banking/statement-lines/import', { accountNumber: 1010, lines: [
+    expect(ok(await as(finance).post('/banking/statement-lines/import', { accountNumber: 1010, lines: [
       { date: today(), description: 'COMMISSION ON TURNOVER & VAT', amount: -3120 },
       { date: today(), description: 'POS SETTLEMENT — INTERSWITCH', amount: 184500, reference: 'ISW/1' },
       { date: today(), description: 'TRF FRM WALK-IN — USSD', amount: 45000 },
-    ] }), 201);
+    ] }), 201)).toEqual({ imported: 3, skipped: 0 });
     ok(await as(finance).post('/banking/rules', { accountNumber: 1010, name: 'Bank charges', descriptionContains: 'commission', direction: 'out', contraAccount: 5600, memo: 'Bank charges (auto)' }), 201);
     expect(ok(await as(finance).post('/banking/accounts/1010/apply-rules'))).toEqual({ matched: 1 });
     const pos = (await banking()).statementLines.find((l) => l.reference === 'ISW/1');
@@ -87,6 +87,18 @@ describe('banking', () => {
     ok(await as(finance).post(`/banking/reconciliations/${recon.id}/toggle`, { movementKey: keys[2] }));
     ok(await as(finance).post(`/banking/reconciliations/${recon.id}/complete`));
     expect((await banking()).reconciliations[0]).toMatchObject({ status: 'Reconciled', openingBalance: 0, reconciledLineIds: expect.arrayContaining(keys) });
+  });
+
+  it('skips statement lines already imported when the next download overlaps', async () => {
+    const statement = [
+      { date: today(), description: 'SMS ALERT CHARGES', amount: -52.5 },
+      { date: today(), description: 'NIP TRANSFER — HMO SETTLEMENT', amount: 950000, reference: 'NIP/9001' },
+    ];
+    expect(ok(await as(finance).post('/banking/statement-lines/import', { accountNumber: 1030, lines: statement }), 201)).toEqual({ imported: 2, skipped: 0 });
+    // the same lines again, plus a second SMS charge the same day — a real one, so it is kept
+    const again = [...statement, { date: today(), description: 'sms alert charges', amount: -52.5 }];
+    expect(ok(await as(finance).post('/banking/statement-lines/import', { accountNumber: 1030, lines: again }), 201)).toEqual({ imported: 1, skipped: 2 });
+    expect((await banking()).statementLines.filter((l) => l.accountNumber === 1030).map((l) => l.amount).sort((a, b) => a - b)).toEqual([-52.5, -52.5, 950000]);
   });
 
   it('refuses live bank feeds rather than simulating one', async () => {

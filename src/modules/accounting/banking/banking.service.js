@@ -144,11 +144,23 @@ export async function importStatementLines(context, { accountNumber, lines }) {
   requireAcct(context, 'acct.post');
   return withTenant(context, async (tx) => {
     await bankAccount(tx, context, accountNumber);
-    const rows = lines.filter((l) => round2(l.amount) !== 0).map((l) => ({ ...org(context), accountNumber, lineDate: new Date(l.date), description: l.description, amount: round2(l.amount), reference: l.reference ?? null, importedByUserId: context.userId }));
-    if (!rows.length) throw new EmrError('VALIDATION_FAILED', { message: 'The statement has no lines with an amount.' });
-    await tx.acctStatementLine.createMany({ data: rows });
+    const all = lines.filter((l) => round2(l.amount) !== 0).map((l) => ({ ...org(context), accountNumber, lineDate: new Date(l.date), description: l.description, amount: round2(l.amount), reference: l.reference ?? null, importedByUserId: context.userId }));
+    if (!all.length) throw new EmrError('VALIDATION_FAILED', { message: 'The statement has no lines with an amount.' });
+    // Statements overlap (this month's download repeats last week's lines): a line already imported for
+    // this account — same day, amount and reference (or description) — is skipped, once per copy held.
+    const day = (d) => d.toISOString().slice(0, 10);
+    const keyOf = (l) => `${day(l.lineDate)}|${round2(Number(l.amount))}|${(l.reference || l.description).trim().toLowerCase()}`;
+    const times = all.map((l) => l.lineDate.getTime());
+    const held = await tx.acctStatementLine.findMany({
+      where: { ...org(context), accountNumber, lineDate: { gte: new Date(Math.min(...times) - 86_400_000), lte: new Date(Math.max(...times) + 86_400_000) } },
+      select: { lineDate: true, amount: true, reference: true, description: true },
+    });
+    const copies = new Map();
+    for (const l of held) copies.set(keyOf(l), (copies.get(keyOf(l)) ?? 0) + 1);
+    const rows = all.filter((l) => { const k = keyOf(l); const n = copies.get(k) ?? 0; if (n) copies.set(k, n - 1); return !n; });
+    if (rows.length) await tx.acctStatementLine.createMany({ data: rows });
     await audited(tx, context, 'bank_statement.imported', 'bank_account', String(accountNumber), [String(rows.length)]);
-    return { imported: rows.length };
+    return { imported: rows.length, skipped: all.length - rows.length };
   });
 }
 async function lineOf(tx, context, id) {
