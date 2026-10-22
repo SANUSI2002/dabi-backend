@@ -19,6 +19,7 @@ import { userNameMap } from '../../emr/core/people.js';
 import { postEntry, requireAcct, reverseInTx, round2 } from '../ledger/ledger.service.js';
 import { docTaxBreakdown, docTotal, dueDateFor, ensureSettings, lineAmount, nextDocNumber, taxRates } from '../settings/settings.service.js';
 import { NOT_REQUIRED, approvalUserIds, buildApproval, decideApproval, presentApproval } from '../control/approvals.service.js';
+import { requireListed } from '../../org-config/orgConfig.service.js';
 
 const org = (context) => ({ organizationId: context.organizationId });
 const notFound = (what) => new EmrError('HR_RECORD_NOT_FOUND', { message: `${what} not found.` });
@@ -118,6 +119,7 @@ export async function overview(context) {
 export async function addVendor(context, input) {
   requireAcct(context, 'acct.post');
   return withTenant(context, async (tx) => {
+    await requireListed(tx, context, 'vendor-categories', input.category, { what: 'The category' });
     const settings = await ensureSettings(tx, context);
     if (input.paymentTermId && !settings.paymentTerms.some((t) => t.id === input.paymentTermId)) throw new EmrError('VALIDATION_FAILED', { message: 'Unknown payment term.' });
     const v = await tx.acctVendor.create({
@@ -137,7 +139,8 @@ export async function addVendor(context, input) {
 export async function updateVendor(context, id, expectedVersion, patch) {
   requireAcct(context, 'acct.post');
   return withTenant(context, async (tx) => {
-    await vendorOf(tx, context, id);
+    const current = await vendorOf(tx, context, id);
+    await requireListed(tx, context, 'vendor-categories', patch.category, { current: current.category, what: 'The category' });
     const data = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     await updateVersioned(tx.acctVendor, { organizationId: context.organizationId, id, expectedVersion, data, notFoundCode: 'HR_RECORD_NOT_FOUND' });
     await audited(tx, context, 'vendor.updated', 'vendor', id, Object.keys(data));

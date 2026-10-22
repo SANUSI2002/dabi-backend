@@ -35,4 +35,11 @@ describe("the hospital's own workforce lists", () => {
     ok(await config(hr).patch(`/master-data/policy-categories/${conduct.id}`, { active: false }, ifMatch(conduct.version)));
     expect((await publish('Conduct')).status).toBe(400);
   });
+
+  it('files letter templates under the Letter Categories list', async () => {
+    const add = (category) => config(hr).post('/letter-templates', { key: `memo-${category.length}`, name: 'Memo', category, body: 'Dear {{employee_name}},', signatories: ['HR'] });
+    expect((await add('Welfare')).status).toBe(400);
+    ok(await config(hr).post('/master-data/letter-categories', { label: 'Welfare' }), 201);
+    ok(await add('Welfare'), 201);
+  });
 });

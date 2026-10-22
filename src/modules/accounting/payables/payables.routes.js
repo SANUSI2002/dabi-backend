@@ -29,9 +29,8 @@ const purchaseLine = z.object({
 }).strict();
 const lines = z.array(purchaseLine).min(1).max(200);
 const currency = z.string().regex(/^[A-Z]{3}$/);
-const CATEGORIES = ['Pharmaceuticals', 'Medical Supplies', 'Equipment', 'Utilities', 'Services', 'Facilities', 'Other'];
 const vendor = {
-  name: text(160), email: z.email().max(160).optional(), phone: free(30).optional(), address: free(300).optional(), taxId: free(40).optional(), category: z.enum(CATEGORIES),
+  name: text(160), email: z.email().max(160).optional(), phone: free(30).optional(), address: free(300).optional(), taxId: free(40).optional(), category: text(120) /* a Vendor Categories item, checked by the service */,
   currency: currency.optional(), paymentTermsDays: z.number().int().min(0).max(365).optional(), paymentTermId: z.string().max(60).optional(),
 };
 const decision = body({ decision: z.enum(['Approved', 'Rejected']), comment: free(500).optional() }, withId);

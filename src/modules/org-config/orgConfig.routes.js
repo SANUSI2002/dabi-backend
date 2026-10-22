@@ -29,7 +29,7 @@ const category = z.string().regex(/^[a-z][a-z0-9-]{1,39}$/);
 const body = (shape, params = org) => z.object({ params: z.object(params).strict(), query: noQuery, body: z.object(shape).strict() });
 const meta = z.record(z.string().max(40), z.union([z.string().max(200), z.number(), z.boolean()])).refine((m) => Object.keys(m).length <= 20, 'At most 20 fields');
 const term = z.object({ singular: z.string().trim().max(80).optional(), plural: z.string().trim().max(80).optional() }).strict();
-const letterCategory = z.enum(['Onboarding', 'Discipline', 'Movement', 'Finance', 'General']);
+const letterCategory = text(120); // a Letter Categories item (checked by the service)
 
 const v = {
   overview: z.object({ params: z.object(org).strict(), query: noQuery }),

@@ -6452,14 +6452,9 @@ paths:
                   pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
                 category:
                   type: string
-                  enum:
-                    - Pharmaceuticals
-                    - Medical Supplies
-                    - Equipment
-                    - Utilities
-                    - Services
-                    - Facilities
-                    - Other
+                  minLength: 1
+                  maxLength: 120
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 currency:
                   type: string
                   pattern: ^[A-Z]{3}$
@@ -6566,14 +6561,9 @@ paths:
                   pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
                 category:
                   type: string
-                  enum:
-                    - Pharmaceuticals
-                    - Medical Supplies
-                    - Equipment
-                    - Utilities
-                    - Services
-                    - Facilities
-                    - Other
+                  minLength: 1
+                  maxLength: 120
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 currency:
                   type: string
                   pattern: ^[A-Z]{3}$
@@ -48597,12 +48587,9 @@ paths:
                   pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 category:
                   type: string
-                  enum:
-                    - Onboarding
-                    - Discipline
-                    - Movement
-                    - Finance
-                    - General
+                  minLength: 1
+                  maxLength: 120
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 body:
                   type: string
                   minLength: 1
@@ -48693,12 +48680,9 @@ paths:
                   pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 category:
                   type: string
-                  enum:
-                    - Onboarding
-                    - Discipline
-                    - Movement
-                    - Finance
-                    - General
+                  minLength: 1
+                  maxLength: 120
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
                 body:
                   type: string
                   minLength: 1

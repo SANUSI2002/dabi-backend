@@ -155,4 +155,11 @@ describe('payables', () => {
     expect(bal(await tb(), 5230)).toBe(before + 1200000);
     expect((await tb()).inBalance).toBe(true);
   });
+
+  it("files vendors under the hospital's own Vendor Categories", async () => {
+    const add = () => as(finance).post('/payables/vendors', { name: 'Lagos Oxygen Ltd', category: 'Medical Gases', openingBalance: 0 });
+    expect((await add()).body.error.message).toMatch(/Vendor Categories/);
+    expect((await request(app).post(`/api/v1/org-config/organizations/${finance.organizationId}/master-data/vendor-categories`).set('Authorization', finance.auth).send({ label: 'Medical Gases' })).status).toBe(201);
+    expect(ok(await add(), 201)).toBeTruthy();
+  });
 });

@@ -16,6 +16,7 @@ export const MASTER_CATEGORIES = [
   { key: "candidate-rejection-reasons", label: "Candidate Rejection Reasons", product: "workforce", description: "Why a candidate is not taken forward" },
   { key: "talent-skill-zones", label: "Talent Pool Skill Zones", product: "workforce", description: "How the talent pool is grouped" },
   { key: "exit-reasons", label: "Exit Reasons", product: "workforce", description: "Why an employee leaves" },
+  { key: "letter-categories", label: "Letter Categories", product: "platform", description: "How letter templates are grouped", editors: ["hr.manage"] },
   { key: "id-types", label: "Identification Types", product: "platform", description: "NIN, passport, driver's licence, voter card" },
   { key: "ward-types", label: "Ward Types", product: "emr", description: "General, maternity, paediatric, ICU, isolation" },
   { key: "bed-types", label: "Bed Types", product: "emr", description: "Standard, VIP, cot, incubator, recovery" },
@@ -36,9 +37,26 @@ export const MASTER_CATEGORIES = [
   { key: "receiving-accounts", label: "Receiving Accounts", product: "emr", description: "Where a patient payment was received, recorded with the payment", editors: ["billing.payment.record"] },
   { key: "inpatient-services", label: "Inpatient Services", product: "emr", description: "The service (specialty) a patient is admitted under; shown on the ward census and handover" },
   { key: "expense-categories", label: "Expense Categories", product: "accounting", description: "Categories for staff expense claims" },
+  { key: "vendor-categories", label: "Vendor Categories", product: "accounting", description: "How suppliers are grouped; Pharmaceuticals vendors are the ones the pharmacy receives stock from", editors: ["acct.post", "acct.control"] },
 ];
 
 export const MASTER_SEED = {
+  "vendor-categories": [
+    { label: "Pharmaceuticals", active: true, system: true },
+    { label: "Medical Supplies", active: true },
+    { label: "Equipment", active: true },
+    { label: "Utilities", active: true },
+    { label: "Services", active: true },
+    { label: "Facilities", active: true },
+    { label: "Other", active: true, system: true },
+  ],
+  "letter-categories": [
+    { label: "Onboarding", active: true },
+    { label: "Discipline", active: true },
+    { label: "Movement", active: true },
+    { label: "Finance", active: true },
+    { label: "General", active: true, system: true },
+  ],
   "policy-categories": [
     { label: "Conduct", active: true },
     { label: "Safety & Clinical", active: true },

@@ -135,6 +135,7 @@ export async function addTemplate(context, input) {
   requireLetters(context);
   return withTenant(context, async (tx) => {
     await ensureSeeded(tx, context);
+    await requireListed(tx, context, 'letter-categories', input.category, { what: 'The category' });
     try {
       await tx.platformLetterTemplate.create({ data: { ...org(context), key: input.key, name: input.name, category: input.category, body: input.body, signatories: input.signatories, updatedByUserId: context.userId } });
     } catch (error) { throw uniqueViolation(error, { templates_key: 'MASTER_ITEM_IN_USE', key: 'MASTER_ITEM_IN_USE' }) ?? error; }
@@ -147,6 +148,7 @@ export async function saveTemplate(context, key, expectedVersion, patch) {
   return withTenant(context, async (tx) => {
     const t = await tx.platformLetterTemplate.findFirst({ where: { ...org(context), key } });
     if (!t) throw new EmrError('HR_RECORD_NOT_FOUND');
+    await requireListed(tx, context, 'letter-categories', patch.category, { current: t.category, what: 'The category' });
     const data = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
     await updateVersioned(tx.platformLetterTemplate, { organizationId: context.organizationId, id: t.id, expectedVersion, data: { ...data, updatedByUserId: context.userId, updatedAt: new Date() }, notFoundCode: 'HR_RECORD_NOT_FOUND' });
     await audited(tx, context, 'letter_template.updated', 'letter_template', t.id, Object.keys(data));
