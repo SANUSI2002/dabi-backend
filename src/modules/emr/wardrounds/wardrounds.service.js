@@ -133,9 +133,9 @@ export async function updateDraft(context, id, expectedVersion, patch) {
     if (r.version !== expectedVersion) throw new EmrError('VERSION_CONFLICT');
     const data = Object.fromEntries(DRAFT_FIELDS.filter((k) => patch[k] !== undefined).map((k) => [k, patch[k]]));
     if (patch.clinicalProgress === '') data.clinicalProgress = null;
-    await updateVersioned(tx.emrWardRound, { organizationId: context.organizationId, id, expectedVersion, data: { ...data, updatedByUserId: context.userId, updatedAt: new Date() }, notFoundCode: 'NOT_FOUND' });
+    const saved = await updateVersioned(tx.emrWardRound, { organizationId: context.organizationId, id, expectedVersion, data: { ...data, updatedByUserId: context.userId, updatedAt: new Date() }, select: { version: true, updatedAt: true }, notFoundCode: 'NOT_FOUND' });
     await audited(tx, context, 'ward_round.updated', id, Object.keys(data));
-    return { id };
+    return { id, version: saved.version, updatedAt: saved.updatedAt }; // an autosave needs nothing else back
   });
 }
 export async function recordExamination(context, id, { systems }) {

@@ -55,11 +55,12 @@ describe('ward rounds', () => {
 
   it('refuses to sign without a progress note and a problem or plan', async () => {
     expect((await as(doctor).post(`/ward-rounds/${round.id}/sign`)).body.error.message).toMatch(/progress note/);
-    ok(await as(doctor).patch(`/ward-rounds/${round.id}`, {
+    const saved = ok(await as(doctor).patch(`/ward-rounds/${round.id}`, {
       clinicalProgress: 'Improving', progressNote: 'Afebrile overnight, tolerating orals.',
       problems: [{ id: 'prob-1', problem: 'Community-acquired pneumonia', status: 'Improving', update: 'Less crepitations', plan: 'Complete antibiotics' }],
       tasks: [{ id: 't-1', type: 'Repeat vitals', description: '4-hourly observations', priority: 'Routine', status: 'Pending' }],
     }, ifMatch(1)));
+    expect(saved).toMatchObject({ id: round.id, version: 2 }); // an autosave gets the new version back, nothing more to reload
     expect((await as(doctor).patch(`/ward-rounds/${round.id}`, { progressNote: 'stale' }, ifMatch(1))).status).toBe(412);
     ok(await as(doctor).post(`/ward-rounds/${round.id}/examination`, { systems: [{ system: 'respiratory', status: 'Abnormal', notes: 'Right basal crepitations' }] }));
   });
