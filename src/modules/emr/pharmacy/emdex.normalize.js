@@ -4,10 +4,10 @@
 import { emdexError } from './emdex.transport.js';
 
 /** { kind, referenceId, genericName, brandName, form, strength, manufacturer, therapeuticClass? } for each search hit (the class, when EMDEX gives one, lets a prescriber's category filter apply). */
-export function normalizeResults(kind, data) {
+export function normalizeResults() {
   throw emdexError('EMDEX_RESPONSE_UNRECOGNISED');
 }
 /** One product's details, as above. */
-export function normalizeProduct(kind, data, id) {
+export function normalizeProduct() {
   throw emdexError('EMDEX_RESPONSE_UNRECOGNISED');
 }

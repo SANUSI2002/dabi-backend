@@ -62,11 +62,14 @@ export const confirmEmailVerificationToken = async (userId, tokenHash) => {
       const now = new Date();
       const token = await tx.emailVerificationToken.findUnique({ where: { tokenHash } });
       if (!token || token.userId !== userId || token.usedAt || token.revokedAt || token.expiresAt <= now) return false;
-      const user = await tx.user.findUnique({ where: { id: userId }, select: { accountStatus: true, emailVerifiedAt: true } });
-      if (user?.accountStatus !== 'PENDING' || user.emailVerifiedAt) return false;
+      const user = await tx.user.findUnique({ where: { id: userId }, select: { accountStatus: true, emailVerifiedAt: true, roles: { select: { role: true } } } });
+      // Older patient accounts can already be active without having proved email ownership.
+      // They must still consume a genuine email token; never reactivate a restricted account.
+      const eligible = user?.accountStatus === 'PENDING' || (user?.accountStatus === 'ACTIVE' && user.roles.some(({ role }) => role === 'PATIENT'));
+      if (!eligible || user.emailVerifiedAt) return false;
       const claimed = await tx.emailVerificationToken.updateMany({ where: { id: token.id, usedAt: null, revokedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
       if (claimed.count !== 1) return false;
-      const activated = await tx.user.updateMany({ where: { id: userId, accountStatus: 'PENDING', emailVerifiedAt: null }, data: { accountStatus: 'ACTIVE', emailVerifiedAt: now } });
+      const activated = await tx.user.updateMany({ where: { id: userId, accountStatus: user.accountStatus, emailVerifiedAt: null }, data: { accountStatus: 'ACTIVE', emailVerifiedAt: now } });
       if (activated.count !== 1) { const conflict = new Error('Email verification conflicted with an account change'); conflict.code = 'EMAIL_VERIFICATION_CONFLICT'; throw conflict; }
       await tx.emailVerificationToken.updateMany({ where: { userId, id: { not: token.id }, usedAt: null, revokedAt: null }, data: { revokedAt: now } });
       return true;

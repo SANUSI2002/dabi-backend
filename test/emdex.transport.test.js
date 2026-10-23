@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { emdexRequest, emdexCapabilities } from '../src/modules/emr/pharmacy/emdex.transport.js';
+import { emdexRequest, emdexCapabilities } from '../src/modules/medicine-reference/emdex.transport.js';
 const { Response, FormData, AbortController } = globalThis;
 const settings = { base: 'https://sandbox.emdexapi.com/api/v1', token: 'synthetic-token' };
 describe('EMDEX documented transport preparation', () => {

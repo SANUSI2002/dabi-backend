@@ -12,6 +12,7 @@
 //   - alarm lifecycle: Raised → Acknowledged / Investigating (equipment.report) → Escalated → Resolved,
 //     Closed or Suppressed (equipment.manage); every step goes on the timeline with who did it.
 import crypto from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import prisma from '../../../config/db.js';
 import { withTenant } from '../core/db.js';
 import { recordAudit } from '../core/audit.js';

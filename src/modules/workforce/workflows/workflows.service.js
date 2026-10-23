@@ -184,7 +184,7 @@ export async function decide(context, instanceId, { nodeId, decision, comment })
     if (!people.me) throw new EmrError('NO_EMPLOYEE_RECORD');
     const graph = inst.graph;
     const node = engine.nodeById(graph, nodeId);
-    const active = structuredClone(inst.active);
+    const active = globalThis.structuredClone(inst.active);
     const step = active.find((a) => a.nodeId === nodeId);
     if (!node || !step) throw new EmrError('INVALID_STATE', { message: 'That step is not waiting for a decision.' });
     const log = trail(context, people.me);

@@ -82,7 +82,7 @@ const handle = (work) => async (req, res, next) => {
 
 export const socialProviders = (req, res) => res.set('Cache-Control', 'no-store').json({ status: 'success', data: publicProviders() });
 export const socialNonce = (req, res) => res.set('Cache-Control', 'no-store').json({ status: 'success', data: { nonce: issueNonce() } });
-export const googleSignIn = handle(async (req, res) => finish(req, res, await googleIdentity(req.body.code), req.body.consentGiven === true, req.body.intent));
+export const googleSignIn = handle(async (req, res) => finish(req, res, await googleIdentity(req.body.code, req.get('origin')), req.body.consentGiven === true, req.body.intent));
 export const appleSignIn = handle(async (req, res) => finish(req, res, await appleIdentity(req.body.idToken, req.body.nonce, req.body), req.body.consentGiven === true, req.body.intent));
 export const completeSocialSignup = handle(async (req, res) => {
   const identity = identityFromSignupToken(req.body.signupToken);

@@ -27,11 +27,11 @@ const hashToken = (token) => crypto.createHash('sha256').update(token).digest('h
 const verificationMessage = 'If an unverified patient account exists for that email, a verification link has been requested.';
 const patientPortalUrl = () => (process.env.PATIENT_PORTAL_URL || 'http://127.0.0.1:5174').replace(/\/$/, '');
 
-async function sendPatientVerification(user) {
+export async function sendPatientVerification(user, baseUrl = patientPortalUrl()) {
   const rawToken = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const token = await AuthModel.createEmailVerificationToken(user.id, hashToken(rawToken), expiresAt);
-  const result = await sendEmailVerificationEmail({ email: user.email, verificationUrl: `${patientPortalUrl()}/verify-email/${user.id}#${rawToken}` });
+  const result = await sendEmailVerificationEmail({ email: user.email, verificationUrl: `${baseUrl}/verify-email/${user.id}#${rawToken}` });
   if (!result.delivered) await AuthModel.revokeEmailVerificationToken(token.id);
   else await AuthModel.revokeOtherEmailVerificationTokens(user.id, token.id);
   return result.delivered;
@@ -176,7 +176,7 @@ export const requestEmailVerification = async (req, res, next) => {
   try {
     if (!verificationEmailConfigured() || (process.env.NODE_ENV === 'production' && !/^https:\/\/[^/]+$/.test(process.env.PATIENT_PORTAL_URL || ''))) return res.status(503).json({ status: 'error', message: 'Email verification is temporarily unavailable.' });
     const user = await AuthModel.findUserByEmail(req.body.email);
-    if (user?.accountStatus === 'PENDING' && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT') && verificationEmailAllowedFor(user.email)) {
+    if (['PENDING', 'ACTIVE'].includes(user?.accountStatus) && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT') && verificationEmailAllowedFor(user.email)) {
       const latest = await AuthModel.latestEmailVerificationToken(user.id);
       if (!latest || latest.createdAt < new Date(Date.now() - 60_000)) await sendPatientVerification(user);
     }

@@ -148,9 +148,13 @@ const STATUS = {
   RATE_LIMITED: 429,
   EMR_DISABLED: 503,
   EMR_PATIENT_REGISTRY_DISABLED: 503,
+  JEV_UNAVAILABLE: 503,
+  JEV_ASSESSMENT_STALE: 409,
 };
 
 const MESSAGES = {
+  JEV_UNAVAILABLE: 'Structured assessment is unavailable for this workflow. Manual care and deterministic safety checks remain available.',
+  JEV_ASSESSMENT_STALE: 'This assessment no longer matches the current record or policy. Request a fresh assessment.',
   VALIDATION_FAILED: 'The request is not valid.',
   IDEMPOTENCY_KEY_REQUIRED: 'This action needs an Idempotency-Key header so a retry can never repeat it.',
   WITNESS_REQUIRED: 'Controlled medicines need a second pharmacy staff member as witness.',

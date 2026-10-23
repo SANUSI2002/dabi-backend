@@ -1,6 +1,7 @@
 // The HR audit slice: Workforce changes with who made them, no clinical events, and payroll entries
 // only for payroll staff.
 import request from 'supertest';
+import crypto from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../../src/app.js';
 import { addMember, createTenant, newPatient } from './fixtures.js';

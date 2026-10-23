@@ -45,7 +45,7 @@ export async function ensureBooks(tx, context) {
   });
   await tx.acctBranch.create({ data: { ...org(context), code: 'HO', name: 'Head Office', isHeadOffice: true } });
   await ensureYear(tx, context, new Date().getUTCFullYear());
-  await tx.acctApprovalRule.createMany({ data: STARTER_APPROVAL_RULES.map(({ id: _id, ...r }) => ({ ...org(context), ...r })) });
+  await tx.acctApprovalRule.createMany({ data: STARTER_APPROVAL_RULES.map(({ id, ...r }) => { void id; return { ...org(context), ...r }; }) });
 }
 async function headOffice(tx, context) {
   return tx.acctBranch.findFirst({ where: { ...org(context), isHeadOffice: true } });

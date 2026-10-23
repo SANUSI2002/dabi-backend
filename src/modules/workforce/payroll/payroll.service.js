@@ -17,7 +17,6 @@ import { EmrError, uniqueViolation } from '../../emr/core/errors.js';
 
 const org = (context) => ({ organizationId: context.organizationId });
 const money = (n) => Math.round(Number(n) * 100) / 100;
-const num = (v) => (v === null || v === undefined ? undefined : Number(v));
 const isoDay = (value) => (value ? value.toISOString().slice(0, 10) : undefined);
 const toDate = (iso) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00.000Z`) : null);
 const notFound = () => new EmrError('HR_RECORD_NOT_FOUND');

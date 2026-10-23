@@ -1,0 +1,9 @@
+# Publish only the existing keyless AI runtime. No deployment or IAM mutation occurs here.
+# Supply _IMAGE with the existing Artifact Registry repository and a release tag.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '--target', 'ai-runtime', '--tag', '${_IMAGE}', '.']
+images: ['${_IMAGE}']
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 600s

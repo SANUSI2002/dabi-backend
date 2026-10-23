@@ -75,8 +75,322 @@ model User {
   medicationSchedules MedicationSchedule[]
   medicationDoses MedicationDose[]
   pushSubscriptions PushSubscription[]
+  aiSessions AiSession[]
+  aiMemories AiPersonalMemory[]
+  aiSources AiDocumentSource[]
+  aiActionProposals AiActionProposal[]
+  aiAllowanceAccount AiAllowanceAccount?
+  aiAllowanceWindows AiAllowanceWindow[]
+  aiAllowanceReservations AiAllowanceReservation[]
+  aiAllowanceLedger AiAllowanceLedger[]
+  aiEnrollment AiEnrollment?
 
   @@map("users")
+}
+
+model AiEnrollment {
+  userId String @id @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  kind String @db.VarChar(24)
+  status String @default("PENDING") @db.VarChar(24)
+  details Json
+  featureOverrides Json @default("{}") @map("feature_overrides")
+  version Int @default(1)
+  expiresAt DateTime? @map("expires_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  decisionReason String? @map("decision_reason")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@index([status, createdAt])
+  @@map("ai_enrollments")
+}
+
+model AiAccessPolicy {
+  id String @id @default("global")
+  version Int @default(1)
+  settings Json
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("ai_access_policies")
+}
+
+model AiKnowledgeDocument {
+  id String @id @default(uuid())
+  familyId String @map("family_id")
+  revision Int @default(1)
+  version Int @default(1)
+  metadata Json
+  status String @default("UPLOADED") @db.VarChar(32)
+  scanStatus String @default("PENDING") @map("scan_status") @db.VarChar(24)
+  scannerVersion String? @map("scanner_version")
+  storageKey String @map("storage_key")
+  sha256 String @db.VarChar(64)
+  byteSize Int @map("byte_size")
+  pageCount Int? @map("page_count")
+  errorCode String? @map("error_code") @db.VarChar(80)
+  uploadedByUserId String @map("uploaded_by_user_id")
+  reviewedByUserId String? @map("reviewed_by_user_id")
+  reviewedAt DateTime? @map("reviewed_at")
+  publishedAt DateTime? @map("published_at")
+  leaseToken String? @map("lease_token")
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  attempts Int @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  passages AiKnowledgePassage[]
+  @@unique([familyId, revision])
+  @@index([status, createdAt])
+  @@map("ai_knowledge_documents")
+}
+
+model AiKnowledgePassage {
+  id String @id @default(uuid())
+  documentId String @map("document_id")
+  document AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  pageNumber Int @map("page_number")
+  pageLabel String? @map("page_label") @db.VarChar(40)
+  text String
+  quality String @default("REVIEW_REQUIRED") @db.VarChar(32)
+  @@unique([documentId, pageNumber])
+  @@map("ai_knowledge_passages")
+}
+
+// Sabi AI owns conversations, not a second patient or clinical-record database.
+model AiSession {
+  id String @id @default(uuid())
+  ownerUserId String @map("owner_user_id")
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  title String @db.VarChar(120)
+  mode String @default("GENERAL") @db.VarChar(32)
+  consentVersion String @map("consent_version") @db.VarChar(64)
+  consentedAt DateTime @default(now()) @map("consented_at")
+  archivedAt DateTime? @map("archived_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  runs AiRun[]
+  messages AiMessage[]
+  memories AiPersonalMemory[]
+  actionProposals AiActionProposal[]
+  @@unique([id, ownerUserId])
+  @@index([ownerUserId, updatedAt])
+  @@map("ai_sessions")
+}
+
+model AiRun {
+  id String @id @default(uuid())
+  sessionId String @map("session_id")
+  session AiSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  clientMessageId String @map("client_message_id") @db.VarChar(64)
+  requestHash String @map("request_hash") @db.VarChar(64)
+  authSessionId String? @map("auth_session_id")
+  status String @default("QUEUED") @db.VarChar(24)
+  model String @db.VarChar(120)
+  promptVersion String @map("prompt_version") @db.VarChar(64)
+  errorCode String? @map("error_code") @db.VarChar(64)
+  usage Json?
+  sourceContext Json? @map("source_context")
+  feedback String? @db.VarChar(24)
+  feedbackAt DateTime? @map("feedback_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  startedAt DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  messages AiMessage[]
+  @@unique([sessionId, clientMessageId])
+  @@unique([id, sessionId])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("ai_runs")
+}
+
+model AiMessage {
+  id String @id @default(uuid())
+  sessionId String @map("session_id")
+  session AiSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  runId String @map("run_id")
+  run AiRun @relation(fields: [runId, sessionId], references: [id, sessionId], onDelete: Restrict)
+  role String @db.VarChar(16)
+  content String
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([runId, role])
+  @@index([sessionId, createdAt])
+  @@map("ai_messages")
+}
+
+// Explicit user-saved preferences/assertions, never verified clinical truth.
+model AiPersonalMemory {
+  id String @id @default(uuid())
+  ownerUserId String @map("owner_user_id")
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  kind String @db.VarChar(24)
+  content String @db.VarChar(1000)
+  sourceSessionId String? @map("source_session_id")
+  sourceSession AiSession? @relation(fields: [sourceSessionId, ownerUserId], references: [id, ownerUserId], onDelete: Restrict)
+  revision Int @default(1)
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@index([ownerUserId, deletedAt])
+  @@map("ai_personal_memories")
+}
+
+model AiRuntimePolicy {
+  id String @id
+  generationPaused Boolean @default(false) @map("generation_paused")
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("ai_runtime_policy")
+}
+
+model AiAllowancePolicy {
+  id String @id
+  version Int @default(1)
+  settings Json
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("ai_allowance_policies")
+}
+
+model AiAllowanceAccount {
+  userId String @id @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  version Int @default(1)
+  dailyRequestOverride Int? @map("daily_request_override")
+  tokenAllowanceOverride Int? @map("token_allowance_override")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("ai_allowance_accounts")
+}
+
+model AiAllowanceWindow {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  kind String @db.VarChar(16)
+  startsAt DateTime @map("starts_at")
+  endsAt DateTime @map("ends_at")
+  usedUnits Int @default(0) @map("used_units")
+  reservedUnits Int @default(0) @map("reserved_units")
+  bonusUnits Int @default(0) @map("bonus_units")
+  requestReservations AiAllowanceReservation[] @relation("AllowanceRequestWindow")
+  tokenReservations AiAllowanceReservation[] @relation("AllowanceTokenWindow")
+  ledger AiAllowanceLedger[]
+  @@unique([id, userId])
+  @@unique([userId, kind, startsAt])
+  @@index([userId, kind, endsAt])
+  @@map("ai_allowance_windows")
+}
+
+model AiAllowanceReservation {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  resourceKind String @map("resource_kind") @db.VarChar(16)
+  resourceId String @map("resource_id")
+  requestWindowId String @map("request_window_id")
+  requestWindow AiAllowanceWindow @relation("AllowanceRequestWindow", fields: [requestWindowId, userId], references: [id, userId], onDelete: Restrict)
+  tokenWindowId String @map("token_window_id")
+  tokenWindow AiAllowanceWindow @relation("AllowanceTokenWindow", fields: [tokenWindowId, userId], references: [id, userId], onDelete: Restrict)
+  reservedTokens Int @map("reserved_tokens")
+  maxOutputTokens Int @map("max_output_tokens")
+  state String @default("RESERVED") @db.VarChar(16)
+  inputTokens Int? @map("input_tokens")
+  outputTokens Int? @map("output_tokens")
+  totalTokens Int? @map("total_tokens")
+  createdAt DateTime @default(now()) @map("created_at")
+  dispatchedAt DateTime? @map("dispatched_at")
+  settledAt DateTime? @map("settled_at")
+  @@unique([resourceKind, resourceId])
+  @@index([userId, state, createdAt])
+  @@map("ai_allowance_reservations")
+}
+
+model AiAllowanceLedger {
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  windowId String @map("window_id")
+  window AiAllowanceWindow @relation(fields: [windowId, userId], references: [id, userId], onDelete: Restrict)
+  eventKey String @unique @map("event_key") @db.VarChar(180)
+  type String @db.VarChar(24)
+  usedDelta Int @default(0) @map("used_delta")
+  reservedDelta Int @default(0) @map("reserved_delta")
+  bonusDelta Int @default(0) @map("bonus_delta")
+  metadata Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([userId, createdAt])
+  @@map("ai_allowance_ledger")
+}
+
+model AiActionProposal {
+  id String @id @default(uuid())
+  ownerUserId String @map("owner_user_id")
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  sessionId String @map("session_id")
+  session AiSession @relation(fields: [sessionId, ownerUserId], references: [id, ownerUserId], onDelete: Restrict)
+  scheduleId String @map("schedule_id")
+  schedule MedicationSchedule @relation(fields: [scheduleId, ownerUserId], references: [id, userId], onDelete: Restrict)
+  scheduleVersion Int @map("schedule_version")
+  enableReminders Boolean @map("enable_reminders")
+  clientRequestId String @map("client_request_id") @db.VarChar(64)
+  status String @default("PENDING") @db.VarChar(24)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  confirmedAt DateTime? @map("confirmed_at")
+  receipt AiActionReceipt?
+  @@unique([ownerUserId, clientRequestId])
+  @@index([sessionId, createdAt])
+  @@map("ai_action_proposals")
+}
+
+model AiActionReceipt {
+  id String @id @default(uuid())
+  proposalId String @unique @map("proposal_id")
+  proposal AiActionProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  result Json
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("ai_action_receipts")
+}
+
+// A personal, revocable derivative of an existing screened document, not clinical truth.
+model AiDocumentSource {
+  id String @id @default(uuid())
+  ownerUserId String @map("owner_user_id")
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  documentId String @map("document_id")
+  document MedicalDocument @relation(fields: [documentId, ownerUserId], references: [id, ownerPatientId], onDelete: Restrict)
+  clientRequestId String @map("client_request_id") @db.VarChar(64)
+  sourceSha256 String @map("source_sha256") @db.Char(64)
+  authSessionId String? @map("auth_session_id")
+  state String @default("QUEUED") @db.VarChar(24)
+  revision Int @default(1)
+  model String @db.VarChar(120)
+  promptVersion String @map("prompt_version") @db.VarChar(64)
+  consentVersion String @map("consent_version") @db.VarChar(64)
+  errorCode String? @map("error_code") @db.VarChar(64)
+  patientLabels Json @default("[]") @map("patient_labels")
+  usage Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  startedAt DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  reviewedAt DateTime? @map("reviewed_at")
+  deletedAt DateTime? @map("deleted_at")
+  pages AiDocumentPage[]
+  @@unique([ownerUserId, clientRequestId])
+  @@index([state, createdAt])
+  @@index([ownerUserId, deletedAt])
+  @@map("ai_document_sources")
+}
+
+model AiDocumentPage {
+  id String @id @default(uuid())
+  sourceId String @map("source_id")
+  source AiDocumentSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  pageNumber Int @map("page_number")
+  originalText String @map("original_text")
+  text String
+  uncertain Boolean @default(true)
+  fields Json
+  @@unique([sourceId, pageNumber])
+  @@map("ai_document_pages")
 }
 
 model UserProfile {
@@ -1356,7 +1670,9 @@ model MedicationSchedule {
   updatedAt          DateTime         @default(now()) @updatedAt @map("updated_at")
   user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   doses              MedicationDose[]
+  aiActionProposals  AiActionProposal[]
 
+  @@unique([id, userId])
   @@index([userId, status])
   @@index([status, materializedUntil])
   @@map("medication_schedules")
@@ -2313,7 +2629,9 @@ model MedicalDocument {
   scanErrorCode        String?               @map("scan_error_code") @db.VarChar(80)
   storageCleanupPending Boolean              @default(false) @map("storage_cleanup_pending")
   cleanupObjectKeys     String[]              @default([]) @map("cleanup_object_keys")
+  aiSources AiDocumentSource[]
 
+  @@unique([id, ownerPatientId])
   @@index([ownerPatientId, status, createdAt])
   @@index([medicalRecordId])
   @@index([status, scanRequestedAt])
@@ -2786,10 +3104,87 @@ model EmrClinicalNote {
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  jevAssessments EmrJevAssessment[]
 
   @@unique([organizationId, id])
+  @@unique([organizationId, id, encounterId])
   @@index([organizationId, encounterId, createdAt])
   @@map("emr_clinical_notes")
+}
+
+model EmrJevPolicy {
+  organizationId String @map("organization_id")
+  workflow String @db.VarChar(80)
+  version Int @default(1)
+  mode String @default("DISABLED") @db.VarChar(24)
+  questionVersion String @map("question_version") @db.VarChar(80)
+  model String @db.VarChar(120)
+  clinicalOwnerUserId String? @map("clinical_owner_user_id")
+  approvalReference String? @map("approval_reference") @db.VarChar(200)
+  processingApprovedAt DateTime? @map("processing_approved_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@id([organizationId, workflow])
+  @@map("emr_jev_policies")
+}
+
+model EmrJevAssessment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  noteId String @map("note_id")
+  encounterId String @map("encounter_id")
+  requestedByUserId String @map("requested_by_user_id")
+  clientRequestId String @map("client_request_id") @db.VarChar(64)
+  workflow String @db.VarChar(80)
+  questionVersion String @map("question_version") @db.VarChar(80)
+  sourceFingerprint String @map("source_fingerprint") @db.VarChar(64)
+  noteVersion Int @map("note_version")
+  policyVersion Int @map("policy_version")
+  mode String @db.VarChar(24)
+  requestedModel String @map("requested_model") @db.VarChar(120)
+  resolvedModel String? @map("resolved_model") @db.VarChar(120)
+  processingStatus String @default("QUEUED") @map("processing_status") @db.VarChar(24)
+  answers Json?
+  usage Json?
+  errorCode String? @map("error_code") @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at")
+  finishedAt DateTime? @map("finished_at")
+  sourceNote EmrClinicalNote @relation(fields:[organizationId,noteId,encounterId], references:[organizationId,id,encounterId], onDelete:Restrict)
+  jobs JevAssessmentJob[]
+  reviews EmrJevReview[]
+  @@unique([organizationId,id])
+  @@unique([organizationId,clientRequestId])
+  @@unique([organizationId,noteId,sourceFingerprint,policyVersion,questionVersion])
+  @@index([organizationId,noteId,createdAt])
+  @@map("emr_jev_assessments")
+}
+
+model JevAssessmentJob {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  assessmentId String @unique @map("assessment_id")
+  requestedByUserId String @map("requested_by_user_id")
+  status String @default("QUEUED") @db.VarChar(24)
+  startedAt DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  assessment EmrJevAssessment @relation(fields:[organizationId,assessmentId], references:[organizationId,id], onDelete:Restrict)
+  @@index([status,createdAt])
+  @@map("jev_assessment_jobs")
+}
+
+model EmrJevReview {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  assessmentId String @map("assessment_id")
+  actorUserId String @map("actor_user_id")
+  clientRequestId String @map("client_request_id") @db.VarChar(64)
+  disposition String @db.VarChar(24)
+  reason String @db.VarChar(2000)
+  createdAt DateTime @default(now()) @map("created_at")
+  assessment EmrJevAssessment @relation(fields:[organizationId,assessmentId], references:[organizationId,id], onDelete:Restrict)
+  @@index([organizationId,assessmentId,createdAt])
+  @@unique([organizationId,clientRequestId])
+  @@map("emr_jev_reviews")
 }
 
 model EmrNoteAmendment {
