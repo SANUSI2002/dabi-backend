@@ -13,8 +13,10 @@ const as = (who) => {
   return {
     get: (path) => request(app).get(url(path)).set('Authorization', who.auth),
     post: (path, body = {}) => request(app).post(url(path)).set('Authorization', who.auth).send(body),
+    patch: (path, body = {}, headers = {}) => request(app).patch(url(path)).set('Authorization', who.auth).set(headers).send(body),
   };
 };
+const ifMatch = (version) => ({ 'If-Match': `W/"${version}"` });
 const ok = (res, status = 200) => { expect(res.status, JSON.stringify(res.body)).toBe(status); return res.body.data; };
 const ym = (d) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 const monthsBack = (k) => { const d = new Date(); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - k, 15, 12)); };
@@ -129,5 +131,21 @@ describe('budgets and tax returns', () => {
     const t = await tb();
     expect(bal(t, 2200)).toBe(0);
     expect(t.inBalance).toBe(true);
+  });
+
+  it('keeps forecast scenarios for the organization: income and expense lines, set months, removed ones gone', async () => {
+    const lines = [{ accountNumber: 4000, baseAmount: 2_500_000, monthlyGrowthPct: 2 }, { accountNumber: 5230, baseAmount: 400_000, monthlyGrowthPct: 0, overrides: [null, 650_000] }];
+    expect((await as(finance).post('/planning/forecasts', { name: 'Bad', basis: 'Manual base', startPeriod: '2026-11', months: 6, lines: [{ accountNumber: 1010, baseAmount: 1, monthlyGrowthPct: 0 }] })).body.error.message).toMatch(/income and expense/);
+    const { id } = ok(await as(finance).post('/planning/forecasts', { name: 'FY27 base case', basis: 'Manual base', startPeriod: '2026-11', months: 6, lines }), 201);
+    let f = ok(await as(finance).get('/planning')).forecasts.find((x) => x.id === id);
+    expect(f).toMatchObject({ name: 'FY27 base case', months: 6, version: 1 });
+    expect(f.lines[1].overrides).toEqual([null, 650000, null, null, null, null]);
+    ok(await as(finance).patch(`/planning/forecasts/${id}`, { name: 'FY27 stretch', lines: f.lines.map((l) => ({ ...l, monthlyGrowthPct: 5 })) }, ifMatch(1)));
+    expect((await as(finance).patch(`/planning/forecasts/${id}`, { name: 'stale' }, ifMatch(1))).status).toBe(412);
+    f = ok(await as(finance).get('/planning')).forecasts.find((x) => x.id === id);
+    expect(f).toMatchObject({ name: 'FY27 stretch', version: 2 });
+    expect(f.lines.every((l) => l.monthlyGrowthPct === 5)).toBe(true);
+    ok(await as(finance).post(`/planning/forecasts/${id}/remove`));
+    expect(ok(await as(finance).get('/planning')).forecasts.find((x) => x.id === id)).toBeUndefined();
   });
 });

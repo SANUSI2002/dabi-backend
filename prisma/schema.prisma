@@ -7043,3 +7043,19 @@ model AcctLandedCost {
   @@index([organizationId, costDate])
   @@map("acct_landed_costs")
 }
+
+model AcctForecastScenario {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(160)
+  basis String @db.VarChar(30)
+  startPeriod String @map("start_period") @db.Char(7)
+  months Int
+  lines Json @default("[]")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  removedAt DateTime? @map("removed_at")
+  version Int @default(1)
+  @@index([organizationId, createdAt])
+  @@map("acct_forecast_scenarios")
+}

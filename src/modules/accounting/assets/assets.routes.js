@@ -27,6 +27,10 @@ const changes = (shape, params = withId) => z.object({
 });
 const depreciation = { method, usefulLifeMonths: z.number().int().min(1).max(1200), salvageValue: money, reducingRateAnnual: z.number().positive().max(100).optional() };
 
+const forecastLine = z.object({
+  id: z.string().max(60).optional(), accountNumber, baseAmount: z.number().min(-1e13).max(1e13), monthlyGrowthPct: z.number().min(-100).max(1000),
+  overrides: z.array(z.number().min(-1e13).max(1e13).nullable()).max(36).optional(),
+}).strict();
 const v = {
   overview: z.object({ params: z.object(org).strict(), query: noQuery }),
   one: z.object({ params: z.object(withId).strict(), query: noQuery }),
@@ -45,6 +49,11 @@ const v = {
   budgetStatus: body({ status: z.enum(['Draft', 'Active', 'Closed']) }, withId),
   line: body({ id: z.string().max(60).optional(), accountNumber, costCentreId: z.uuid().optional(), monthly: z.array(z.number().min(-1e13).max(1e13)).length(12) }, withId),
   removeLine: body({}, { ...withId, lineId: z.string().max(60) }),
+  forecast: body({
+    id: z.uuid().optional(), name: text(160), basis: z.enum(['Last 3 months average', 'Budget', 'Manual base']), startPeriod: z.string().regex(/^[0-9]{4}-(0[1-9]|1[0-2])$/),
+    months: z.number().int().min(1).max(36), lines: z.array(forecastLine).max(200),
+  }),
+  updateForecast: changes({ name: text(160).optional(), months: z.number().int().min(1).max(36).optional(), lines: z.array(forecastLine).max(200).optional() }),
   taxReturn: body({ id: z.uuid().optional(), returnType: z.enum(['VAT', 'WHT', 'PAYE']), periodStart: when, periodEnd: when }),
   filing: body({ submissionRef: text(100), filedVia: free(120).optional() }, withId),
   pay: body({ fromAccount: accountNumber }, withId),
@@ -72,6 +81,9 @@ r(planningRoutes, 'post', '/budgets', v.budget, (req) => plan.createBudget(req.e
 r(planningRoutes, 'post', '/budgets/:id/status', v.budgetStatus, (req) => plan.setBudgetStatus(req.emr, req.params.id, req.body));
 r(planningRoutes, 'post', '/budgets/:id/lines', v.line, (req) => plan.upsertLine(req.emr, req.params.id, req.body));
 r(planningRoutes, 'post', '/budgets/:id/lines/:lineId/remove', v.removeLine, (req) => plan.removeLine(req.emr, req.params.id, req.params.lineId));
+r(planningRoutes, 'post', '/forecasts', v.forecast, (req) => plan.createForecast(req.emr, req.body), 201);
+planningRoutes.patch('/forecasts/:id', check(v.updateForecast), handle(async (req, res) => send(res, await plan.updateForecast(req.emr, req.params.id, requireVersion(req), req.body))));
+r(planningRoutes, 'post', '/forecasts/:id/remove', v.empty, (req) => plan.removeForecast(req.emr, req.params.id));
 r(planningRoutes, 'post', '/tax-returns', v.taxReturn, (req) => plan.prepareReturn(req.emr, req.body), 201);
 r(planningRoutes, 'get', '/tax-returns/:id/schedule', v.one, (req) => plan.returnSchedule(req.emr, req.params.id));
 r(planningRoutes, 'post', '/tax-returns/:id/filing', v.filing, (req) => plan.recordFiling(req.emr, req.params.id, req.body));

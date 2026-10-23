@@ -1,4 +1,4 @@
-// Cost centres, budgets and tax returns.
+// Cost centres, budgets, forecast scenarios and tax returns.
 //
 // Rules enforced here:
 //   - a cost-centre code is unique; centres are switched off, never deleted;
@@ -40,6 +40,7 @@ export async function overview(context) {
     ]);
     const names = await userNameMap(tx, returns.map((r) => r.filedByUserId));
     return {
+      forecasts: await listForecasts(tx, context),
       costCentres: centres.map((c) => ({ id: c.id, code: c.code, name: c.name, active: c.active, version: c.version })),
       budgets: budgets.map((b) => ({ id: b.id, name: b.name, fiscalYear: b.fiscalYear, status: b.status, lines: b.lines, createdAt: iso(b.createdAt), version: b.version })),
       taxReturns: returns.map((r) => {
@@ -51,6 +52,70 @@ export async function overview(context) {
         };
       }),
     };
+  });
+}
+
+// ---- forecast scenarios -----------------------------------------------------------------------------
+// Each line projects an income or expense account: a base figure for the first month growing by a monthly
+// rate, with any month set by hand (overrides). Lines are checked against the chart: an account that is
+// not an active revenue, cost-of-sales or expense account is refused.
+const FORECAST_TYPES = ['revenue', 'expense', 'cogs'];
+async function checkForecastLines(tx, context, lines, months) {
+  const numbers = [...new Set(lines.map((l) => l.accountNumber))];
+  const accounts = await tx.acctAccount.findMany({ where: { ...org(context), number: { in: numbers } }, select: { number: true, type: true, isActive: true } });
+  const ok = new Set(accounts.filter((a) => a.isActive && FORECAST_TYPES.includes(a.type)).map((a) => a.number));
+  const bad = numbers.filter((n) => !ok.has(n));
+  if (bad.length) throw new EmrError('VALIDATION_FAILED', { message: `Forecast only income and expense accounts: ${bad.join(', ')} ${bad.length === 1 ? 'is' : 'are'} not one.` });
+  return lines.map((l) => ({
+    id: l.id ?? `fl-${rid()}`, accountNumber: l.accountNumber, baseAmount: round2(l.baseAmount), monthlyGrowthPct: l.monthlyGrowthPct,
+    ...(l.overrides ? { overrides: Array.from({ length: months }, (_, i) => (l.overrides[i] === undefined || l.overrides[i] === null ? null : round2(l.overrides[i]))) } : {}),
+  }));
+}
+const presentForecast = (f, names) => ({
+  id: f.id, name: f.name, basis: f.basis, startPeriod: f.startPeriod, months: f.months, lines: f.lines, createdAt: iso(f.createdAt),
+  createdBy: names.get(f.createdByUserId) ?? 'Former member', version: f.version,
+});
+export async function listForecasts(tx, context) {
+  const rows = await tx.acctForecastScenario.findMany({ where: { ...org(context), removedAt: null }, orderBy: { createdAt: 'desc' } });
+  const names = await userNameMap(tx, rows.map((r) => r.createdByUserId));
+  return rows.map((r) => presentForecast(r, names));
+}
+async function forecastOf(tx, context, id) {
+  const f = await tx.acctForecastScenario.findFirst({ where: { ...org(context), id, removedAt: null } });
+  if (!f) throw new EmrError('HR_RECORD_NOT_FOUND', { message: 'Forecast scenario not found.' });
+  return f;
+}
+export async function createForecast(context, { id, name, basis, startPeriod, months, lines }) {
+  requireAcct(context, 'acct.post');
+  return withTenant(context, async (tx) => {
+    const checked = await checkForecastLines(tx, context, lines, months);
+    const f = await tx.acctForecastScenario.create({ data: { ...(id ? { id } : {}), ...org(context), name, basis, startPeriod, months, lines: checked, createdByUserId: context.userId } });
+    await audited(tx, context, 'forecast.created', 'forecast', f.id);
+    return { id: f.id };
+  });
+}
+export async function updateForecast(context, id, expectedVersion, patch) {
+  requireAcct(context, 'acct.post');
+  return withTenant(context, async (tx) => {
+    const f = await forecastOf(tx, context, id);
+    const months = patch.months ?? f.months;
+    const data = {
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.months !== undefined ? { months } : {}),
+      ...(patch.lines !== undefined || patch.months !== undefined ? { lines: await checkForecastLines(tx, context, patch.lines ?? f.lines, months) } : {}),
+    };
+    await updateVersioned(tx.acctForecastScenario, { organizationId: context.organizationId, id, expectedVersion, data, notFoundCode: 'HR_RECORD_NOT_FOUND' });
+    await audited(tx, context, 'forecast.updated', 'forecast', id, Object.keys(data));
+    return { id };
+  });
+}
+export async function removeForecast(context, id) {
+  requireAcct(context, 'acct.post');
+  return withTenant(context, async (tx) => {
+    const f = await forecastOf(tx, context, id);
+    await updateVersioned(tx.acctForecastScenario, { organizationId: context.organizationId, id, expectedVersion: f.version, data: { removedAt: new Date() }, notFoundCode: 'HR_RECORD_NOT_FOUND' });
+    await audited(tx, context, 'forecast.removed', 'forecast', id);
+    return { id, removed: true };
   });
 }
 
