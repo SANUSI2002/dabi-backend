@@ -145,5 +145,9 @@ describe('hospital stores', () => {
     const ctx = { organizationId: A.organizationId, userId: officer.userId };
     await expect(withTenant(ctx, (tx) => tx.emrStoreMovement.updateMany({ where: { itemId: item.id }, data: { qtyDelta: 999 } }))).rejects.toThrow();
     await expect(withTenant(ctx, (tx) => tx.emrStoreBatch.updateMany({ where: { itemId: item.id }, data: { unitCostMinor: 1n } }))).rejects.toThrow();
+    // a landed cost can only raise a cost, and only on the hospital's own batch
+    const batchId = (await state()).batches.find((b) => b.itemId === item.id).id;
+    await expect(withTenant(ctx, (tx) => tx.$executeRaw`SELECT emr_raise_batch_cost(${batchId}, ${-500n})`)).rejects.toThrow();
+    await expect(withTenant({ organizationId: B.organizationId, userId: bOfficer.userId }, (tx) => tx.$executeRaw`SELECT emr_raise_batch_cost(${batchId}, ${500n})`)).rejects.toThrow();
   });
 });

@@ -83,7 +83,7 @@ export async function applyLandedCost(context, input) {
       const capitalised = perUnit * BigInt(onHand);
       const expensed = amountMinor - capitalised;
       for (const b of perUnit > 0n ? batches : []) {
-        await tx.emrStoreBatch.updateMany({ where: { organizationId: context.organizationId, id: b.id }, data: { unitCostMinor: b.unitCostMinor + perUnit } });
+        await tx.$executeRaw`SELECT emr_raise_batch_cost(${b.id}, ${perUnit})`; // the only way a batch cost changes
       }
       const acct = storeAccountsFor(item.category);
       const name = item.name.slice(0, 120);

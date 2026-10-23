@@ -16,5 +16,15 @@ ALTER TABLE "acct_landed_costs" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "acct_landed_costs_tenant" ON "acct_landed_costs" USING ("organization_id" = emr_current_organization()) WITH CHECK ("organization_id" = emr_current_organization());
 GRANT SELECT, INSERT ON "acct_landed_costs" TO sabi_emr_app;
 
--- A landed cost raises a batch's unit cost; nothing else changes it.
-GRANT UPDATE ("unit_cost_minor") ON "emr_store_batches" TO sabi_emr_app;
+-- A batch's cost is still never set directly: the one change allowed is a landed cost raising it, by a
+-- positive amount, on a batch of the caller's own organization.
+CREATE FUNCTION emr_raise_batch_cost(p_batch_id TEXT, p_increment BIGINT) RETURNS VOID
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF p_increment IS NULL OR p_increment <= 0 THEN RAISE EXCEPTION 'A landed cost raises a batch cost by a positive amount'; END IF;
+  UPDATE "emr_store_batches" SET "unit_cost_minor" = "unit_cost_minor" + p_increment
+  WHERE "id" = p_batch_id AND "organization_id" = emr_current_organization();
+  IF NOT FOUND THEN RAISE EXCEPTION 'Batch not found'; END IF;
+END $$;
+REVOKE ALL ON FUNCTION emr_raise_batch_cost(TEXT, BIGINT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION emr_raise_batch_cost(TEXT, BIGINT) TO sabi_emr_app;
