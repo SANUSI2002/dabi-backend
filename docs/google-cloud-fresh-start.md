@@ -48,6 +48,21 @@ GCS_BUCKET_PREFIX=sabi-prod-556396127853
 GOOGLE_CLOUD_PROJECT_NUMBER=556396127853
 ```
 
+Provisioned and verified in the official project on 23 October 2026:
+
+- `sabi-prod-556396127853-hospital-evidence-quarantine`
+- `sabi-prod-556396127853-hospital-evidence-clean`
+- `sabi-prod-556396127853-clinical-documents`
+- `sabi-prod-556396127853-profile-images`
+- `sabi-prod-556396127853-finance-documents`
+
+All five use regional Standard storage in `us-east1`, uniform bucket-level
+access, enforced public-access prevention, Google-managed encryption and the
+default seven-day soft-delete recovery window. No source-provider objects were
+copied and no API/worker service-account access has yet been granted. Console
+creation is not proof of application connectivity; verify the keyless runtime
+and its restricted preview-signing permissions before cutover.
+
 The Google adapter uses Application Default Credentials; no downloaded account
 key or Supabase credential is required. Five logical buckets map to private,
 project-scoped physical names under this prefix: hospital quarantine, released
@@ -72,7 +87,7 @@ acceptance check before claiming every document API is migrated.
 2. Create separate API, worker, migration and Scheduler identities. Limit each
    identity to the database, buckets and individual secrets it needs; do not use
    project-wide Editor or download service-account keys.
-3. Provision private buckets, Secret Manager values and Cloud SQL connection
+3. Connect the provisioned private buckets, Secret Manager values and Cloud SQL
    configuration. Existing provider secrets must be transferred securely; never
    print them, put them in source or expose them as frontend variables.
 4. Run all reviewed migrations once with a migration identity, then a restore
@@ -81,6 +96,10 @@ acceptance check before claiming every document API is migrated.
    worker handlers and durable queue/Scheduler wakeups; do not suspend reminders,
    scanning, reconciliation or notifications by deploying the current combined
    entrypoint at scale-to-zero. Quote the complete worker cost.
+   Bounded single-pass functions now exist for rider dispatch, rider transfer
+   reconciliation and subscription reconciliation; the existing interval hosts
+   delegate to those same functions. This preparation does not yet implement
+   Cloud Tasks/Scheduler orchestration or remove any existing worker.
 6. Build immutable backend images in Google Cloud. Start with a bounded replica
    and database-pool budget; distributed rate enforcement is required before
    increasing API replicas.
