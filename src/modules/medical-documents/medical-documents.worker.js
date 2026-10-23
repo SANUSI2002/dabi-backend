@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { setInterval, clearInterval } from 'node:timers';
 import prisma from '../../config/db.js';
-import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient, uploadPrivateObject } from '../../config/privateStorage.js';
+import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient, privateStorageBackend, uploadPrivateObject } from '../../config/privateStorage.js';
 import { scanWithCloudmersive } from '../platform/platform.cloudmersive.js';
 import { scanFailureCode, scanRetryAt, isTerminalScanFailure } from '../platform/platform.evidence-scanner.js';
 import { audit } from './medical-documents.repository.js';
@@ -12,7 +12,7 @@ const bucket = PRIVATE_BUCKETS.clinicalDocuments;
 export async function processPatientDocument({ db = prisma, client, scan = scanWithCloudmersive, now = new Date(), configured = intakeConfigured } = {}) {
   if (!configured()) return false;
   client ||= privateStorageClient();
-  const rows = await db.medicalDocument.findMany({ where: { uploadBackend: 'supabase', status: 'PENDING_SCAN', scanAttempts: { lt: 5 }, OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }] }, orderBy: [{ scanRequestedAt: 'asc' }, { id: 'asc' }], take: 10 });
+  const rows = await db.medicalDocument.findMany({ where: { uploadBackend: privateStorageBackend(), status: 'PENDING_SCAN', scanAttempts: { lt: 5 }, OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }] }, orderBy: [{ scanRequestedAt: 'asc' }, { id: 'asc' }], take: 10 });
   for (const doc of rows) {
     const lease = randomUUID();
     const claimed = await db.medicalDocument.updateMany({ where: { id: doc.id, status: 'PENDING_SCAN', scanAttempts: doc.scanAttempts, OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }] }, data: { scanLeaseToken: lease, scanLeaseExpiresAt: new Date(now.getTime() + 300000), scanAttempts: { increment: 1 } } });
@@ -58,7 +58,7 @@ export async function processPatientDocument({ db = prisma, client, scan = scanW
 export async function cleanDeletedPatientDocuments({ db = prisma, client } = {}) {
   client ||= privateStorageClient();
   await assertPrivateBucket(client, bucket);
-  const docs = await db.medicalDocument.findMany({ where: { uploadBackend: 'supabase', storageCleanupPending: true }, take: 20 });
+  const docs = await db.medicalDocument.findMany({ where: { uploadBackend: privateStorageBackend(), storageCleanupPending: true }, take: 20 });
   for (const doc of docs) {
     const paths = [...new Set(doc.cleanupObjectKeys)];
     if (!paths.length) continue;

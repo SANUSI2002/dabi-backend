@@ -7,6 +7,7 @@ import {
 } from "./medical-documents.storage.js";
 import { buildEmergencySummaryPdf } from "./medical-documents.pdf.js";
 import { signedClinicalDocument } from './medical-documents.intake.js';
+import { privateStorageBackend } from '../../config/privateStorage.js';
 
 const error = (code, status = 400) =>
   Object.assign(new Error(code), { code, status });
@@ -134,7 +135,7 @@ const authorizeDownload = async (userId, id, shareId) => {
     ),
   );
   try {
-    return item.uploadBackend === 'supabase' ? await signedClinicalDocument(item) : await storage().createDownload(item.objectKey);
+    return item.uploadBackend === privateStorageBackend() ? await signedClinicalDocument(item) : await storage().createDownload(item.objectKey);
   } catch (cause) {
     throw error(
       cause.code === "DOCUMENT_STORAGE_UNAVAILABLE"
@@ -280,7 +281,7 @@ export const remove = async (ownerPatientId, id) => {
       data: { revokedAt: new Date() },
     });
     await repository.audit(tx, ownerPatientId, "DOCUMENT_DELETED", id);
-    if (item.uploadBackend === 'supabase') {
+    if (item.uploadBackend === privateStorageBackend()) {
       await tx.medicalDocument.update({ where: { id }, data: { storageCleanupPending: true, cleanupObjectKeys: { push: item.objectKey } } });
       return null;
     }

@@ -1,0 +1,93 @@
+# Fresh Google Cloud production environment
+
+Decision: 23 October 2026. This supersedes the earlier plan to retain Render and
+Supabase as active staging dependencies. The user requested a **new database and
+new storage**, not a copy of existing accounts, clinical records or uploaded files.
+Do not delete the old providers or imply their records were migrated.
+
+## Verified starting point
+
+- Official project: `project-2dfff4eb-ff04-40b1-aff`, number `556396127853`.
+- Official Google account: `damilare@sabihealth.org`.
+- Console reports USD 300 trial credit and 86 days remaining at inspection.
+- `sabi-ai-runtime` exists in `europe-west1` and reports healthy.
+- Cloud SQL has no existing instance. No new instance has been provisioned.
+- The old Render PostgreSQL database is expired and suspended; do not bypass
+  migrations or configure a replacement as though it contained the old records.
+- The EMR backend release is merged at `f61552f`; frontend PR #7 is green and
+  contains the unpublished EMR development, not the image library.
+
+## Funding decision before creation
+
+The existing limits remain USD 60/month target and **less than USD 120 cumulative
+trial consumption**. No billing upgrade, commitment or automatic service shutdown
+is authorised. Budgets are alerts, not guaranteed spend caps.
+
+The inspected PostgreSQL Enterprise configuration in `us-east1` is 1 dedicated
+vCPU, 3.75 GiB RAM and 10 GiB SSD, with automated backups and PITR. Published
+compute/storage rates put the database at approximately USD 51/month before
+backup use, traffic and the other services. Single-zone has **no automatic
+failover**. This is not a highly available configuration or a complete quote.
+The user has been asked to choose this budget-fitting baseline or request an HA
+quote. Do not treat an unanswered/preselected option as approval.
+
+## Storage implementation
+
+Production configuration:
+
+```text
+PRIVATE_STORAGE_PROVIDER=gcs
+GCS_BUCKET_PREFIX=sabi-prod-556396127853
+GOOGLE_CLOUD_PROJECT_NUMBER=556396127853
+```
+
+The Google adapter uses Application Default Credentials; no downloaded account
+key or Supabase credential is required. Five logical buckets map to private,
+project-scoped physical names under this prefix: hospital quarantine, released
+evidence, clinical documents, profile images and finance documents. Every
+operation checks the project number, uniform bucket-level access and enforced
+public-access prevention. Uploads do not overwrite; reads/signatures pin an
+object generation; deletion uses a generation precondition. Short-lived preview
+links are still issued only after the existing domain authorisation and scan
+checks. The application enforces type/size restrictions because GCS does not
+provide Supabase's per-bucket MIME/size policy fields.
+
+Patient intake, scan workers, AI personal sources, finance intake and rider
+onboarding select the active provider rather than requiring Supabase environment
+variables. Existing Supabase support is retained only for compatibility/testing;
+the new production environment must explicitly select `gcs` and have no Supabase
+secrets. Legacy S3 presigned-upload endpoints need a separate GCS adapter and
+acceptance check before claiming every document API is migrated.
+
+## Remaining cutover work — not yet completed
+
+1. Confirm the regional resource quote and provision the backed-up database.
+2. Create separate API, worker, migration and Scheduler identities. Limit each
+   identity to the database, buckets and individual secrets it needs; do not use
+   project-wide Editor or download service-account keys.
+3. Provision private buckets, Secret Manager values and Cloud SQL connection
+   configuration. Existing provider secrets must be transferred securely; never
+   print them, put them in source or expose them as frontend variables.
+4. Run all reviewed migrations once with a migration identity, then a restore
+   drill. Establish and test the runtime SQL grants, including tenant RLS roles.
+5. Split API serving from interval workers. Use authenticated request-billed
+   worker handlers and durable queue/Scheduler wakeups; do not suspend reminders,
+   scanning, reconciliation or notifications by deploying the current combined
+   entrypoint at scale-to-zero. Quote the complete worker cost.
+6. Build immutable backend images in Google Cloud. Start with a bounded replica
+   and database-pool budget; distributed rate enforcement is required before
+   increasing API replicas.
+7. Establish initial platform ownership through a verified account and an
+   explicitly authorised first-admin grant. Existing Render passwords, roles and
+   sessions will not exist in this fresh database. Do not invent demo credentials.
+8. Deploy each frontend surface with the Google API target, correct OAuth origins
+   and redirects, and no Render rewrite. If all hosting also moves, prepare the
+   separate Firebase Hosting targets and its refresh-cookie compatibility.
+9. Verify registration, email verification, login/refresh/MFA, tenant isolation,
+   uploads/scanning/previews, background jobs and financial idempotency before
+   moving the existing domains. Health checks alone are insufficient.
+10. Remove active Render/Supabase traffic only after the replacement passes these
+    checks. Retain old resources without deleting them unless separately asked.
+
+References: https://cloud.google.com/sql/pricing and
+https://docs.cloud.google.com/storage/docs/request-preconditions.

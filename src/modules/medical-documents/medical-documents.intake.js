@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import prisma from '../../config/db.js';
-import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient, uploadPrivateObject } from '../../config/privateStorage.js';
+import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient, privateStorageBackend, privateStorageConfigured, uploadPrivateObject } from '../../config/privateStorage.js';
 import { cloudmersiveConfigured } from '../../config/evidenceScanner.js';
 import { audit, isPatient, ownedRecord, safeDocumentSelect } from './medical-documents.repository.js';
 
@@ -15,10 +15,9 @@ export const intakeMaxBytes = () => {
 };
 export function intakeConfigured() {
   return process.env.PATIENT_DOCUMENT_UPLOADS_ENABLED !== 'false'
-    && cloudmersiveConfigured() && Boolean(process.env.SUPABASE_URL)
-    && Boolean(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);
+    && cloudmersiveConfigured() && privateStorageConfigured();
 }
-export const intakeConfig = () => ({ enabled: intakeConfigured(), maxBytes: intakeMaxBytes(), contentTypes: Object.keys(extensions), scanner: 'Cloudmersive', privacy: 'Documents are stored privately in Supabase. File contents are sent to Cloudmersive for security screening. Only you and eligible people you explicitly share with can open a screened file.' });
+export const intakeConfig = () => ({ enabled: intakeConfigured(), maxBytes: intakeMaxBytes(), contentTypes: Object.keys(extensions), scanner: 'Cloudmersive', privacy: 'Documents are stored in private storage. File contents are sent to Cloudmersive for security screening. Only you and eligible people you explicitly share with can open a screened file.' });
 
 export async function receiveDocument(userId, data, bytes, requestKey, { db = prisma, client, configured = intakeConfigured } = {}) {
   if (!configured()) throw documentError('DOCUMENT_INTAKE_UNAVAILABLE', 503);
@@ -42,7 +41,7 @@ export async function receiveDocument(userId, data, bytes, requestKey, { db = pr
     const created = await tx.medicalDocument.create({ data: {
       id, ownerPatientId: userId, originalFilename: data.filename,
       declaredContentType: data.contentType, byteSize: bytes.length, kind: data.kind,
-      medicalRecordId: data.medicalRecordId, uploadBackend: 'supabase', intakeKey,
+      medicalRecordId: data.medicalRecordId, uploadBackend: privateStorageBackend(), intakeKey,
       objectKey: `quarantine/${id}.${extensions[data.contentType]}`, sha256: hash,
     } });
     await audit(tx, userId, 'DOCUMENT_UPLOAD_INITIALIZED', id);
@@ -66,7 +65,7 @@ export async function receiveDocument(userId, data, bytes, requestKey, { db = pr
 }
 
 export async function signedClinicalDocument(item, client = privateStorageClient()) {
-  if (item.uploadBackend !== 'supabase' || item.status !== 'CLEAN' || !item.objectKey.startsWith('clean/')) throw documentError('RESOURCE_NOT_FOUND', 404);
+  if (item.uploadBackend !== privateStorageBackend() || item.status !== 'CLEAN' || !item.objectKey.startsWith('clean/')) throw documentError('RESOURCE_NOT_FOUND', 404);
   await assertPrivateBucket(client, bucket);
   const { data, error } = await client.storage.from(bucket).createSignedUrl(item.objectKey, 60);
   if (error || !data?.signedUrl) throw documentError('DOCUMENT_STORAGE_ERROR', 503);
@@ -76,7 +75,7 @@ export async function signedClinicalDocument(item, client = privateStorageClient
 export async function retryDocumentScan(userId, id, db = prisma) {
   return db.$transaction(async (tx) => {
     const now = new Date();
-    const changed = await tx.medicalDocument.updateMany({ where: { id, ownerPatientId: userId, uploadBackend: 'supabase', status: 'PENDING_SCAN', scanErrorCode: { not: null }, scanLeaseToken: null, OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }] }, data: { scanAttempts: 0, scanErrorCode: null, scanLeaseExpiresAt: null } });
+    const changed = await tx.medicalDocument.updateMany({ where: { id, ownerPatientId: userId, uploadBackend: privateStorageBackend(), status: 'PENDING_SCAN', scanErrorCode: { not: null }, scanLeaseToken: null, OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }] }, data: { scanAttempts: 0, scanErrorCode: null, scanLeaseExpiresAt: null } });
     if (!changed.count) throw documentError('INVALID_DOCUMENT_STATE', 409);
     await audit(tx, userId, 'DOCUMENT_SCAN_RETRY_REQUESTED', id);
     return { id, status: 'PENDING_SCAN' };

@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { URL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { createGoogleStorageClient, googleStorageConfigured } from './googleStorage.js';
 
 export const PRIVATE_BUCKETS = Object.freeze({
   hospitalEvidenceQuarantine: 'sabi-hospital-evidence-quarantine',
@@ -18,9 +19,16 @@ export class PrivateStorageError extends Error {
   }
 }
 
+export const privateStorageBackend = () => process.env.PRIVATE_STORAGE_PROVIDER === 'gcs' ? 'gcs' : 'supabase';
+export const privateStorageConfigured = () => privateStorageBackend() === 'gcs'
+  ? googleStorageConfigured()
+  : Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY));
+
 // Only the trusted Node API receives the secret key. Never use this client in
 // browser code or log its configuration. Sabi Auth remains the session authority.
 export function privateStorageClient() {
+  if (process.env.PRIVATE_STORAGE_PROVIDER && !['gcs', 'supabase'].includes(process.env.PRIVATE_STORAGE_PROVIDER)) throw new PrivateStorageError('PRIVATE_STORAGE_NOT_CONFIGURED');
+  if (privateStorageBackend() === 'gcs') return createGoogleStorageClient(PRIVATE_BUCKETS);
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new PrivateStorageError('PRIVATE_STORAGE_NOT_CONFIGURED');

@@ -14,7 +14,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import prisma from '../../../config/db.js';
-import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient, uploadPrivateObject } from '../../../config/privateStorage.js';
+import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient, privateStorageConfigured, uploadPrivateObject } from '../../../config/privateStorage.js';
 import { cloudmersiveConfigured } from '../../../config/evidenceScanner.js';
 import { withTenant } from '../../emr/core/db.js';
 import { recordAudit } from '../../emr/core/audit.js';
@@ -35,7 +35,7 @@ export const maxBytes = () => {
 /** Attachments need the scanner and the private storage; FINANCE_DOCUMENT_UPLOADS_ENABLED=false switches them off. */
 export function configured() {
   return process.env.FINANCE_DOCUMENT_UPLOADS_ENABLED !== 'false' && cloudmersiveConfigured()
-    && Boolean(process.env.SUPABASE_URL) && Boolean(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);
+    && privateStorageConfigured();
 }
 const unavailable = () => new EmrError('FINANCE_DOCUMENTS_UNAVAILABLE');
 
