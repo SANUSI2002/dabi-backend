@@ -23,6 +23,7 @@ import { bankingRoutes, expenseRoutes } from './banking/banking.routes.js';
 import { assetRoutes, planningRoutes } from './assets/assets.routes.js';
 import { prefsRoutes, projectRoutes } from './projects/projects.routes.js';
 import { integrationRoutes } from './integrations/integrations.routes.js';
+import { attachmentRoutes } from './attachments/attachments.routes.js';
 import { moduleGate } from '../org-config/modules.service.js';
 
 const router = express.Router();
@@ -42,6 +43,7 @@ tenant.use('/planning', planningRoutes);
 tenant.use('/projects', projectRoutes);
 tenant.use('/notification-prefs', prefsRoutes);
 tenant.use('/integrations', integrationRoutes);
+tenant.use('/attachments', attachmentRoutes);
 tenant.get('/inventory', validateEmr(z.object({ params: z.object({ organizationId: z.uuid() }).strict(), query: z.object({}).strict() })),
   handle(async (req, res) => send(res, await inventoryOverview(req.emr))));
 tenant.post('/inventory/receipts', validateEmr(z.object({
