@@ -37,7 +37,8 @@ describe('non-administrator Google production database roles', () => {
     const client = await connect();
     try {
       const { rows: [r] } = await client.query(`SELECT
-        has_table_privilege($1,'users','SELECT,INSERT,UPDATE,DELETE') AS app,
+        (SELECT bool_and(has_table_privilege($1,'users',privilege))
+          FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) AS p(privilege)) AS app,
         has_table_privilege($1,'_prisma_migrations','SELECT') AS migrations,
         has_table_privilege($1,'emr_patients','SELECT') AS clinical,
         has_schema_privilege($1,'public','CREATE') AS ddl,
@@ -77,7 +78,8 @@ describe('non-administrator Google production database roles', () => {
       expect(rows).toHaveLength(18);
       expect(rows.every(r => r.roles.length === 1 && r.roles[0] === 'sabi_application_server')).toBe(true);
       const { rows: [r] } = await client.query(`SELECT
-        has_table_privilege($1,'ai_sessions','SELECT,INSERT,UPDATE,DELETE') AS ai,
+        (SELECT bool_and(has_table_privilege($1,'ai_sessions',privilege))
+          FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) AS p(privilege)) AS ai,
         has_table_privilege($1,'audit_events','INSERT') AS audit_append,
         has_table_privilege($1,'audit_events','UPDATE,DELETE') AS audit_mutate,
         has_table_privilege($1,'ai_allowance_ledger','UPDATE,DELETE') AS ledger_mutate,
@@ -91,7 +93,8 @@ describe('non-administrator Google production database roles', () => {
     const client = await connect();
     try {
       const { rows: [r] } = await client.query(`SELECT
-        has_table_privilege($1,'jev_assessment_jobs','SELECT,UPDATE') AS worker,
+        has_table_privilege($1,'jev_assessment_jobs','SELECT') AND
+          has_table_privilege($1,'jev_assessment_jobs','UPDATE') AS worker,
         has_table_privilege($2,'jev_assessment_jobs','SELECT,UPDATE') AS api,
         has_table_privilege($1,'jev_assessment_jobs','INSERT,DELETE') AS worker_enqueue_or_delete`, [worker, api]);
       expect(r).toEqual({ worker: true, api: false, worker_enqueue_or_delete: false });

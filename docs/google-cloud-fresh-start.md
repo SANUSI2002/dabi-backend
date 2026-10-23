@@ -127,6 +127,16 @@ logic was weakened to fix that test. The production dependency audit is clean;
 three moderate development-only Vitest advisories remain. Do not represent
 dependency audit results as a complete application-security assessment.
 
+SQL release `ed7a41b` additionally passed the full 997-unit/628-database CI suite,
+including the eight new runtime-grant tests. The request-only API at `de7b669`
+passed six focused host tests and lint. Its non-root container was successfully
+built in Google Cloud Shell with no live secrets in build arguments; image ID
+`sha256:0aa58d2f3a643bf44fc7db5396c1ce7703551368a02b0b1963a66f0dfade9630`.
+Container syntax and non-root entrypoint checks passed. Starting that image with
+only synthetic legacy connection settings exited 1 with a sanitised dependency
+preflight error, as intended. This is a local Cloud Shell image, not a registry
+publication, deployed API or successful production-connectivity check.
+
 The Google adapter uses Application Default Credentials; no downloaded account
 key or Supabase credential is required. Five logical buckets map to private,
 project-scoped physical names under this prefix: hospital quarantine, released
