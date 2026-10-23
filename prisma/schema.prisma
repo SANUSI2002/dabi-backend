@@ -7093,3 +7093,24 @@ model AcctAttachment {
   @@index([status, scanRequestedAt], map: "acct_attachments_scan_idx")
   @@map("acct_attachments")
 }
+
+model AcctEmailJob {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  noticeId String @map("notice_id")
+  recipient String @db.VarChar(160)
+  replyTo String? @map("reply_to") @db.VarChar(160)
+  fromName String @map("from_name") @db.VarChar(120)
+  subject String @db.VarChar(300)
+  body String @db.VarChar(20000)
+  status String @default("QUEUED") @db.VarChar(8)
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  lastError String? @map("last_error") @db.VarChar(60)
+  providerMessageId String? @map("provider_message_id") @db.VarChar(120)
+  sentAt DateTime? @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([organizationId, noticeId], map: "acct_email_jobs_notice_key")
+  @@index([status, nextAttemptAt], map: "acct_email_jobs_due_idx")
+  @@map("acct_email_jobs")
+}

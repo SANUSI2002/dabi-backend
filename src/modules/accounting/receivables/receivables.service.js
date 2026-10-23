@@ -9,7 +9,8 @@
 //     early-payment discount only within its term; foreign settlements book the realised FX gain or loss;
 //   - a credit note is applied to the same customer's invoices, never beyond what is left of either;
 //   - a customer on credit hold cannot be invoiced; going over the credit limit needs approval (acct.approve);
-//   - reminders and statements record that they were sent — nothing is mailed from here;
+//   - reminders and statements are recorded, and emailed to the customer when it has an email address and
+//     an email provider is configured (each notice says whether it was emailed);
 //   - acct.view reads, acct.post prepares and issues, acct.control changes credit limits and holds.
 import { withTenant } from '../../emr/core/db.js';
 import { recordAudit } from '../../emr/core/audit.js';
@@ -19,6 +20,7 @@ import { userNameMap } from '../../emr/core/people.js';
 import { postEntry, requireAcct, reverseInTx, round2 } from '../ledger/ledger.service.js';
 import { docSubtotal, docTax, docTaxBreakdown, docTotal, dueDateFor, ensureSettings, lineAmount, nextDocNumber, taxRates } from '../settings/settings.service.js';
 import { timeLinesForInvoice } from '../projects/projects.service.js';
+import { queueCustomerEmail, senderFor } from '../email/customerEmail.js';
 
 const org = (context) => ({ organizationId: context.organizationId });
 const can = (context, p) => context.permissions.includes(p) || context.permissions.includes('acct.control');
@@ -69,7 +71,7 @@ export async function overview(context) {
   requireAcct(context, 'acct.view');
   return withTenant(context, async (tx) => {
     await ensureSettings(tx, context);
-    const [customers, docs, receipts, applications, schedules, charges, notices] = await Promise.all([
+    const [customers, docs, receipts, applications, schedules, charges, notices, emails] = await Promise.all([
       tx.acctCustomer.findMany({ where: org(context), orderBy: { name: 'asc' } }),
       tx.acctSalesDoc.findMany({ where: org(context), orderBy: [{ docDate: 'desc' }, { createdAt: 'desc' }] }),
       tx.acctReceipt.findMany({ where: { ...org(context), voidedAt: null }, orderBy: { receiptDate: 'desc' } }),
@@ -77,8 +79,16 @@ export async function overview(context) {
       tx.acctRevenueSchedule.findMany({ where: org(context), orderBy: { createdAt: 'desc' } }),
       tx.acctDelayedCharge.findMany({ where: { ...org(context), removedAt: null }, orderBy: { chargeDate: 'desc' } }),
       tx.acctCustomerNotice.findMany({ where: org(context), orderBy: { sentAt: 'desc' } }),
+      tx.acctEmailJob.findMany({ where: org(context), select: { noticeId: true, status: true, sentAt: true, lastError: true } }),
     ]);
     const names = await userNameMap(tx, [...docs.map((d) => d.createdByUserId), ...receipts.map((r) => r.createdByUserId), ...notices.map((n) => n.sentByUserId)]);
+    // whether each notice reached the customer by email
+    const emailByNotice = new Map(emails.map((e) => [e.noticeId, e]));
+    const emailOf = (n) => {
+      const e = emailByNotice.get(n.id);
+      if (!e) return { status: n.sentTo ? 'NOT_SENT' : 'NO_EMAIL_ADDRESS' };
+      return { status: e.status, ...(e.sentAt ? { sentAt: iso(e.sentAt) } : {}), ...(e.status === 'FAILED' ? { error: e.lastError } : {}) };
+    };
     const who = (id) => names.get(id) ?? 'Former member';
     const iso = (d) => (d ? d.toISOString() : undefined);
     const base = (d) => ({ id: d.id, number: d.number, customerId: d.customerId ?? undefined, date: iso(d.docDate), lines: d.lines, notes: d.notes ?? undefined, journalEntryId: d.journalEntryId ?? undefined, createdBy: who(d.createdByUserId), createdAt: d.createdAt, version: d.version });
@@ -108,8 +118,8 @@ export async function overview(context) {
       refundReceipts: of('refund-receipt').map((d) => ({ ...base(d), method: d.method, fromAccountNumber: d.cashAccountNumber, reason: d.reason ?? '', status: d.status })),
       revenueSchedules: schedules.map((s) => ({ id: s.id, invoiceId: s.invoiceId, customerId: s.customerId, totalAmount: Number(s.totalAmount), method: 'Straight Line', startPeriod: s.startPeriod, months: s.months, deferredAccountNumber: s.deferredAccountNumber, revenueAccountNumber: s.revenueAccountNumber, entries: s.entries, createdAt: s.createdAt, version: s.version })),
       delayedCharges: charges.map((c) => ({ id: c.id, customerId: c.customerId, date: iso(c.chargeDate), accountNumber: c.accountNumber, description: c.description, qty: Number(c.qty), unitPrice: Number(c.unitPrice), taxRateId: c.taxRateId ?? undefined, status: c.status, invoiceId: c.invoiceId ?? undefined, createdBy: who(c.createdByUserId), createdAt: c.createdAt })),
-      reminders: notices.filter((n) => n.kind === 'reminder').map((n) => ({ invoiceId: n.invoiceId, level: n.level, tone: n.tone, sentAt: iso(n.sentAt), sentBy: who(n.sentByUserId) })),
-      statementLog: notices.filter((n) => n.kind === 'statement').map((n) => ({ customerId: n.customerId, to: n.sentTo, sentAt: iso(n.sentAt), by: who(n.sentByUserId) })),
+      reminders: notices.filter((n) => n.kind === 'reminder').map((n) => ({ invoiceId: n.invoiceId, level: n.level, tone: n.tone, sentAt: iso(n.sentAt), sentBy: who(n.sentByUserId), email: emailOf(n) })),
+      statementLog: notices.filter((n) => n.kind === 'statement').map((n) => ({ customerId: n.customerId, to: n.sentTo, sentAt: iso(n.sentAt), by: who(n.sentByUserId), email: emailOf(n) })),
     };
   });
 }
@@ -629,39 +639,68 @@ async function reminderDue(tx, context, settings, inv) {
   const sent = (await tx.acctCustomerNotice.aggregate({ where: { ...org(context), kind: 'reminder', invoiceId: inv.id }, _max: { level: true } }))._max.level ?? 0;
   return settings.reminderRules.filter((r) => r.active && r.daysOverdue <= overdueDays && r.level > sent).sort((a, b) => b.level - a.level)[0] ?? null;
 }
-async function sendReminderInTx(tx, context, settings, inv) {
+const money = (amount, currency = 'NGN') => `${currency === 'NGN' ? '₦' : `${currency} `}${Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const day = (d) => (d ? d.toISOString().slice(0, 10) : '');
+const fill = (template, values) => String(template ?? '').replace(/\{(\w+)\}/g, (all, key) => (values[key] === undefined ? all : String(values[key])));
+const hospitalNameOf = (settings, sender) => settings.orgProfile?.tradingName || settings.orgProfile?.legalName || sender.hospitalName;
+
+async function sendReminderInTx(tx, context, settings, inv, sender) {
   const rule = await reminderDue(tx, context, settings, inv);
   if (!rule) return null;
   const cust = await customerOf(tx, context, inv.customerId);
-  await tx.acctCustomerNotice.create({ data: { ...org(context), kind: 'reminder', customerId: cust.id, invoiceId: inv.id, level: rule.level, tone: rule.tone, sentTo: cust.email ?? null, sentByUserId: context.userId } });
-  await audited(tx, context, 'invoice.reminder_recorded', 'invoice', inv.id, [String(rule.level)]);
-  return rule.level;
+  const notice = await tx.acctCustomerNotice.create({ data: { ...org(context), kind: 'reminder', customerId: cust.id, invoiceId: inv.id, level: rule.level, tone: rule.tone, sentTo: cust.email ?? null, sentByUserId: context.userId } });
+  const rates = await taxRates(tx, context);
+  const values = { number: inv.number, amount: money(balanceOf(rates, inv), inv.currency), dueDate: day(inv.dueDate), daysOverdue: Math.floor((Date.now() - inv.dueDate.getTime()) / 86_400_000), customer: cust.name };
+  const delivery = await queueCustomerEmail(tx, context, {
+    noticeId: notice.id, recipient: cust.email, sender, hospitalName: hospitalNameOf(settings, sender),
+    subject: fill(rule.subject || `Reminder — invoice {number}`, values), body: `Dear ${cust.name},\n\n${fill(rule.body || 'Invoice {number} for {amount} was due on {dueDate}.', values)}`,
+  });
+  await audited(tx, context, 'invoice.reminder_recorded', 'invoice', inv.id, [String(rule.level), delivery.status]);
+  return { level: rule.level, delivery };
 }
 export async function sendReminder(context, invoiceId) {
   requireAcct(context, 'acct.post');
+  const sender = await senderFor(context);
   return withTenant(context, async (tx) => {
     const settings = await ensureSettings(tx, context);
-    const level = await sendReminderInTx(tx, context, settings, await docOf(tx, context, invoiceId, 'invoice'));
-    if (!level) throw new EmrError('INVALID_STATE', { message: 'No reminder is due on this invoice.' });
-    return { ok: true, level };
+    const sent = await sendReminderInTx(tx, context, settings, await docOf(tx, context, invoiceId, 'invoice'), sender);
+    if (!sent) throw new EmrError('INVALID_STATE', { message: 'No reminder is due on this invoice.' });
+    return { ok: true, ...sent };
   });
 }
 export async function runReminders(context) {
   requireAcct(context, 'acct.post');
+  const sender = await senderFor(context);
   return withTenant(context, async (tx) => {
     const settings = await ensureSettings(tx, context);
-    let sent = 0;
-    for (const inv of await tx.acctSalesDoc.findMany({ where: { ...org(context), kind: 'invoice', status: { in: OPEN }, dueDate: { lt: new Date() } } })) if (await sendReminderInTx(tx, context, settings, inv)) sent += 1;
-    return { sent };
+    let sent = 0; let emailed = 0;
+    for (const inv of await tx.acctSalesDoc.findMany({ where: { ...org(context), kind: 'invoice', status: { in: OPEN }, dueDate: { lt: new Date() } } })) {
+      const r = await sendReminderInTx(tx, context, settings, inv, sender);
+      if (r) { sent += 1; if (r.delivery.status === 'QUEUED') emailed += 1; }
+    }
+    return { sent, emailed, notEmailed: sent - emailed };
   });
 }
+/** Records a statement of account for the customer and emails its open invoices and balance. */
 export async function markStatementSent(context, customerId) {
   requireAcct(context, 'acct.post');
+  const sender = await senderFor(context);
   return withTenant(context, async (tx) => {
     const cust = await customerOf(tx, context, customerId);
     if (!cust.email) throw new EmrError('VALIDATION_FAILED', { message: `${cust.name} has no email address on file.` });
-    await tx.acctCustomerNotice.create({ data: { ...org(context), kind: 'statement', customerId, sentTo: cust.email, sentByUserId: context.userId } });
-    await audited(tx, context, 'customer.statement_recorded', 'customer', customerId);
-    return { ok: true, to: cust.email };
+    const settings = await ensureSettings(tx, context);
+    const rates = await taxRates(tx, context);
+    const open = await tx.acctSalesDoc.findMany({ where: { ...org(context), kind: 'invoice', customerId, status: { in: OPEN } }, orderBy: { docDate: 'asc' } });
+    const balance = round2(open.reduce((n, i) => n + balanceNgn(rates, i), 0));
+    const lines = open.map((i) => `  ${i.number}  ·  due ${day(i.dueDate)}  ·  ${money(balanceOf(rates, i), i.currency)}${shownStatus(i.status, i.dueDate) === 'Overdue' ? '  (overdue)' : ''}`);
+    const hospitalName = hospitalNameOf(settings, sender);
+    const notice = await tx.acctCustomerNotice.create({ data: { ...org(context), kind: 'statement', customerId, sentTo: cust.email, sentByUserId: context.userId } });
+    const delivery = await queueCustomerEmail(tx, context, {
+      noticeId: notice.id, recipient: cust.email, sender, hospitalName,
+      subject: `Statement of account — ${hospitalName}`,
+      body: `Dear ${cust.name},\n\nYour account with ${hospitalName} on ${day(new Date())}:\n\n${lines.length ? lines.join('\n') : '  No open invoices.'}\n\nBalance due: ${money(balance)}`,
+    });
+    await audited(tx, context, 'customer.statement_recorded', 'customer', customerId, [delivery.status]);
+    return { ok: true, to: cust.email, delivery };
   });
 }

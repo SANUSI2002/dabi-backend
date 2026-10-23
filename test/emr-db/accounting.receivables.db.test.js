@@ -5,7 +5,8 @@
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../../src/app.js';
-import { addMember, createTenant } from './fixtures.js';
+import { addMember, createTenant, prisma } from './fixtures.js';
+import { deliverCustomerEmails } from '../../src/modules/accounting/email/customerEmail.js';
 
 const ifMatch = (version) => ({ 'If-Match': `W/"${version}"` });
 const as = (who) => {
@@ -155,8 +156,36 @@ describe('receivables', () => {
     ok(await as(finance).post(`/receivables/customers/${hmo.id}/statement`));
     const data = await ar();
     expect(data.reminders.some((r) => r.invoiceId === tmpl.id && r.level >= 1)).toBe(true);
-    expect(data.statementLog[0]).toMatchObject({ customerId: hmo.id, to: 'claims@hygeia.test' });
+    expect(data.statementLog[0]).toMatchObject({ customerId: hmo.id, to: 'claims@hygeia.test', email: { status: 'NOT_SENT' } }); // no email provider in this test
     expect((await tb()).inBalance).toBe(true);
+  });
+
+  it("emails reminders and statements in the hospital's own words when an email provider is set up", async () => {
+    const saved = { key: process.env.RESEND_API_KEY, from: process.env.PASSWORD_RESET_EMAIL_FROM };
+    process.env.RESEND_API_KEY = 'synthetic-only'; process.env.PASSWORD_RESET_EMAIL_FROM = 'Sabi Health <billing@sabi.test>';
+    try {
+      const inv = ok(await as(finance).post('/receivables/invoices', { customerId: hmo.id, date: daysAgo(40), lines: [svc(4000, 'Consultations — September', 1, 87500)] }), 201);
+      ok(await as(finance).post(`/receivables/invoices/${inv.id}/issue`));
+      const sent = ok(await as(finance).post(`/receivables/invoices/${inv.id}/reminder`));
+      expect(sent.delivery).toEqual({ status: 'QUEUED' });
+      const job = await prisma.acctEmailJob.findFirst({ where: { organizationId: A.organizationId, status: 'QUEUED' }, orderBy: { createdAt: 'desc' } });
+      expect(job).toMatchObject({ recipient: 'claims@hygeia.test', replyTo: expect.stringContaining('@') });
+      expect(job.subject).toMatch(/invoice INV-/); // the reminder rule's subject, filled in
+      expect(job.body).toMatch(/₦87,500\.00/);
+      const outbox = [];
+      expect(await deliverCustomerEmails({ send: async (j) => { outbox.push(j); return { ok: true, providerId: 'synthetic-1' }; } })).toBeGreaterThanOrEqual(1);
+      expect(outbox.some((j) => j.id === job.id)).toBe(true);
+      const statement = ok(await as(finance).post(`/receivables/customers/${hmo.id}/statement`));
+      expect(statement.delivery).toEqual({ status: 'QUEUED' });
+      await deliverCustomerEmails({ send: async () => ({ ok: false, retryable: false, code: 'PROVIDER_HTTP_422' }) });
+      const data = await ar();
+      expect(data.reminders.find((r) => r.invoiceId === inv.id).email).toMatchObject({ status: 'SENT', sentAt: expect.any(String) });
+      expect(data.statementLog[0].email).toEqual({ status: 'FAILED', error: 'PROVIDER_HTTP_422' });
+    } finally {
+      process.env.RESEND_API_KEY = saved.key ?? ''; process.env.PASSWORD_RESET_EMAIL_FROM = saved.from ?? '';
+      if (saved.key === undefined) delete process.env.RESEND_API_KEY;
+      if (saved.from === undefined) delete process.env.PASSWORD_RESET_EMAIL_FROM;
+    }
   });
 
   it('voids only unpaid invoices and keeps numbering per organization', async () => {
