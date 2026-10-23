@@ -17,19 +17,26 @@ Do not delete the old providers or imply their records were migrated.
 - The EMR backend release is merged at `f61552f`; frontend PR #7 is green and
   contains the unpublished EMR development, not the image library.
 
-## Funding decision before creation
+## Approved funding and availability decision
 
-The existing limits remain USD 60/month target and **less than USD 120 cumulative
-trial consumption**. No billing upgrade, commitment or automatic service shutdown
-is authorised. Budgets are alerts, not guaranteed spend caps.
+The user approved a **USD 150/month target** and explicitly replaced the earlier
+USD 120 cumulative trial-consumption cap. Eligible usage may consume the remaining
+USD 300 Google trial credit. No paid-billing upgrade, commitment or automatic
+service shutdown is authorised. Budgets are alerts, not guaranteed spend caps.
+Trial credit is finite; continued service after its expiry requires a separate
+billing decision. External provider charges are not covered by Google credit.
 
 The inspected PostgreSQL Enterprise configuration in `us-east1` is 1 dedicated
 vCPU, 3.75 GiB RAM and 10 GiB SSD, with automated backups and PITR. Published
-compute/storage rates put the database at approximately USD 51/month before
-backup use, traffic and the other services. Single-zone has **no automatic
-failover**. This is not a highly available configuration or a complete quote.
-The user has been asked to choose this budget-fitting baseline or request an HA
-quote. Do not treat an unanswered/preselected option as approval.
+regional console quote for **multiple-zone high availability** is approximately
+USD 0.14/hour (about USD 102/month) including primary and standby compute and
+baseline storage, before backup use, traffic and the other services. The user
+approved proceeding under the revised budget. This leaves approximately USD 48
+of the monthly target for API, workers, storage, AI and other Google usage;
+actual consumption must be monitored rather than represented as a hard cap.
+The instance form is prepared but has not been submitted: the account owner must
+complete the initial administrator credential entry and submission. No database
+is ready until the console confirms creation and connectivity is verified.
 
 ## Storage implementation
 

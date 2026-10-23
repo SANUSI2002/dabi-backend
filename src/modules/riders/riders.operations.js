@@ -97,17 +97,22 @@ export async function earnDelivery(tx, assignment) {
   // The immutable earning and delivery confirmation commit together. Replays cannot double-credit.
   return tx.riderEarning.create({ data: { id: randomUUID(), assignmentId: assignment.id, partnerId: assignment.partnerId, amountMinor: assignment.earningOfferMinor, policyVersion: assignment.payPolicyVersion } });
 }
+export async function runAutoDispatchOnce({ db = prisma, dispatch = dispatchOne } = {}) {
+  if (process.env.RIDER_AUTO_DISPATCH_WORKER === 'false') return 0;
+  await expireRiderOffers(db);
+  const policy = await db.riderPayPolicy.findUnique({ where: { id: 'default' } });
+  if (!policy?.published || !policy.automaticDispatch) return 0;
+  const due = await db.orderFulfilment.findMany({ where: { status: 'READY_FOR_PICKUP', fulfilmentMethod: 'DELIVERY', order: { status: 'PAID' }, deliveryAssignments: { none: { status: { not: 'REJECTED' } } } }, select: { id: true }, orderBy: { createdAt: 'asc' }, take: 10 });
+  for (const fulfilment of due) try { await dispatch(fulfilment.id, null, { db, requireAutomatic: true }); } catch (e) { if (!e.ccError) throw e; }
+  return due.length;
+}
 export function startAutoDispatchWorker() {
   let busy = false;
   const timer = setInterval(async () => {
     if (busy || process.env.RIDER_AUTO_DISPATCH_WORKER === 'false') return;
     busy = true;
     try {
-      await expireRiderOffers();
-      const policy = await prisma.riderPayPolicy.findUnique({ where: { id: 'default' } });
-      if (!policy?.published || !policy.automaticDispatch) return;
-      const due = await prisma.orderFulfilment.findMany({ where: { status: 'READY_FOR_PICKUP', fulfilmentMethod: 'DELIVERY', order: { status: 'PAID' }, deliveryAssignments: { none: { status: { not: 'REJECTED' } } } }, select: { id: true }, orderBy: { createdAt: 'asc' }, take: 10 });
-      for (const f of due) try { await dispatchOne(f.id, null, { requireAutomatic: true }); } catch (e) { if (!e.ccError) throw e; }
+      await runAutoDispatchOnce();
     } catch { console.error('[rider-dispatch] Queue unavailable; deliveries remain unassigned.'); }
     finally { busy = false; }
   }, 15000);

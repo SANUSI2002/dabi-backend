@@ -37,19 +37,22 @@ export async function pruneTracking(db = prisma, now = new Date()) {
   await db.deliveryPartner.updateMany({ where: { OR: [{ isAvailable: false }, { availableUntil: { lte: now } }], locationUpdatedAt: { lt: new Date(now.getTime() - 86400000) } }, data: { lastLatitude: null, lastLongitude: null, locationAccuracyMeters: null, locationUpdatedAt: null } });
   return rows.length;
 }
+export async function reconcileSubscriptionOnce({ db = prisma, reconcile = reconcileSubscription, configured = operationsConfigured } = {}) {
+  if (!configured()) return false;
+  const row = await db.subscriptionPayment.findFirst({ where: { status: { in: ['INITIALIZING', 'UNKNOWN', 'READY'] }, nextCheckAt: { lte: new Date() }, OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] }, orderBy: { nextCheckAt: 'asc' } });
+  if (!row) return false;
+  const changed = await db.subscriptionPayment.updateMany({ where: { id: row.id, nextCheckAt: row.nextCheckAt }, data: { nextCheckAt: new Date(Date.now() + 300000) } });
+  if (!changed.count) return false;
+  try { await reconcile(row.reference); } catch (e) { await db.subscriptionPayment.updateMany({ where: { id: row.id, status: { not: 'PAID' } }, data: { errorCode: e.code || 'PROVIDER_UNAVAILABLE' } }); }
+  return true;
+}
 export function startRuntimeWorker() {
   let busy = false, lastPruned = 0;
   const timer = setInterval(async () => {
     if (busy) return; busy = true;
     try {
       await sendSubscriptionMail();
-      if (operationsConfigured()) {
-        const row = await prisma.subscriptionPayment.findFirst({ where: { status: { in: ['INITIALIZING', 'UNKNOWN', 'READY'] }, nextCheckAt: { lte: new Date() }, OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] }, orderBy: { nextCheckAt: 'asc' } });
-        if (row) {
-          const changed = await prisma.subscriptionPayment.updateMany({ where: { id: row.id, nextCheckAt: row.nextCheckAt }, data: { nextCheckAt: new Date(Date.now() + 300000) } });
-          if (changed.count) try { await reconcileSubscription(row.reference); } catch (e) { await prisma.subscriptionPayment.updateMany({ where: { id: row.id, status: { not: 'PAID' } }, data: { errorCode: e.code || 'PROVIDER_UNAVAILABLE' } }); }
-        }
-      }
+      await reconcileSubscriptionOnce();
       if (Date.now() - lastPruned > 3600000) { await pruneTracking(); lastPruned = Date.now(); }
     } catch { console.error('[platform-runtime] Queue temporarily unavailable; jobs remain persisted.'); }
     finally { busy = false; }

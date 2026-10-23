@@ -150,20 +150,25 @@ export async function queueRiderTransferVerification(event, db = prisma) {
   const changed = await db.riderTransferAttempt.updateMany({ where: { reference, ...(event.event === 'transfer.reversed' ? {} : { OR: [{ lastProviderEvent: null }, { lastProviderEvent: { not: 'transfer.reversed' } }] }) }, data: { nextCheckAt: new Date(), verificationRequested: true, lastProviderEvent: event.event } });
   return changed.count ? { queued: true } : { ignored: true };
 }
+export async function runRiderTransferReconciliationOnce({ db = prisma, gateway = provider } = {}) {
+  if (!gateway.operationsConfigured()) return 0;
+  const rows = await db.riderTransferAttempt.findMany({ where: { AND: [{ OR: [{ status: { in: ['SUBMITTED', 'UNKNOWN', 'NEEDS_PROVIDER_AUTH'] } }, { verificationRequested: true }] }, { OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] }], nextCheckAt: { lte: new Date() } }, orderBy: { nextCheckAt: 'asc' }, take: 1 });
+  for (const row of rows) {
+    // Preserve the compare-and-set claim and provider retry delay in both hosts.
+    const claimed = await db.riderTransferAttempt.updateMany({ where: { id: row.id, nextCheckAt: row.nextCheckAt }, data: { nextCheckAt: new Date(Date.now() + 300000) } });
+    if (!claimed.count) continue;
+    try { await reconcileRiderTransfer(row.reference, { db, gateway }); }
+    catch (e) { await db.riderTransferAttempt.update({ where: { id: row.id }, data: { errorCode: e.code || 'RECONCILIATION_UNAVAILABLE' } }); }
+  }
+  return rows.length;
+}
 export function startRiderTransferReconciler() {
   let busy = false;
   const timer = setInterval(async () => {
     if (busy || !provider.operationsConfigured()) return;
     busy = true;
     try {
-      const rows = await prisma.riderTransferAttempt.findMany({ where: { AND: [{ OR: [{ status: { in: ['SUBMITTED', 'UNKNOWN', 'NEEDS_PROVIDER_AUTH'] } }, { verificationRequested: true }] }, { OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] }], nextCheckAt: { lte: new Date() } }, orderBy: { nextCheckAt: 'asc' }, take: 1 });
-      for (const row of rows) {
-        // Delay before network work so a failing provider does not cause a tight request loop.
-        const claimed = await prisma.riderTransferAttempt.updateMany({ where: { id: row.id, nextCheckAt: row.nextCheckAt }, data: { nextCheckAt: new Date(Date.now() + 300000) } });
-        if (!claimed.count) continue;
-        try { await reconcileRiderTransfer(row.reference); }
-        catch (e) { await prisma.riderTransferAttempt.update({ where: { id: row.id }, data: { errorCode: e.code || 'RECONCILIATION_UNAVAILABLE' } }); }
-      }
+      await runRiderTransferReconciliationOnce();
     } catch { console.error('[rider-payouts] Reconciliation unavailable; no payout is marked paid.'); }
     finally { busy = false; }
   }, 15000);
