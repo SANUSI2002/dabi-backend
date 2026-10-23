@@ -38,3 +38,14 @@ export async function activeMemberWithRole(organizationId, userId, roleCode) {
   });
   return !!membership;
 }
+
+/** userId → role codes held in the organization (any membership status), for labelling audit actors. */
+export async function memberRoleMap(organizationId, userIds) {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (!unique.length) return new Map();
+  const memberships = await prisma.organizationMembership.findMany({
+    where: { organizationId, userId: { in: unique } },
+    select: { userId: true, roles: { select: { roleCode: true } } },
+  });
+  return new Map(memberships.map((m) => [m.userId, m.roles.map((r) => r.roleCode).sort()]));
+}

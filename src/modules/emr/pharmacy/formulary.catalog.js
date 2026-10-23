@@ -23,8 +23,9 @@ export const formularyFields = {
   controlled: z.boolean().optional(),
   highAlert: z.boolean().optional(),
   reorderLevel: z.number().int().min(0).max(1e6).optional(),
-  // Catalogue details (not used by prescribing checks).
-  category: label(60).nullable().optional(),
+  // Catalogue details (not used by prescribing checks). The category is a code on the organization's
+  // drug-categories list, the drug classes codes on its drug-classes list (checked when saved).
+  category: code.nullable().optional(),
   manufacturer: label(120).nullable().optional(),
   prescriptionRequired: z.boolean().optional(),
   minStock: z.number().int().min(0).max(1e6).optional(),
@@ -33,9 +34,32 @@ export const formularyFields = {
 };
 export const formularyCode = code;
 
+// The starter items' categories (codes on the starter drug-categories list).
+const CATEGORY_OF = {
+  PARA500: 'ANALGESIC',
+  IBU400: 'ANALGESIC',
+  DICLO75_INJ: 'ANALGESIC',
+  AMOX500: 'ANTIBIOTIC',
+  AMOXCLAV625: 'ANTIBIOTIC',
+  CEFTRI1G_INJ: 'ANTIBIOTIC',
+  METRO400: 'ANTIBIOTIC',
+  CIPRO500: 'ANTIBIOTIC',
+  AL20_120: 'ANTIMALARIAL',
+  METF500: 'ANTIDIABETIC',
+  AMLO5: 'ANTIHYPERTENSIVE',
+  OMEP20: 'GASTROINTESTINAL',
+  PRED5: 'CORTICOSTEROID',
+  FESO4_200: 'HAEMATINIC',
+  ZINC20: 'VITAMIN',
+  ORS: 'FLUIDS',
+  SALB_INH: 'RESPIRATORY',
+  INS_SOL: 'ANTIDIABETIC',
+  TRAM50: 'OPIOID',
+  MORPH10_INJ: 'OPIOID',
+};
 const item = (codeValue, genericName, form, strength, doseUnit, dispenseUnit, dosePerDispenseUnit, maxDailyDose, defaultRoute, extra = {}) => ({
   code: codeValue, genericName, form, strength, doseUnit, dispenseUnit, dosePerDispenseUnit, maxDailyDose, defaultRoute,
-  drugClasses: [], controlled: false, highAlert: false, reorderLevel: 50, ...extra,
+  drugClasses: [], controlled: false, highAlert: false, reorderLevel: 50, category: CATEGORY_OF[codeValue] ?? null, ...extra,
 });
 
 export const DEFAULT_FORMULARY = [

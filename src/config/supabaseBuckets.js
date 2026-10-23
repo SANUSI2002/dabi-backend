@@ -7,6 +7,7 @@ export const PRIVATE_BUCKET_POLICIES = Object.freeze([
   { id: PRIVATE_BUCKETS.hospitalEvidenceClean, maxBytes: 10 * 1024 * 1024, mimeTypes: evidenceTypes },
   { id: PRIVATE_BUCKETS.clinicalDocuments, maxBytes: 20 * 1024 * 1024, mimeTypes: evidenceTypes },
   { id: PRIVATE_BUCKETS.profileImages, maxBytes: 2 * 1024 * 1024, mimeTypes: ['image/jpeg', 'image/png'] },
+  { id: PRIVATE_BUCKETS.financeDocuments, maxBytes: 10 * 1024 * 1024, mimeTypes: evidenceTypes },
 ]);
 
 function readBucketLimit(bucket) {

@@ -9,7 +9,7 @@ import { sendItems } from '../core/http.js';
 import { activeMembersWithPermission } from '../core/membership.js';
 
 // Only capabilities a picker needs; the query cannot be used to map the organization's roles.
-const PICKABLE = ['lab.order.create', 'diagnosis.record', 'prescription.review', 'prescription.dispense', 'medication.administer', 'vitals.record', 'procedure.perform'];
+const PICKABLE = ['lab.order.create', 'diagnosis.record', 'prescription.review', 'prescription.dispense', 'medication.administer', 'vitals.record', 'procedure.perform', 'delivery.record', 'outreach.chw'];
 
 const list = z.object({
   params: z.object({ organizationId: z.uuid() }).strict(),
@@ -17,5 +17,5 @@ const list = z.object({
 });
 
 export const staffRoutes = express.Router({ mergeParams: true });
-staffRoutes.get('/', check(list), allow('encounter.read', 'lab.order.read', 'queue.read'),
+staffRoutes.get('/', check(list), allow('encounter.read', 'lab.order.read', 'queue.read', 'delivery.record', 'outreach.read'),
   handle(async (req, res) => sendItems(res, await activeMembersWithPermission(req.emr.organizationId, req.query.permission))));

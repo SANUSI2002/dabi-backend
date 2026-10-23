@@ -23,6 +23,8 @@ import { labRoutes, encounterLabRoutes } from './lab/lab.routes.js';
 import { staffRoutes } from './staff/staff.routes.js';
 import { pharmacyRoutes, encounterPrescriptionRoutes, patientPharmacyRoutes } from './pharmacy/pharmacy.routes.js';
 import { wardRoutes, bedRoutes, encounterAdmissionRoutes, admissionRoutes } from './admissions/admissions.routes.js';
+import { admissionWardRoundRoutes, wardRoundRoutes } from './wardrounds/wardrounds.routes.js';
+import { scadaIngestRoutes, scadaRoutes } from './scada/scada.routes.js';
 import { billingRoutes } from './billing/billing.routes.js';
 import { queueRoutes } from './queue/queue.routes.js';
 import { patientRecordRoutes } from './records/records.routes.js';
@@ -30,7 +32,23 @@ import { dashboardRoutes } from './dashboard/dashboard.routes.js';
 import { appointmentRoutes } from './appointments/appointments.routes.js';
 import { imagingRoutes } from './radiology/radiology.routes.js';
 import { procedureRoutes } from './procedures/procedures.routes.js';
+import { catalogRoutes } from './catalogs/catalogs.routes.js';
+import { equipmentRoutes } from './assets/assets.routes.js';
+import { storeRoutes } from './stores/stores.routes.js';
+import { reportRoutes } from './reports/reports.routes.js';
+import { outreachRoutes } from './outreach/outreach.routes.js';
+import { transferRoutes } from './transfers/transfers.routes.js';
+import { referralRoutes } from './referrals/referrals.routes.js';
+import { programmeRoutes } from './programmes/programmes.routes.js';
+import { nutritionRoutes } from './nutrition/nutrition.routes.js';
+import { familyPlanningRoutes } from './family-planning/family-planning.routes.js';
+import { immunizationRoutes } from './immunizations/immunizations.routes.js';
+import { surveillanceRoutes } from './surveillance/surveillance.routes.js';
+import { postnatalRoutes } from './postnatal/postnatal.routes.js';
+import { antenatalRoutes } from './antenatal/antenatal.routes.js';
+import { birthRoutes, deliveryRoutes } from './deliveries/deliveries.routes.js';
 import { tenantRuntimeRoutes } from '../command-centre/runtime.routes.js';
+import { moduleGate } from '../org-config/modules.service.js';
 import jevEmrRoutes from '../ai/jev/jev.emr.routes.js';
 
 const router = express.Router();
@@ -42,6 +60,7 @@ router.get('/internal/metrics', protect, requirePlatform, (req, res) => {
 });
 
 const tenant = express.Router({ mergeParams: true });
+tenant.use(moduleGate('emr')); // a module the organization switched off is refused
 tenant.use('/runtime', tenantRuntimeRoutes);
 tenant.use('/ai', jevEmrRoutes);
 tenant.use('/patients', patientRoutes);
@@ -55,17 +74,39 @@ tenant.use('/pharmacy', pharmacyRoutes);
 tenant.use('/encounters/:encounterId/admission', encounterAdmissionRoutes);
 tenant.use('/wards', wardRoutes);
 tenant.use('/beds', bedRoutes);
+tenant.use('/admissions/:admissionId/ward-rounds', admissionWardRoundRoutes);
 tenant.use('/admissions', admissionRoutes);
+tenant.use('/ward-rounds', wardRoundRoutes);
 tenant.use('/billing', billingRoutes);
 tenant.use('/queue', queueRoutes);
 tenant.use('/dashboard', dashboardRoutes);
 tenant.use('/appointments', appointmentRoutes);
 tenant.use('/imaging', imagingRoutes);
 tenant.use('/procedures', procedureRoutes);
+tenant.use('/catalogs', catalogRoutes);
+tenant.use('/equipment', equipmentRoutes);
+tenant.use('/scada', scadaRoutes);
+tenant.use('/stores', storeRoutes);
+tenant.use('/reports', reportRoutes);
+tenant.use('/outreach', outreachRoutes);
+tenant.use('/transfers', transferRoutes);
+tenant.use('/referrals', referralRoutes);
+tenant.use('/programmes', programmeRoutes);
+tenant.use('/nutrition', nutritionRoutes);
+tenant.use('/family-planning', familyPlanningRoutes);
+tenant.use('/surveillance', surveillanceRoutes);
+tenant.use('/immunizations', immunizationRoutes);
+tenant.use('/postnatal', postnatalRoutes);
+tenant.use('/antenatal', antenatalRoutes);
+tenant.use('/deliveries', deliveryRoutes);
+tenant.use('/births', birthRoutes);
 tenant.use('/staff', staffRoutes);
 tenant.use('/webhooks', webhookRoutes);
 tenant.use('/audit-events', auditRoutes);
 tenant.use('/telehealth/designation', telehealthRoutes);
+
+// Devices report with their own key, not a staff sign-in (see scada.routes.js).
+router.use('/scada/ingest', scadaIngestRoutes);
 
 router.use(
   '/organizations/:organizationId',

@@ -16,14 +16,18 @@ const resultEntries = z.array(z.object({
 // ---- catalog ----
 // The lab section a test is grouped under on ordering screens (e.g. Haematology).
 const section = z.string().trim().min(1).max(60).regex(/^[^\p{Cc}]+$/u, 'Contains control characters');
+const turnaroundMinutes = z.number().int().min(5).max(10080);
+const phaseName = z.string().trim().min(1).max(60).regex(/^[^\p{Cc}]+$/u, 'Contains control characters');
+// Bench phases between collection and result entry, in order (result entry completes the last one).
+const phases = z.array(phaseName).max(10).refine((list) => new Set(list.map((p) => p.toLowerCase())).size === list.length, 'Each phase can appear once');
 export const listTests = z.object({ params: z.object(org).strict(), query: z.object({ includeInactive: z.enum(['true', 'false']).optional() }).strict() });
 export const createTest = z.object({
   params: z.object(org).strict(), query: noQuery,
-  body: z.object({ code: testCode, name: z.string().trim().min(1).max(120), section: section.optional(), specimenType: z.string().trim().min(1).max(80), analytes: analytesSchema }).strict(),
+  body: z.object({ code: testCode, name: z.string().trim().min(1).max(120), section: section.optional(), specimenType: z.string().trim().min(1).max(80), analytes: analytesSchema, turnaroundMinutes: turnaroundMinutes.optional(), phases: phases.optional() }).strict(),
 });
 export const updateTest = z.object({
   params: z.object({ ...org, code: testCode }).strict(), query: noQuery,
-  body: z.object({ name: z.string().trim().min(1).max(120).optional(), section: section.optional(), specimenType: z.string().trim().min(1).max(80).optional(), analytes: analytesSchema.optional(), active: z.boolean().optional() })
+  body: z.object({ name: z.string().trim().min(1).max(120).optional(), section: section.optional(), specimenType: z.string().trim().min(1).max(80).optional(), analytes: analytesSchema.optional(), turnaroundMinutes: turnaroundMinutes.optional(), phases: phases.optional(), active: z.boolean().optional() })
     .strict().refine((body) => Object.values(body).some((value) => value !== undefined), 'Send at least one field to change'),
 });
 
@@ -62,3 +66,5 @@ export const returnResults = z.object({ params: itemParams, query: noQuery, body
 export const acknowledge = z.object({ params: itemParams, query: noQuery, body: noBody });
 export const communicate = z.object({ params: itemParams, query: noQuery, body: z.object({ toUserId: z.uuid() }).strict() });
 export const amend = z.object({ params: itemParams, query: noQuery, body: z.object({ reason, results: resultEntries }).strict() });
+
+export const completePhase = z.object({ params: itemParams, query: noQuery, body: z.object({ phase: phaseName }).strict() });

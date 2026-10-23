@@ -22,6 +22,16 @@ export const EVENT_TYPES = [
   'medication.dispensed', 'medication.returned', 'allergy.recorded', 'stock.low',
   'admission.created', 'admission.transferred', 'admission.discharged', 'admission.cancelled', 'medication.administered',
   'invoice.issued', 'invoice.voided', 'payment.recorded', 'payment.reversed',
+  'pregnancy.enrolled', 'anc.visit.recorded', 'pregnancy.visit_entered_in_error', 'pregnancy.closed',
+  'delivery.recorded', 'delivery.entered_in_error', 'birth.notified', 'birth.registered', 'birth.certificate_issued',
+  'pnc.recorded', 'pnc.entered_in_error',
+  'immunization.given', 'immunization.aefi_reported', 'immunization.entered_in_error', 'surveillance.notified', 'surveillance.classified',
+  'fp.registered', 'fp.visit_recorded', 'fp.discontinued',
+  'growth.recorded', 'growth.entered_in_error', 'cmam.screened', 'cmam.discharged',
+  'ncd.enrolled',
+  'referral.created', 'referral.accepted', 'referral.declined', 'referral.scheduled', 'referral.attended', 'referral.cancelled', 'referral.completed',
+  'transfer.initiated', 'transfer.completed', 'transfer.cancelled',
+  'outreach.logged',
 ];
 const MAX_SUBSCRIPTIONS = 10;
 

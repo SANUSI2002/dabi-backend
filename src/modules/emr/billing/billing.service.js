@@ -5,6 +5,7 @@
 // transaction, and reconciliation() checks invoices against their charges, payments and ledger.
 // Invoices and payments lock the invoice row (FOR UPDATE) first; issuing an invoice claims its
 // charges with a guarded UPDATE, so each charge lands on exactly one invoice.
+import { requireListed } from '../../org-config/orgConfig.service.js';
 import { withTenant } from '../core/db.js';
 import { afterCursor, page } from '../core/cursor.js';
 import { recordAudit, changedFieldNames } from '../core/audit.js';
@@ -270,6 +271,7 @@ export async function recordPayment(context, invoiceId, input, { idempotencyKey 
   if (!idempotencyKey) throw new EmrError('IDEMPOTENCY_KEY_REQUIRED');
   return withTenant(context, (tx) => idempotent(tx, context, { key: idempotencyKey, scope: `payment:${invoiceId}`, body: input }, async () => {
     const invoice = await lockInvoice(tx, context, invoiceId);
+    await requireListed(tx, context, 'receiving-accounts', input.receivingAccount, { what: 'The receiving account' });
     if (!['ISSUED', 'PARTIALLY_PAID'].includes(invoice.status)) throw new EmrError('INVALID_STATE', { message: `This invoice is ${invoice.status.toLowerCase().replace('_', ' ')}.` });
     const amount = BigInt(input.amountMinor);
     const balance = invoice.totalMinor - invoice.amountPaidMinor;

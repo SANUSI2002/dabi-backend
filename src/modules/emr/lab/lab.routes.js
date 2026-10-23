@@ -35,6 +35,8 @@ labRoutes.post('/orders/:orderId/cancel', check(v.cancel), allow('lab.order.crea
   handle(async (req, res) => send(res, await service.cancelOrder(req.emr, req.params.orderId, requireVersion(req), req.body))));
 
 // Result actions take the ordered test's version in If-Match (each test is versioned separately).
+labRoutes.post('/orders/:orderId/items/:itemId/phase', check(v.completePhase), allow('lab.result.create'),
+  handle(async (req, res) => send(res, await service.completePhase(req.emr, req.params.orderId, req.params.itemId, requireVersion(req), req.body))));
 labRoutes.put('/orders/:orderId/items/:itemId/results', check(v.enterResults), allow('lab.result.create'),
   handle(async (req, res) => send(res, await service.enterResults(req.emr, req.params.orderId, req.params.itemId, requireVersion(req), req.body))));
 labRoutes.post('/orders/:orderId/items/:itemId/verify', check(v.verify), allow('lab.result.verify'),

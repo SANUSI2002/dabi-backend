@@ -5,7 +5,7 @@
 //   3. require the EMR API to be switched on,
 // then expose req.emr = { organizationId, userId, requestId, roles, permissions }.
 import { documented } from '../../../docs/routeMeta.js';
-import { approvedEmrFor, emrPatientRegistryEnabled } from '../emr.entitlement.js';
+import { accountingApiEnabled, approvedProductFor, emrPatientRegistryEnabled, workforceApiEnabled } from '../emr.entitlement.js';
 import { EmrError } from './errors.js';
 
 export const emrApiEnabled = emrPatientRegistryEnabled;
@@ -14,22 +14,28 @@ const ENTITLEMENT_TTL_MS = 60_000;
 const entitlementCache = new Map();
 export const clearEntitlementCache = () => entitlementCache.clear();
 
-async function entitled(accessContext) {
-  const key = accessContext.organization.id;
+async function entitled(accessContext, product = 'emr') {
+  const key = `${accessContext.organization.id}:${product}`;
   const cached = entitlementCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.ok;
-  const ok = await approvedEmrFor(accessContext);
+  const ok = await approvedProductFor(accessContext, product);
   entitlementCache.set(key, { ok, expiresAt: Date.now() + ENTITLEMENT_TTL_MS });
   if (entitlementCache.size > 20_000) entitlementCache.delete(entitlementCache.keys().next().value);
   return ok;
 }
 
-export const emrTenant = async (req, res, next) => {
+/**
+ * Tenant resolution for a product API: same tenancy (req.emr, RLS via withTenant), its own entitlement.
+ * `product` may be a list: entitled to any one of them (shared configuration).
+ */
+const productTenant = (product, deniedCode, enabled, disabledCode) => async (req, res, next) => {
   try {
     const organization = req.accessContext?.organization;
     if (!organization || req.params.organizationId !== organization.id) throw new EmrError('ORGANIZATION_ACCESS_DENIED');
-    if (!await entitled(req.accessContext)) throw new EmrError('EMR_ACCESS_DENIED');
-    if (!emrApiEnabled()) throw new EmrError('EMR_PATIENT_REGISTRY_DISABLED');
+    let ok = false;
+    for (const one of [product].flat()) if (!ok) ok = await entitled(req.accessContext, one);
+    if (!ok) throw new EmrError(deniedCode);
+    if (!enabled()) throw new EmrError(disabledCode);
     req.emr = {
       organizationId: organization.id,
       facilityId: organization.facilityId ?? null,
@@ -45,7 +51,16 @@ export const emrTenant = async (req, res, next) => {
   }
 };
 
+export const emrTenant = productTenant('emr', 'EMR_ACCESS_DENIED', emrApiEnabled, 'EMR_PATIENT_REGISTRY_DISABLED');
+export const workforceTenant = productTenant('workforce', 'WORKFORCE_ACCESS_DENIED', workforceApiEnabled, 'WORKFORCE_API_DISABLED');
+export const accountingTenant = productTenant('accounting', 'ACCOUNTING_ACCESS_DENIED', accountingApiEnabled, 'ACCOUNTING_API_DISABLED');
+// Organization configuration shared by every product (master data, terminology, letters).
+export const orgConfigTenant = productTenant(['emr', 'workforce', 'accounting'], 'ORG_CONFIG_ACCESS_DENIED', () => emrApiEnabled() || workforceApiEnabled() || accountingApiEnabled(), 'WORKFORCE_API_DISABLED');
+
 export const requireEmrPermission = (...codes) => documented((req, res, next) =>
   (codes.some((code) => req.emr?.permissions.includes(code)) ? next() : next(new EmrError('PERMISSION_DENIED'))), { permissions: codes, emr: true });
 
 documented(emrTenant, { emrTenant: true });
+documented(workforceTenant, { emrTenant: true });
+documented(orgConfigTenant, { emrTenant: true });
+documented(accountingTenant, { emrTenant: true });

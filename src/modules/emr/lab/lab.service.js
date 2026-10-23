@@ -31,6 +31,7 @@ const toOrder = (order) => ({
 // Minimum identity the lab needs to label and match specimens — no contact or clinical details.
 const labPatient = { select: { id: true, medicalRecordNumber: true, givenName: true, familyName: true, dateOfBirth: true, sex: true } };
 const currentResults = { where: { status: { not: 'SUPERSEDED' } }, orderBy: { analyteCode: 'asc' } };
+const phaseLog = { orderBy: { position: 'asc' } };
 
 // ---------------------------------------------------------------------------------------------
 // Catalog
@@ -97,7 +98,7 @@ export async function orderTests(context, encounterId, input, { idempotencyKey }
         clinicalNotes: input.clinicalNotes, orderedByUserId: context.userId,
         items: { create: input.tests.map((code) => {
           const test = tests.find((t) => t.code === code);
-          return { testCode: test.code, testName: test.name, specimenType: test.specimenType, analytes: test.analytes };
+          return { testCode: test.code, testName: test.name, specimenType: test.specimenType, analytes: test.analytes, turnaroundMinutes: test.turnaroundMinutes, phases: test.phases };
         }) },
       },
       include: { items: true },
@@ -114,7 +115,7 @@ export async function listEncounterOrders(context, encounterId) {
     if (!encounter) throw new EmrError('ENCOUNTER_NOT_FOUND');
     const orders = await tx.emrLabOrder.findMany({
       where: { organizationId: context.organizationId, encounterId },
-      include: { items: { include: { results: currentResults }, orderBy: { testCode: 'asc' } } },
+      include: { items: { include: { results: currentResults, phaseLog }, orderBy: { testCode: 'asc' } } },
       orderBy: { createdAt: 'asc' },
     });
     await recordAudit(tx, context, { action: 'lab_result.viewed', resourceType: 'encounter', resourceId: encounterId });
@@ -128,10 +129,14 @@ const nameField = (field) => field.replace(/UserId$/, 'Name');
 
 /** Adds the display name beside every staff id on the orders and their tests (e.g. verifiedByName). */
 async function withStaffNames(tx, orders) {
-  const ids = orders.flatMap((order) => [...ORDER_PEOPLE.map((f) => order[f]), ...order.items.flatMap((item) => ITEM_PEOPLE.map((f) => item[f]))]);
+  const ids = orders.flatMap((order) => [
+    ...ORDER_PEOPLE.map((f) => order[f]),
+    ...order.items.flatMap((item) => [...ITEM_PEOPLE.map((f) => item[f]), ...(item.phaseLog ?? []).map((p) => p.completedByUserId)]),
+  ]);
   const names = await userNameMap(tx, ids);
   const named = (row, fields) => ({ ...row, ...Object.fromEntries(fields.map((f) => [nameField(f), names.get(row[f]) ?? null])) });
-  return orders.map((order) => ({ ...named(order, ORDER_PEOPLE), items: order.items.map((item) => named(item, ITEM_PEOPLE)) }));
+  const withPhaseNames = (item) => (item.phaseLog ? { ...item, phaseLog: item.phaseLog.map((p) => ({ ...p, completedByName: names.get(p.completedByUserId) ?? null })) } : item);
+  return orders.map((order) => ({ ...named(order, ORDER_PEOPLE), items: order.items.map((item) => withPhaseNames(named(item, ITEM_PEOPLE))) }));
 }
 
 /**
@@ -151,7 +156,7 @@ export async function worklist(context, { status, priority, patientId, limit, cu
         ...(patientId ? { patientId } : {}),
         ...after,
       },
-      include: { patient: labPatient, items: { include: { results: currentResults }, orderBy: { testCode: 'asc' } } },
+      include: { patient: labPatient, items: { include: { results: currentResults, phaseLog }, orderBy: { testCode: 'asc' } } },
       orderBy: [{ createdAt: direction }, { id: direction }],
       take: limit + 1,
     });
@@ -165,7 +170,18 @@ export async function worklist(context, { status, priority, patientId, limit, cu
 export async function labOrdersForPatient(tx, context, patientId, take) {
   const rows = await tx.emrLabOrder.findMany({
     where: { organizationId: context.organizationId, patientId },
-    include: { patient: labPatient, items: { include: { results: currentResults }, orderBy: { testCode: 'asc' } } },
+    include: { patient: labPatient, items: { include: { results: currentResults, phaseLog }, orderBy: { testCode: 'asc' } } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take,
+  });
+  return (await withStaffNames(tx, rows)).map(toOrder);
+}
+
+/** Orders placed in a period (every status), with results and staff names — the report builder's lab source. */
+export async function withStaffNamesForReports(tx, context, createdAt, take) {
+  const rows = await tx.emrLabOrder.findMany({
+    where: { organizationId: context.organizationId, createdAt },
+    include: { patient: labPatient, items: { include: { results: currentResults, phaseLog }, orderBy: { testCode: 'asc' } } },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take,
   });
@@ -176,7 +192,7 @@ export async function getOrder(context, orderId) {
   return withTenant(context, async (tx) => {
     const order = await tx.emrLabOrder.findFirst({
       where: { organizationId: context.organizationId, id: orderId },
-      include: { patient: labPatient, items: { include: { results: { orderBy: [{ analyteCode: 'asc' }, { enteredAt: 'asc' }] } }, orderBy: { testCode: 'asc' } } },
+      include: { patient: labPatient, items: { include: { results: { orderBy: [{ analyteCode: 'asc' }, { enteredAt: 'asc' }] }, phaseLog }, orderBy: { testCode: 'asc' } } },
     });
     if (!order) throw new EmrError('LAB_ORDER_NOT_FOUND');
     await recordAudit(tx, context, { action: 'lab_order.viewed', resourceType: 'lab_order', resourceId: orderId });
@@ -252,14 +268,41 @@ export async function enterResults(context, orderId, itemId, expectedVersion, { 
     policy.requireOrderStatus(order, ['COLLECTED', 'IN_PROGRESS'], 'resulted');
     const item = await loadItem(tx, context, order, itemId);
     if (item.status === 'VERIFIED') throw new EmrError('INVALID_STATE', { message: 'This test is verified; amend it instead.' });
+    if (item.phaseIndex < item.phases.length - 1) {
+      throw new EmrError('INVALID_STATE', { message: `Complete "${item.phases[item.phaseIndex]}" before entering results.` });
+    }
     const rows = policy.interpretAll(item.analytes, results, order.patient.sex);
+    // Entering results completes the last bench phase.
+    const lastPhase = item.phases.length && item.phaseIndex === item.phases.length - 1 ? { phaseIndex: item.phases.length } : {};
+    if (lastPhase.phaseIndex) {
+      await tx.emrLabItemPhase.create({ data: { organizationId: context.organizationId, itemId, position: item.phaseIndex, phase: item.phases[item.phaseIndex], completedByUserId: context.userId } });
+    }
 
     await tx.emrLabResult.deleteMany({ where: { organizationId: context.organizationId, itemId, status: 'PRELIMINARY' } });
     await tx.emrLabResult.createMany({ data: rows.map((row) => ({ ...row, organizationId: context.organizationId, itemId, enteredByUserId: context.userId })) });
-    await updateItem(tx, context, itemId, expectedVersion, { status: 'RESULTED', resultedAt: new Date(), resultedByUserId: context.userId });
+    await updateItem(tx, context, itemId, expectedVersion, { status: 'RESULTED', resultedAt: new Date(), resultedByUserId: context.userId, ...lastPhase });
     if (order.status === 'COLLECTED') await tx.emrLabOrder.updateMany({ where: { organizationId: context.organizationId, id: orderId }, data: { status: 'IN_PROGRESS', version: { increment: 1 } } });
     await recordAudit(tx, context, { action: 'lab_result.entered', resourceType: 'lab_order_item', resourceId: itemId, changedFields: rows.map((r) => r.analyteCode) });
     return itemWithResults(tx, context, itemId);
+  });
+}
+
+/** Completes the test's current bench phase, in order. The last phase is completed by entering results. */
+export async function completePhase(context, orderId, itemId, expectedVersion, { phase }) {
+  return withTenant(context, async (tx) => {
+    const order = await lockOrder(tx, context, orderId);
+    policy.requireOrderStatus(order, ['COLLECTED', 'IN_PROGRESS'], 'processed');
+    const item = await loadItem(tx, context, order, itemId);
+    if (item.status !== 'PENDING') throw new EmrError('INVALID_STATE', { message: 'Results are already entered for this test.' });
+    if (item.phaseIndex >= item.phases.length - 1) throw new EmrError('INVALID_STATE', { message: 'The last phase is completed by entering the results.' });
+    const current = item.phases[item.phaseIndex];
+    if (current.toLowerCase() !== phase.trim().toLowerCase()) throw new EmrError('INVALID_STATE', { message: `The current phase is "${current}".` });
+    await tx.emrLabItemPhase.create({ data: { organizationId: context.organizationId, itemId, position: item.phaseIndex, phase: current, completedByUserId: context.userId } });
+    await updateItem(tx, context, itemId, expectedVersion, { phaseIndex: item.phaseIndex + 1 });
+    if (order.status === 'COLLECTED') await tx.emrLabOrder.updateMany({ where: { organizationId: context.organizationId, id: orderId }, data: { status: 'IN_PROGRESS', version: { increment: 1 } } });
+    await recordAudit(tx, context, { action: 'lab_phase.completed', resourceType: 'lab_order_item', resourceId: itemId, changedFields: [current] });
+    const updated = await tx.emrLabOrderItem.findFirst({ where: { organizationId: context.organizationId, id: itemId }, include: { results: currentResults, phaseLog } });
+    return { ...updated, results: updated.results.map(toResult) };
   });
 }
 

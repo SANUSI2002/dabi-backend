@@ -2292,6 +2292,19 @@ model EmrPatient {
   appointments EmrAppointment[]
   imagingStudies EmrImagingStudy[]
   procedures EmrProcedure[]
+  transfers EmrPatientTransfer[]
+  referrals EmrReferral[]
+  ncdClients EmrNcdClient[]
+  cmamScreenings EmrCmamScreening[]
+  growthVisits EmrGrowthVisit[]
+  fpClients EmrFpClient[]
+  surveillanceCases EmrSurveillanceCase[]
+  immunizations EmrImmunization[]
+  aefiReports EmrAefiReport[]
+  pncVisits EmrPncVisit[]
+  pregnancies EmrPregnancy[]
+  deliveries EmrDelivery[]
+  birthRegistrations EmrBirthRegistration[]
 
   @@unique([organizationId, medicalRecordNumber])
   @@unique([organizationId, id])
@@ -3307,6 +3320,8 @@ model EmrLabTest {
   section String @default("General")
   specimenType String @map("specimen_type")
   analytes Json
+  turnaroundMinutes Int @default(60) @map("turnaround_minutes")
+  phases String[] @default([])
   active Boolean @default(true)
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at")
@@ -3352,6 +3367,9 @@ model EmrLabOrderItem {
   testName String @map("test_name")
   specimenType String @map("specimen_type")
   analytes Json
+  turnaroundMinutes Int @default(60) @map("turnaround_minutes")
+  phases String[] @default([])
+  phaseIndex Int @default(0) @map("phase_index")
   status EmrLabItemStatus @default(PENDING)
   resultedByUserId String? @map("resulted_by_user_id")
   resultedAt DateTime? @map("resulted_at")
@@ -3371,6 +3389,7 @@ model EmrLabOrderItem {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   order EmrLabOrder @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: Restrict)
   results EmrLabResult[]
+  phaseLog EmrLabItemPhase[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, orderId, testCode])
@@ -3457,6 +3476,9 @@ model EmrFormularyItem {
   version Int @default(1)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  referenceSource String? @map("reference_source") @db.VarChar(10)
+  referenceId String? @map("reference_id") @db.VarChar(80)
+  addedByUserId String? @map("added_by_user_id")
   batches EmrStockBatch[]
 
   @@unique([organizationId, id])
@@ -3774,6 +3796,9 @@ model EmrPrescriptionItem {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   prescription EmrPrescription @relation(fields: [organizationId, prescriptionId], references: [organizationId, id], onDelete: Restrict)
 
+  heldAt DateTime? @map("held_at")
+  heldReason String? @map("held_reason") @db.VarChar(1000)
+  heldByUserId String? @map("held_by_user_id")
   @@unique([organizationId, id])
   @@index([organizationId, formularyItemId, status])
   @@map("emr_prescription_items")
@@ -4144,7 +4169,7 @@ model EmrPayment {
   reference String?
   /** Date on the transfer, POS slip or cheque (may differ from when it was entered). */
   transactionDate DateTime? @map("transaction_date") @db.Date
-  receivingAccount String? @map("receiving_account") @db.VarChar(60)
+  receivingAccount String? @map("receiving_account") @db.VarChar(120)
   notes String? @db.VarChar(500)
   status EmrPaymentStatus @default(POSTED)
   receivedByUserId String @map("received_by_user_id")
@@ -4478,4 +4503,3009 @@ model UserIdentityProvider {
   @@unique([provider, subject])
   @@unique([userId, provider])
   @@map("user_identity_providers")
+}
+
+// Antenatal care (migration 20261025090000_emr_antenatal; see antenatal.service.js).
+model EmrPregnancy {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  lmp DateTime @db.Date
+  edd DateTime @db.Date
+  gravida Int
+  parity Int
+  bloodGroup String? @map("blood_group") @db.VarChar(3)
+  bookingHb Decimal? @map("booking_hb") @db.Decimal(4, 1)
+  ttDoses Int @default(0) @map("tt_doses")
+  status String @default("ACTIVE") @db.VarChar(16)
+  enrolledByUserId String @map("enrolled_by_user_id")
+  closedAt DateTime? @map("closed_at")
+  closedByUserId String? @map("closed_by_user_id")
+  closureNote String? @map("closure_note") @db.VarChar(300)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  visits EmrAncVisit[]
+  deliveries EmrDelivery[]
+
+  @@unique([organizationId, id, patientId])
+  @@index([organizationId, createdAt, id])
+  @@map("emr_pregnancies")
+}
+
+model EmrAncVisit {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  pregnancyId String @map("pregnancy_id")
+  patientId String @map("patient_id")
+  visitDate DateTime @map("visit_date") @db.Date
+  gestationalWeeks Int @map("gestational_weeks")
+  weightKg Decimal? @map("weight_kg") @db.Decimal(5, 1)
+  systolic Int?
+  diastolic Int?
+  hb Decimal? @db.Decimal(4, 1)
+  fetalHeartRate Int? @map("fetal_heart_rate")
+  nextVisitDate DateTime? @map("next_visit_date") @db.Date
+  notes String? @db.VarChar(1000)
+  recordedByUserId String @map("recorded_by_user_id")
+  status String @default("ACTIVE") @db.VarChar(16)
+  errorReason String? @map("error_reason") @db.VarChar(300)
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  pregnancy EmrPregnancy @relation(fields: [organizationId, pregnancyId, patientId], references: [organizationId, id, patientId], onDelete: Restrict)
+
+  @@index([organizationId, pregnancyId, visitDate], map: "emr_anc_visits_pregnancy_idx")
+  @@map("emr_anc_visits")
+}
+
+// Labour & delivery and the birth register (migration 20261026090000_emr_deliveries; see deliveries.service.js).
+model EmrDelivery {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  pregnancyId String? @map("pregnancy_id")
+  bookingStatus String @map("booking_status") @db.VarChar(12)
+  deliveredAt DateTime @map("delivered_at")
+  gestationalWeeks Int @map("gestational_weeks")
+  mode String @db.VarChar(20)
+  motherStatus String @map("mother_status") @db.VarChar(10)
+  bloodLossMl Int @map("blood_loss_ml")
+  complications String? @db.VarChar(500)
+  notes String? @db.VarChar(1000)
+  nhmisIndicators String[] @default([]) @map("nhmis_indicators")
+  babySex String @map("baby_sex") @db.VarChar(6)
+  babyStatus String @map("baby_status") @db.VarChar(20)
+  birthWeightKg Decimal @map("birth_weight_kg") @db.Decimal(3, 2)
+  apgar1 Int? @map("apgar_1")
+  apgar5 Int? @map("apgar_5")
+  breastfedWithinHour Boolean @default(false) @map("breastfed_within_hour")
+  conductedByUserId String @map("conducted_by_user_id")
+  recordedByUserId String @map("recorded_by_user_id")
+  status String @default("ACTIVE") @db.VarChar(16)
+  errorReason String? @map("error_reason") @db.VarChar(300)
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  pregnancy EmrPregnancy? @relation(fields: [organizationId, pregnancyId, patientId], references: [organizationId, id, patientId], onDelete: Restrict)
+  registration EmrBirthRegistration?
+
+  pncVisits EmrPncVisit[]
+  @@unique([organizationId, id])
+  @@index([organizationId, deliveredAt, id])
+  @@index([organizationId, patientId, deliveredAt], map: "emr_deliveries_patient_idx")
+  @@map("emr_deliveries")
+}
+
+model EmrBirthRegistration {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  deliveryId String @map("delivery_id")
+  patientId String @map("patient_id")
+  babyName String? @map("baby_name") @db.VarChar(160)
+  fatherName String? @map("father_name") @db.VarChar(160)
+  informantName String @map("informant_name") @db.VarChar(160)
+  informantRelation String @map("informant_relation") @db.VarChar(20)
+  notificationNumber String @map("notification_number") @db.VarChar(32)
+  status String @default("NOTIFIED") @db.VarChar(20)
+  notifiedByUserId String @map("notified_by_user_id")
+  notifiedAt DateTime @default(now()) @map("notified_at")
+  registrationNumber String? @map("registration_number") @db.VarChar(60)
+  registeredByUserId String? @map("registered_by_user_id")
+  registeredAt DateTime? @map("registered_at")
+  certificateIssuedByUserId String? @map("certificate_issued_by_user_id")
+  certificateIssuedAt DateTime? @map("certificate_issued_at")
+  version Int @default(1)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  delivery EmrDelivery @relation(fields: [organizationId, deliveryId], references: [organizationId, id], onDelete: Restrict)
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, deliveryId], map: "emr_birth_registrations_delivery_key")
+  @@unique([organizationId, notificationNumber], map: "emr_birth_registrations_number_key")
+  @@map("emr_birth_registrations")
+}
+
+// Postnatal care (migration 20261027090000_emr_postnatal; see postnatal.service.js).
+model EmrPncVisit {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  deliveryId String? @map("delivery_id")
+  visitDate DateTime @map("visit_date") @db.Date
+  daysPostpartum Int @map("days_postpartum")
+  contact Int
+  systolic Int?
+  diastolic Int?
+  uterus String @db.VarChar(20)
+  lochia String @db.VarChar(12)
+  breast String @db.VarChar(16)
+  breastfeeding String @db.VarChar(20)
+  dangerSigns String[] @default([]) @map("danger_signs")
+  fpCounselled Boolean @default(false) @map("fp_counselled")
+  notes String? @db.VarChar(1000)
+  escalatedEncounterId String? @map("escalated_encounter_id")
+  recordedByUserId String @map("recorded_by_user_id")
+  status String @default("ACTIVE") @db.VarChar(16)
+  errorReason String? @map("error_reason") @db.VarChar(300)
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  delivery EmrDelivery? @relation(fields: [organizationId, deliveryId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, visitDate, id])
+  @@index([organizationId, patientId, visitDate], map: "emr_pnc_visits_patient_idx")
+  @@map("emr_pnc_visits")
+}
+
+// Immunization and AEFI (migration 20261028090000_emr_immunizations; see immunizations.service.js).
+model EmrImmunization {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  vaccineCode String @map("vaccine_code") @db.VarChar(12)
+  vaccineName String @map("vaccine_name") @db.VarChar(120)
+  givenAt DateTime @map("given_at")
+  batchNumber String @map("batch_number") @db.VarChar(60)
+  site String @db.VarChar(60)
+  givenByUserId String @map("given_by_user_id")
+  status String @default("ACTIVE") @db.VarChar(16)
+  errorReason String? @map("error_reason") @db.VarChar(300)
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  aefi EmrAefiReport?
+
+  @@unique([organizationId, id])
+  @@index([organizationId, givenAt], map: "emr_immunizations_organization_id_given_at_idx")
+  @@map("emr_immunizations")
+}
+
+model EmrAefiReport {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  immunizationId String @map("immunization_id")
+  patientId String @map("patient_id")
+  symptoms String @db.VarChar(500)
+  severity String @db.VarChar(12)
+  onsetHours Int @map("onset_hours")
+  actionTaken String @map("action_taken") @db.VarChar(500)
+  reportedByUserId String @map("reported_by_user_id")
+  reportedAt DateTime @default(now()) @map("reported_at")
+  surveillanceCaseId String? @map("surveillance_case_id")
+  immunization EmrImmunization @relation(fields: [organizationId, immunizationId], references: [organizationId, id], onDelete: Restrict)
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  surveillanceCase EmrSurveillanceCase? @relation(fields: [organizationId, surveillanceCaseId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, immunizationId], map: "emr_aefi_reports_immunization_key")
+  @@map("emr_aefi_reports")
+}
+
+// Disease surveillance (migration 20261029090000_emr_surveillance; see surveillance.service.js).
+model EmrSurveillanceCase {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  diseaseCode String @map("disease_code") @db.VarChar(10)
+  diseaseName String @map("disease_name") @db.VarChar(120)
+  immediate Boolean
+  onsetDate DateTime? @map("onset_date") @db.Date
+  notes String? @db.VarChar(1000)
+  source String @default("MANUAL") @db.VarChar(10)
+  status String @default("SUSPECTED") @db.VarChar(10)
+  reportedByUserId String @map("reported_by_user_id")
+  reportedAt DateTime @default(now()) @map("reported_at")
+  classifiedByUserId String? @map("classified_by_user_id")
+  classifiedAt DateTime? @map("classified_at")
+  classificationNote String? @map("classification_note") @db.VarChar(300)
+  version Int @default(1)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  aefiReports EmrAefiReport[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, reportedAt], map: "emr_surveillance_cases_organization_id_reported_at_idx")
+  @@map("emr_surveillance_cases")
+}
+
+// Family planning (migration 20261030090000_emr_family_planning; see family-planning.service.js).
+model EmrFpClient {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  method String @db.VarChar(40)
+  firstTime Boolean @default(false) @map("first_time")
+  startDate DateTime @map("start_date") @db.Date
+  nextVisitDate DateTime? @map("next_visit_date") @db.Date
+  counselled Boolean @default(true)
+  notes String? @db.VarChar(1000)
+  status String @default("ACTIVE") @db.VarChar(14)
+  discontinueReason String? @map("discontinue_reason") @db.VarChar(120)
+  discontinuedAt DateTime? @map("discontinued_at")
+  discontinuedByUserId String? @map("discontinued_by_user_id")
+  registeredByUserId String @map("registered_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  visits EmrFpVisit[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, createdAt], map: "emr_fp_clients_organization_id_created_at_idx")
+  @@map("emr_fp_clients")
+}
+
+model EmrFpVisit {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  clientId String @map("client_id")
+  visitDate DateTime @map("visit_date") @db.Date
+  visitType String @map("visit_type") @db.VarChar(14)
+  method String @db.VarChar(40)
+  nextVisitDate DateTime? @map("next_visit_date") @db.Date
+  notes String? @db.VarChar(1000)
+  recordedByUserId String @map("recorded_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  client EmrFpClient @relation(fields: [organizationId, clientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, clientId, visitDate], map: "emr_fp_visits_client_idx")
+  @@map("emr_fp_visits")
+}
+
+// Growth monitoring and CMAM (migration 20261031090000_emr_nutrition; see nutrition.service.js).
+model EmrGrowthVisit {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  visitDate DateTime @map("visit_date") @db.Date
+  weightKg Decimal @map("weight_kg") @db.Decimal(4, 1)
+  heightCm Decimal @map("height_cm") @db.Decimal(4, 1)
+  muacCm Decimal @map("muac_cm") @db.Decimal(3, 1)
+  waz Decimal? @db.Decimal(3, 1)
+  feeding String @db.VarChar(30)
+  classification String @db.VarChar(8)
+  recordedByUserId String @map("recorded_by_user_id")
+  status String @default("ACTIVE") @db.VarChar(16)
+  errorReason String? @map("error_reason") @db.VarChar(300)
+  erroredByUserId String? @map("errored_by_user_id")
+  erroredAt DateTime? @map("errored_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  cmamScreenings EmrCmamScreening[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, visitDate], map: "emr_growth_visits_organization_id_visit_date_idx")
+  @@map("emr_growth_visits")
+}
+
+model EmrCmamScreening {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  screeningDate DateTime @map("screening_date") @db.Date
+  muacCm Decimal @map("muac_cm") @db.Decimal(3, 1)
+  oedema String @db.VarChar(10)
+  appetite String @db.VarChar(4)
+  growthMonitoringDone Boolean? @map("growth_monitoring_done")
+  notes String? @db.VarChar(1000)
+  classification String @db.VarChar(8)
+  programme String? @db.VarChar(4)
+  source String @db.VarChar(14)
+  growthVisitId String? @map("growth_visit_id")
+  outcome String? @db.VarChar(14)
+  dischargedAt DateTime? @map("discharged_at")
+  dischargedByUserId String? @map("discharged_by_user_id")
+  recordedByUserId String @map("recorded_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  growthVisit EmrGrowthVisit? @relation(fields: [organizationId, growthVisitId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, screeningDate], map: "emr_cmam_screenings_organization_id_screening_date_idx")
+  @@map("emr_cmam_screenings")
+}
+
+// NCD register (migration 20261101090000_emr_programmes; see programmes.service.js).
+model EmrNcdClient {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  condition String @db.VarChar(120)
+  systolic Int?
+  diastolic Int?
+  fastingGlucoseMmol Decimal? @map("fasting_glucose_mmol") @db.Decimal(4, 1)
+  control String @db.VarChar(12)
+  nextVisitDate DateTime @map("next_visit_date") @db.Date
+  status String @default("ACTIVE") @db.VarChar(10)
+  enrolledByUserId String @map("enrolled_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, nextVisitDate], map: "emr_ncd_clients_organization_id_next_visit_idx")
+  @@map("emr_ncd_clients")
+}
+
+// Referrals (migration 20261102090000_emr_referrals; see referrals.service.js).
+model EmrReferral {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  direction String @db.VarChar(8)
+  destination String @db.VarChar(200)
+  diagnosis String @db.VarChar(300)
+  reason String @db.VarChar(60)
+  urgency String @db.VarChar(9)
+  status String @default("REQUESTED") @db.VarChar(9)
+  clinicalSummary String? @map("clinical_summary") @db.VarChar(4000)
+  attachedLabItemIds String[] @default([]) @map("attached_lab_item_ids")
+  referredByUserId String? @map("referred_by_user_id")
+  referredByName String? @map("referred_by_name") @db.VarChar(160)
+  sourceReferralId String? @map("source_referral_id")
+  receivingClinician String? @map("receiving_clinician") @db.VarChar(160)
+  declineReason String? @map("decline_reason") @db.VarChar(500)
+  appointmentDate DateTime? @map("appointment_date") @db.Date
+  attendedAt DateTime? @map("attended_at")
+  outcome String? @db.VarChar(30)
+  outcomeNote String? @map("outcome_note") @db.VarChar(2000)
+  outcomeBy String? @map("outcome_by") @db.VarChar(160)
+  outcomeAt DateTime? @map("outcome_at")
+  backReferral Boolean @default(false) @map("back_referral")
+  updatedByUserId String? @map("updated_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  patient EmrPatient @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+  source EmrReferral? @relation("EmrBackReferral", fields: [organizationId, sourceReferralId], references: [organizationId, id], onDelete: Restrict)
+  backReferrals EmrReferral[] @relation("EmrBackReferral")
+
+  @@unique([organizationId, id], map: "emr_referrals_org_id_key")
+  @@index([organizationId, createdAt])
+  @@index([organizationId, patientId])
+  @@map("emr_referrals")
+}
+
+// Patient transfers of care (migration 20261103090000_emr_transfers; see transfers.service.js).
+model EmrPatientTransfer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  direction String @db.VarChar(3)
+  patientId String? @map("patient_id")
+  patientName String @map("patient_name") @db.VarChar(160)
+  facility String @db.VarChar(200)
+  reason String @db.VarChar(120)
+  summary String? @db.VarChar(4000)
+  status String @default("PENDING") @db.VarChar(9)
+  recordsSent Boolean @default(false) @map("records_sent")
+  initiatedByUserId String @map("initiated_by_user_id")
+  completedByUserId String? @map("completed_by_user_id")
+  completedAt DateTime? @map("completed_at")
+  cancelledByUserId String? @map("cancelled_by_user_id")
+  cancelledAt DateTime? @map("cancelled_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  patient EmrPatient? @relation(fields: [organizationId, patientId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@map("emr_patient_transfers")
+}
+
+// Community outreach activities (migration 20261104090000_emr_outreach; see outreach.service.js).
+model EmrOutreachActivity {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  chwUserId String @map("chw_user_id")
+  activityType String @map("activity_type") @db.VarChar(120)
+  ward String @db.VarChar(120)
+  households Int
+  referrals Int
+  activityDate DateTime @map("activity_date") @db.Date
+  notes String? @db.VarChar(2000)
+  status String @default("ACTIVE") @db.VarChar(16)
+  recordedByUserId String @map("recorded_by_user_id")
+  enteredInErrorReason String? @map("entered_in_error_reason") @db.VarChar(500)
+  enteredInErrorByUserId String? @map("entered_in_error_by_user_id")
+  enteredInErrorAt DateTime? @map("entered_in_error_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, activityDate])
+  @@map("emr_outreach_activities")
+}
+
+// Monthly Summary Form returns (migration 20261105090000_emr_reports; see reports.service.js).
+model EmrMsfReturn {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  period String @db.VarChar(7)
+  values Json @default("{}")
+  status String @default("DRAFT") @db.VarChar(8)
+  updatedByUserId String @map("updated_by_user_id")
+  compiledByUserId String? @map("compiled_by_user_id")
+  compiledAt DateTime? @map("compiled_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@unique([organizationId, period])
+  @@map("emr_msf_returns")
+}
+
+// Completed bench phases of an ordered lab test (migration 20261106090000_emr_lab_phases).
+model EmrLabItemPhase {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  itemId String @map("item_id")
+  position Int
+  phase String @db.VarChar(60)
+  completedByUserId String @map("completed_by_user_id")
+  completedAt DateTime @default(now()) @map("completed_at")
+  item EmrLabOrderItem @relation(fields: [organizationId, itemId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, itemId, position], map: "emr_lab_item_phases_item_position_key")
+  @@map("emr_lab_item_phases")
+}
+
+// Hospital stores (migration 20261107090000_emr_stores; see stores.service.js).
+model EmrStoreLocation {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(12)
+  name String @db.VarChar(80)
+  type String @db.VarChar(10)
+  status String @default("ACTIVE") @db.VarChar(8)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  batches EmrStoreBatch[]
+
+  @@unique([organizationId, id], map: "emr_store_locations_org_id_key")
+  @@unique([organizationId, code])
+  @@map("emr_store_locations")
+}
+
+model EmrStoreItem {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  sku String @db.VarChar(30)
+  name String @db.VarChar(120)
+  category String @db.VarChar(120)
+  unit String @db.VarChar(20)
+  minLevel Int? @map("min_level")
+  reorderLevel Int @default(0) @map("reorder_level")
+  reorderQty Int? @map("reorder_qty")
+  active Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  batches EmrStoreBatch[]
+
+  @@unique([organizationId, id], map: "emr_store_items_org_id_key")
+  @@unique([organizationId, sku])
+  @@map("emr_store_items")
+}
+
+model EmrStoreBatch {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  itemId String @map("item_id")
+  locationId String @map("location_id")
+  batchNumber String? @map("batch_number") @db.VarChar(60)
+  expiryDate DateTime? @map("expiry_date") @db.Date
+  qtyReceived Int @map("qty_received")
+  qtyRemaining Int @map("qty_remaining")
+  unitCostMinor BigInt @map("unit_cost_minor")
+  status String @default("ACTIVE") @db.VarChar(11)
+  quarantineReason String? @map("quarantine_reason") @db.VarChar(300)
+  quarantinedByUserId String? @map("quarantined_by_user_id")
+  quarantinedAt DateTime? @map("quarantined_at")
+  source String @db.VarChar(10)
+  reference String? @db.VarChar(80)
+  receivedAt DateTime @default(now()) @map("received_at")
+  item EmrStoreItem @relation(fields: [organizationId, itemId], references: [organizationId, id], onDelete: Restrict)
+  location EmrStoreLocation @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "emr_store_batches_org_id_key")
+  @@index([organizationId, itemId, locationId], map: "emr_store_batches_item_idx")
+  @@map("emr_store_batches")
+}
+
+model EmrStoreRequisition {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(20)
+  requestingLocationId String @map("requesting_location_id")
+  fulfillingLocationId String? @map("fulfilling_location_id")
+  neededBy DateTime? @map("needed_by") @db.Date
+  justification String? @db.VarChar(500)
+  status String @default("DRAFT") @db.VarChar(20)
+  requestedByUserId String @map("requested_by_user_id")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  rejectionReason String? @map("rejection_reason") @db.VarChar(500)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  lines EmrStoreRequisitionLine[]
+
+  @@unique([organizationId, id], map: "emr_store_requisitions_org_id_key")
+  @@unique([organizationId, number])
+  @@map("emr_store_requisitions")
+}
+
+model EmrStoreRequisitionLine {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  requisitionId String @map("requisition_id")
+  itemId String @map("item_id")
+  qtyRequested Int @map("qty_requested")
+  qtyIssued Int @default(0) @map("qty_issued")
+  requisition EmrStoreRequisition @relation(fields: [organizationId, requisitionId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, requisitionId, itemId], map: "emr_store_requisition_lines_item_key")
+  @@map("emr_store_requisition_lines")
+}
+
+model EmrStoreTransfer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  itemId String @map("item_id")
+  qty Int
+  valueMinor BigInt @map("value_minor")
+  fromLocationId String @map("from_location_id")
+  toLocationId String @map("to_location_id")
+  reference String? @db.VarChar(80)
+  requisitionId String? @map("requisition_id")
+  userId String @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("emr_store_transfers")
+}
+
+model EmrStoreCount {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(20)
+  locationId String @map("location_id")
+  status String @default("DRAFT") @db.VarChar(6)
+  note String? @db.VarChar(500)
+  createdByUserId String @map("created_by_user_id")
+  postedByUserId String? @map("posted_by_user_id")
+  postedAt DateTime? @map("posted_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  lines EmrStoreCountLine[]
+
+  @@unique([organizationId, id], map: "emr_store_counts_org_id_key")
+  @@unique([organizationId, number])
+  @@map("emr_store_counts")
+}
+
+model EmrStoreCountLine {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  countId String @map("count_id")
+  itemId String @map("item_id")
+  systemQty Int @map("system_qty")
+  countedQty Int? @map("counted_qty")
+  count EmrStoreCount @relation(fields: [organizationId, countId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, countId, itemId], map: "emr_store_count_lines_item_key")
+  @@map("emr_store_count_lines")
+}
+
+model EmrStoreMovement {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  itemId String @map("item_id")
+  batchId String @map("batch_id")
+  locationId String @map("location_id")
+  kind String @db.VarChar(12)
+  qtyDelta Int @map("qty_delta")
+  unitCostMinor BigInt @map("unit_cost_minor")
+  reference String? @db.VarChar(80)
+  note String? @db.VarChar(500)
+  department String? @db.VarChar(80)
+  purpose String? @db.VarChar(200)
+  requisitionId String? @map("requisition_id")
+  transferId String? @map("transfer_id")
+  countId String? @map("count_id")
+  userId String @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, itemId, createdAt], map: "emr_store_movements_item_idx")
+  @@map("emr_store_movements")
+}
+
+// Equipment & maintenance (migration 20261108090000_emr_assets; see assets.service.js).
+model EmrAsset {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  tag String @db.VarChar(30)
+  name String @db.VarChar(120)
+  category String @db.VarChar(120)
+  location String @db.VarChar(120)
+  status String @default("IN_SERVICE") @db.VarChar(14)
+  serialNumber String? @map("serial_number") @db.VarChar(60)
+  costMinor BigInt? @map("cost_minor")
+  commissionedOn DateTime @map("commissioned_on") @db.Date
+  serviceIntervalDays Int @map("service_interval_days")
+  lastServicedOn DateTime @map("last_serviced_on") @db.Date
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  jobs EmrMaintenanceJob[]
+
+  @@unique([organizationId, id], map: "emr_assets_org_id_key")
+  @@unique([organizationId, tag])
+  @@map("emr_assets")
+}
+
+model EmrMaintenanceJob {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  assetId String @map("asset_id")
+  type String @db.VarChar(10)
+  summary String @db.VarChar(1000)
+  priority String @db.VarChar(6)
+  status String @default("OPEN") @db.VarChar(11)
+  reportedByUserId String @map("reported_by_user_id")
+  openedAt DateTime @default(now()) @map("opened_at")
+  startedAt DateTime? @map("started_at")
+  closedAt DateTime? @map("closed_at")
+  resolution String? @db.VarChar(1000)
+  resolvedByUserId String? @map("resolved_by_user_id")
+  version Int @default(1)
+  asset EmrAsset @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, assetId, status], map: "emr_maintenance_jobs_asset_idx")
+  @@map("emr_maintenance_jobs")
+}
+
+// Hospital catalogs (migration 20261109090000_emr_catalogs; see catalogs.service.js).
+model EmrDiagnosisCatalog {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(16)
+  name String @db.VarChar(200)
+  chapter String @db.VarChar(80)
+  ncd Boolean @default(false)
+  notifiable Boolean @default(false)
+  active Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, code])
+  @@map("emr_diagnosis_catalog")
+}
+
+model EmrPatientCategory {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(24)
+  name String @db.VarChar(80)
+  exempt Boolean @default(false)
+  reason String? @db.VarChar(200)
+  active Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, code])
+  @@map("emr_patient_categories")
+}
+
+// Workforce: organization structure and people (migration 20261110090000_workforce_people).
+model WfCompany {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  code String @db.VarChar(30)
+  isHeadquarters Boolean @default(false) @map("is_headquarters")
+  address String? @db.VarChar(200)
+  lga String? @db.VarChar(80)
+  state String? @db.VarChar(80)
+  country String @default("Nigeria") @db.VarChar(80)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_companies_org_id_key")
+  @@unique([organizationId, code])
+  @@map("wf_companies")
+}
+
+model WfEmployee {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  userId String? @map("user_id")
+  name String @db.VarChar(160)
+  role String @db.VarChar(80)
+  cadre String @default("") @db.VarChar(80)
+  phone String? @db.VarChar(30)
+  email String? @db.VarChar(160)
+  hireDate DateTime @map("hire_date") @db.Date
+  license String? @db.VarChar(60)
+  status String @default("ACTIVE") @db.VarChar(8)
+  dob DateTime? @db.Date
+  gender String? @db.VarChar(6)
+  maritalStatus String? @map("marital_status") @db.VarChar(8)
+  address String? @db.VarChar(200)
+  lga String? @db.VarChar(80)
+  state String? @db.VarChar(80)
+  emergencyContactName String? @map("emergency_contact_name") @db.VarChar(120)
+  emergencyContactPhone String? @map("emergency_contact_phone") @db.VarChar(30)
+  emergencyContactRelation String? @map("emergency_contact_relation") @db.VarChar(40)
+  qualification String? @db.VarChar(160)
+  companyId String? @map("company_id")
+  departmentId String? @map("department_id")
+  jobPositionId String? @map("job_position_id")
+  jobRoleId String? @map("job_role_id")
+  employeeTypeId String? @map("employee_type_id")
+  reportingManagerId String? @map("reporting_manager_id")
+  dateJoining DateTime? @map("date_joining") @db.Date
+  contractEndDate DateTime? @map("contract_end_date") @db.Date
+  workEmail String? @map("work_email") @db.VarChar(160)
+  workPhone String? @map("work_phone") @db.VarChar(30)
+  tagIds String[] @default([]) @map("tag_ids")
+  bankName String? @map("bank_name") @db.VarChar(80)
+  accountNumber String? @map("account_number") @db.VarChar(20)
+  bankBranch String? @map("bank_branch") @db.VarChar(80)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@unique([organizationId, id], map: "wf_employees_org_id_key")
+  @@map("wf_employees")
+}
+
+model WfDepartment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  code String @db.VarChar(20)
+  description String? @db.VarChar(500)
+  status String @default("Active") @db.VarChar(10)
+  parentDepartmentId String? @map("parent_department_id")
+  hodEmployeeId String? @map("hod_employee_id")
+  deputyHodEmployeeId String? @map("deputy_hod_employee_id")
+  companyIds String[] @default([]) @map("company_ids")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  members WfDepartmentMember[]
+
+  @@unique([organizationId, id], map: "wf_departments_org_id_key")
+  @@unique([organizationId, code])
+  @@map("wf_departments")
+}
+
+model WfDepartmentMember {
+  organizationId String @map("organization_id")
+  departmentId String @map("department_id")
+  employeeId String @map("employee_id")
+  addedAt DateTime @default(now()) @map("added_at")
+  department WfDepartment @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+
+  @@id([organizationId, departmentId, employeeId])
+  @@map("wf_department_members")
+}
+
+model WfHodChange {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  departmentId String @map("department_id")
+  role String @db.VarChar(10)
+  previousEmployeeId String? @map("previous_employee_id")
+  newEmployeeId String? @map("new_employee_id")
+  effectiveDate DateTime @map("effective_date") @db.Date
+  reason String? @db.VarChar(500)
+  changedByUserId String @map("changed_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_hod_changes")
+}
+
+model WfJobPosition {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  departmentId String @map("department_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_job_positions_org_id_key")
+  @@map("wf_job_positions")
+}
+
+model WfJobRole {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  jobPositionId String @map("job_position_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_job_roles")
+}
+
+model WfEmployeeType {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, name])
+  @@map("wf_employee_types")
+}
+
+model WfTag {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(60)
+  color String @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, name])
+  @@map("wf_tags")
+}
+
+model WfEmployeeDocument {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  title String @db.VarChar(160)
+  category String @db.VarChar(80)
+  status String @default("Requested") @db.VarChar(9)
+  issueDate DateTime? @map("issue_date") @db.Date
+  expiryDate DateTime? @map("expiry_date") @db.Date
+  notifyBeforeDays Int @default(30) @map("notify_before_days")
+  rejectReason String? @map("reject_reason") @db.VarChar(500)
+  requestedByUserId String @map("requested_by_user_id")
+  reviewedByUserId String? @map("reviewed_by_user_id")
+  reviewedAt DateTime? @map("reviewed_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_employee_documents")
+}
+
+model WfActionType {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  blockOption Boolean @default(false) @map("block_option")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_action_types_org_id_key")
+  @@unique([organizationId, name])
+  @@map("wf_action_types")
+}
+
+model WfDisciplinaryAction {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeIds String[] @map("employee_ids")
+  actionTypeId String @map("action_type_id")
+  description String @db.VarChar(2000)
+  unit String @db.VarChar(5)
+  amount Int
+  startDate DateTime @map("start_date") @db.Date
+  attachment String? @db.VarChar(200)
+  recordedByUserId String @map("recorded_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_disciplinary_actions")
+}
+
+model WfEmployeeNote {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  note String @db.VarChar(4000)
+  byUserId String @map("by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_employee_notes")
+}
+
+model WfBonusEntry {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  delta Int
+  reason String @db.VarChar(500)
+  byUserId String @map("by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_bonus_entries")
+}
+
+model WfQualification {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  title String @db.VarChar(160)
+  issuingBody String @map("issuing_body") @db.VarChar(160)
+  dateObtained DateTime @map("date_obtained") @db.Date
+  certificateRef String? @map("certificate_ref") @db.VarChar(80)
+  recordedByUserId String @map("recorded_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_qualifications")
+}
+
+model WfPolicy {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  category String @db.VarChar(120)
+  title String @db.VarChar(160)
+  purpose String @db.VarChar(500)
+  body String @db.VarChar(20000)
+  publishedByUserId String @map("published_by_user_id")
+  version Int @default(1)
+  updatedAt DateTime @default(now()) @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("wf_policies")
+}
+
+// Workforce: time & attendance and work (migration 20261111090000_workforce_time).
+model WfTimeBlock {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  code String @db.VarChar(12)
+  startTime String @map("start_time") @db.VarChar(5)
+  endTime String @map("end_time") @db.VarChar(5)
+  overnight Boolean @default(false)
+  paidHours Decimal @map("paid_hours") @db.Decimal(5, 2)
+  breakMins Int @default(0) @map("break_mins")
+  lateGraceMins Int @default(0) @map("late_grace_mins")
+  classification String @db.VarChar(10)
+  colour String @db.VarChar(20)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_time_blocks_org_id_key")
+  @@unique([organizationId, code])
+  @@map("wf_time_blocks")
+}
+
+model WfSchedule {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  description String? @db.VarChar(500)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime? @map("end_date") @db.Date
+  days Json
+  rotation String[] @default([])
+  rotationAnchor DateTime? @map("rotation_anchor") @db.Date
+  holidayRule String @map("holiday_rule") @db.VarChar(30)
+  expectedCycleHours Decimal @map("expected_cycle_hours") @db.Decimal(6, 2)
+  status String @default("Draft") @db.VarChar(7)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_schedules_org_id_key")
+  @@map("wf_schedules")
+}
+
+model WfScheduleAssignment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  scheduleId String @map("schedule_id")
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  effectiveTo DateTime? @map("effective_to") @db.Date
+  captureMode String @map("capture_mode") @db.VarChar(10)
+  assignedByUserId String @map("assigned_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_schedule_assignments")
+}
+
+model WfAttendance {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  clockInAt DateTime @map("clock_in_at")
+  clockOutAt DateTime? @map("clock_out_at")
+  source String @db.VarChar(6)
+  breakMins Int @default(0) @map("break_mins")
+  onBreakSince DateTime? @map("on_break_since")
+  flags String[] @default([])
+  location String? @db.VarChar(120)
+  workLocation String @default("WFO") @map("work_location") @db.VarChar(12)
+  consentAt DateTime? @map("consent_at")
+  resolutionAction String? @map("resolution_action") @db.VarChar(12)
+  resolutionByUserId String? @map("resolution_by_user_id")
+  resolutionAt DateTime? @map("resolution_at")
+  resolutionNote String? @map("resolution_note") @db.VarChar(500)
+  recordedByUserId String @map("recorded_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, clockInAt], map: "wf_attendance_clock_in_idx")
+  @@map("wf_attendance")
+}
+
+model WfOvertimeRequest {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  workDate DateTime @map("work_date") @db.Date
+  hours Decimal @db.Decimal(5, 2)
+  reason String @db.VarChar(500)
+  status String @default("Pending") @db.VarChar(8)
+  requestedByUserId String @map("requested_by_user_id")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  decisionNote String? @map("decision_note") @db.VarChar(500)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_overtime_requests")
+}
+
+model WfPeriod {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  label String @db.VarChar(40)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime @map("end_date") @db.Date
+  locked Boolean @default(false)
+  lockedByUserId String? @map("locked_by_user_id")
+  lockedAt DateTime? @map("locked_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_periods_org_id_key")
+  @@unique([organizationId, startDate], map: "wf_periods_organization_id_start_key")
+  @@map("wf_periods")
+}
+
+model WfTimesheet {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  periodId String @map("period_id")
+  status String @default("Open") @db.VarChar(9)
+  captureMode String @default("Attendance") @map("capture_mode") @db.VarChar(10)
+  submission Int @default(0)
+  submittedAt DateTime? @map("submitted_at")
+  approvedAt DateTime? @map("approved_at")
+  approverUserId String? @map("approver_user_id")
+  returnNote String? @map("return_note") @db.VarChar(500)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  lines WfTimesheetLine[]
+  events WfTimesheetEvent[]
+
+  @@unique([organizationId, id], map: "wf_timesheets_org_id_key")
+  @@unique([organizationId, employeeId, periodId], map: "wf_timesheets_employee_period_key")
+  @@map("wf_timesheets")
+}
+
+model WfTimesheetLine {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  timesheetId String @map("timesheet_id")
+  workDate DateTime @map("work_date") @db.Date
+  source String @db.VarChar(10)
+  expectedHours Decimal @default(0) @map("expected_hours") @db.Decimal(5, 2)
+  workedHours Decimal @default(0) @map("worked_hours") @db.Decimal(5, 2)
+  breakHours Decimal @default(0) @map("break_hours") @db.Decimal(5, 2)
+  overtimeHours Decimal @default(0) @map("overtime_hours") @db.Decimal(5, 2)
+  container String? @db.VarChar(120)
+  task String? @db.VarChar(120)
+  note String? @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  timesheet WfTimesheet @relation(fields: [organizationId, timesheetId], references: [organizationId, id], onDelete: Restrict)
+  @@map("wf_timesheet_lines")
+}
+
+model WfTimesheetEvent {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  timesheetId String @map("timesheet_id")
+  submission Int
+  status String @db.VarChar(9)
+  byUserId String @map("by_user_id")
+  note String? @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  timesheet WfTimesheet @relation(fields: [organizationId, timesheetId], references: [organizationId, id], onDelete: Restrict)
+  @@map("wf_timesheet_events")
+}
+
+model WfAmendment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  timesheetId String @map("timesheet_id")
+  reason String @db.VarChar(500)
+  change String @db.VarChar(1000)
+  status String @default("Pending") @db.VarChar(8)
+  requestedByUserId String @map("requested_by_user_id")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  decisionNote String? @map("decision_note") @db.VarChar(500)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_amendments")
+}
+
+model WfTimePolicy {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  scope String @db.VarChar(120)
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  effectiveTo DateTime? @map("effective_to") @db.Date
+  periodType String @map("period_type") @db.VarChar(9)
+  captureDefault String @map("capture_default") @db.VarChar(10)
+  incrementMins Int @map("increment_mins")
+  rounding String @db.VarChar(10)
+  submissionDeadlineDays Int @map("submission_deadline_days")
+  approvalDeadlineDays Int @map("approval_deadline_days")
+  lateGraceMins Int @map("late_grace_mins")
+  earlyLeaveGraceMins Int @map("early_leave_grace_mins")
+  absenceThresholdMins Int @map("absence_threshold_mins")
+  maxDailyHours Int @map("max_daily_hours")
+  allowEditDerived Boolean @map("allow_edit_derived")
+  overtimeEnabled Boolean @map("overtime_enabled")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_time_policies")
+}
+
+model WfSettings {
+  organizationId String @id @map("organization_id")
+  capabilities Json
+  breakRules Json @map("break_rules")
+  attendanceRules Json @map("attendance_rules")
+  enrolments Json
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@map("wf_settings")
+}
+
+model WfHoliday {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  holidayDate DateTime @map("holiday_date") @db.Date
+  scope String @db.VarChar(12)
+  scopeValue String @map("scope_value") @db.VarChar(120)
+  paid Boolean @default(true)
+  workRequiresApproval Boolean @default(true) @map("work_requires_approval")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_holidays_org_id_key")
+  @@map("wf_holidays")
+}
+
+model WfLeaveRequest {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  leaveType String @map("leave_type") @db.VarChar(60)
+  fromDate DateTime @map("from_date") @db.Date
+  toDate DateTime @map("to_date") @db.Date
+  days Decimal @db.Decimal(5, 1)
+  paid Boolean @default(true)
+  note String? @db.VarChar(500)
+  status String @default("Pending") @db.VarChar(8)
+  requestedByUserId String @map("requested_by_user_id")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_leave_requests")
+}
+
+model WfHolidayWorkRequest {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  holidayId String @map("holiday_id")
+  reason String @db.VarChar(500)
+  hours Decimal @db.Decimal(5, 2)
+  status String @default("Pending") @db.VarChar(8)
+  requestedByUserId String @map("requested_by_user_id")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_holiday_work_requests")
+}
+
+model WfWorkContainer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  label String @db.VarChar(40)
+  name String @db.VarChar(120)
+  code String @db.VarChar(20)
+  owner String @db.VarChar(120)
+  status String @default("Active") @db.VarChar(6)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_work_containers_org_id_key")
+  @@unique([organizationId, code])
+  @@map("wf_work_containers")
+}
+
+model WfWorkTask {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  containerId String @map("container_id")
+  name String @db.VarChar(160)
+  parentId String? @map("parent_id")
+  assignedTo String @map("assigned_to") @db.VarChar(120)
+  status String @default("Not started") @db.VarChar(11)
+  estimateHours Decimal @default(0) @map("estimate_hours") @db.Decimal(7, 2)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, id], map: "wf_work_tasks_org_id_key")
+  @@map("wf_work_tasks")
+}
+
+model WfWorkActivity {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  taskId String @map("task_id")
+  staff String @db.VarChar(120)
+  workDate DateTime @map("work_date") @db.Date
+  hours Decimal @db.Decimal(5, 2)
+  note String @default("") @db.VarChar(500)
+  loggedByUserId String @map("logged_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_work_activities")
+}
+
+model WfWorkflowDef {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  starterKey String? @map("starter_key") @db.VarChar(30)
+  name String @db.VarChar(120)
+  description String? @db.VarChar(500)
+  triggerType String @map("trigger_type") @db.VarChar(40)
+  active Boolean @default(false)
+  nodes Json
+  edges Json
+  version Int @default(1)
+  createdByUserId String? @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("wf_workflow_defs")
+}
+
+model WfWorkflowInstance {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  defId String @map("def_id")
+  defName String @map("def_name") @db.VarChar(120)
+  defVersion Int @map("def_version")
+  graph Json
+  triggerType String @map("trigger_type") @db.VarChar(40)
+  subject String @db.VarChar(300)
+  reference String @db.VarChar(100)
+  context Json
+  isTest Boolean @default(false) @map("is_test")
+  initiatedByUserId String @map("initiated_by_user_id")
+  initiatedByEmployeeId String? @map("initiated_by_employee_id")
+  status String @default("Running") @db.VarChar(9)
+  active Json
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+  @@map("wf_workflow_instances")
+}
+
+model WfWorkflowEvent {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  instanceId String @map("instance_id")
+  nodeId String @map("node_id") @db.VarChar(60)
+  nodeLabel String @map("node_label") @db.VarChar(160)
+  action String @db.VarChar(10)
+  actorUserId String? @map("actor_user_id")
+  actorEmployeeId String? @map("actor_employee_id")
+  comment String? @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_workflow_events")
+}
+
+model WfRequisition {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  title String @db.VarChar(160)
+  description String @default("") @db.VarChar(2000)
+  departmentId String? @map("department_id")
+  jobPositionId String? @map("job_position_id")
+  vacancy Int
+  managerIds String[] @default([]) @map("manager_ids")
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime? @map("end_date") @db.Date
+  closed Boolean @default(false)
+  createdByUserId String @map("created_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_requisitions")
+}
+
+model WfPipelineStage {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  requisitionId String @map("requisition_id")
+  name String @db.VarChar(80)
+  type String @db.VarChar(9)
+  sequence Int
+  @@map("wf_pipeline_stages")
+}
+
+model WfCandidate {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  requisitionId String @map("requisition_id")
+  stageId String @map("stage_id")
+  name String @db.VarChar(160)
+  email String @db.VarChar(160)
+  phone String @default("") @db.VarChar(30)
+  source String @db.VarChar(120)
+  referredByEmployeeId String? @map("referred_by_employee_id")
+  rating Int @default(0)
+  hired Boolean @default(false)
+  canceled Boolean @default(false)
+  cancelReason String? @map("cancel_reason") @db.VarChar(200)
+  convertedEmployeeId String? @map("converted_employee_id")
+  appliedAt DateTime @default(now()) @map("applied_at")
+  version Int @default(1)
+  @@map("wf_candidates")
+}
+
+model WfInterview {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  scheduledAt DateTime @map("scheduled_at")
+  interviewerIds String[] @map("interviewer_ids")
+  notes String? @db.VarChar(1000)
+  status String @default("Scheduled") @db.VarChar(9)
+  feedback String? @db.VarChar(2000)
+  createdByUserId String @map("created_by_user_id")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_interviews")
+}
+
+model WfTalentPool {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  skillZone String @map("skill_zone") @db.VarChar(80)
+  candidateName String @map("candidate_name") @db.VarChar(160)
+  email String @default("") @db.VarChar(160)
+  phone String @default("") @db.VarChar(30)
+  reason String @db.VarChar(500)
+  fromCandidateId String? @map("from_candidate_id")
+  profile Json @default("{}")
+  takenRequisitionId String? @map("taken_requisition_id")
+  takenCandidateId String? @map("taken_candidate_id")
+  takenStatusCode String? @map("taken_status_code") @db.VarChar(40)
+  takenAt DateTime? @map("taken_at")
+  addedByUserId String @map("added_by_user_id")
+  addedAt DateTime @default(now()) @map("added_at")
+  @@map("wf_talent_pool")
+}
+
+model WfTalentEntry {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  talentId String @map("talent_id")
+  kind String @db.VarChar(8)
+  text String @db.VarChar(2000)
+  detail String? @db.VarChar(300)
+  sizeKb Int? @map("size_kb")
+  byUserId String @map("by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_talent_entries")
+}
+
+model WfVacancy {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  departmentId String @map("department_id")
+  jobPositionId String? @map("job_position_id")
+  roleTitle String @map("role_title") @db.VarChar(160)
+  headcount Int
+  vacancyTypeId String? @map("vacancy_type_id") @db.VarChar(60)
+  reason String @db.VarChar(2000)
+  requirements String? @db.VarChar(2000)
+  salaryMin Decimal? @map("salary_min") @db.Decimal(14, 2)
+  salaryMax Decimal? @map("salary_max") @db.Decimal(14, 2)
+  raisedByUserId String @map("raised_by_user_id")
+  raisedByEmployeeId String? @map("raised_by_employee_id")
+  status String @default("Draft") @db.VarChar(9)
+  rejectionReason String? @map("rejection_reason") @db.VarChar(500)
+  requisitionId String? @map("requisition_id")
+  submittedAt DateTime? @map("submitted_at")
+  decidedAt DateTime? @map("decided_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_vacancies")
+}
+
+model WfOnboarding {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  candidateId String @map("candidate_id")
+  candidateName String @map("candidate_name") @db.VarChar(160)
+  requisitionId String @map("requisition_id")
+  jobPositionId String? @map("job_position_id")
+  departmentId String? @map("department_id")
+  currentStageId String @map("current_stage_id") @db.VarChar(20)
+  taskDone Json @default("{}") @map("task_done")
+  resumptionDate DateTime? @map("resumption_date") @db.Date
+  basicSalary Decimal? @map("basic_salary") @db.Decimal(14, 2)
+  employeeId String? @map("employee_id")
+  startedByUserId String @map("started_by_user_id")
+  startedAt DateTime @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  version Int @default(1)
+  @@map("wf_onboarding")
+}
+
+model WfOnboardingDocument {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  onboardingId String @map("onboarding_id")
+  taskId String @map("task_id") @db.VarChar(20)
+  title String @db.VarChar(200)
+  uploadedByUserId String @map("uploaded_by_user_id")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+  @@map("wf_onboarding_documents")
+}
+
+model WfHrSettings {
+  organizationId String @id @map("organization_id")
+  offerLetterTemplate String @map("offer_letter_template") @db.VarChar(20000)
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("wf_hr_settings")
+}
+
+model WfOffboarding {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  reason String @db.VarChar(120)
+  noticeDate DateTime @default(now()) @map("notice_date")
+  lastWorkingDate DateTime @map("last_working_date") @db.Date
+  currentStageId String @map("current_stage_id") @db.VarChar(20)
+  status String @default("Ongoing") @db.VarChar(9)
+  exitInterviewNotes String? @map("exit_interview_notes") @db.VarChar(4000)
+  handoverNotes String? @map("handover_notes") @db.VarChar(4000)
+  fnfAmount Decimal? @map("fnf_amount") @db.Decimal(14, 2)
+  fnfSettled Boolean @default(false) @map("fnf_settled")
+  startedByUserId String @map("started_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+  version Int @default(1)
+  @@map("wf_offboarding")
+}
+
+model WfReviewPeriod {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime @map("end_date") @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_review_periods")
+}
+
+model WfKeyResult {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  title String @db.VarChar(160)
+  type String @db.VarChar(10)
+  targetValue Decimal @map("target_value") @db.Decimal(14, 2)
+  @@map("wf_key_results")
+}
+
+model WfObjective {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  title String @db.VarChar(160)
+  description String @default("") @db.VarChar(2000)
+  managerIds String[] @default([]) @map("manager_ids")
+  assigneeIds String[] @map("assignee_ids")
+  keyResultIds String[] @map("key_result_ids")
+  durationUnit String @map("duration_unit") @db.VarChar(6)
+  duration Int
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_objectives")
+}
+
+model WfEmployeeObjective {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  objectiveId String @map("objective_id")
+  employeeId String @map("employee_id")
+  startDate DateTime @map("start_date")
+  endDate DateTime @map("end_date")
+  status String @default("Not Started") @db.VarChar(11)
+  progress Int @default(0)
+  keyResults Json @map("key_results")
+  version Int @default(1)
+  @@map("wf_employee_objectives")
+}
+
+model WfFeedback {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  reviewCycle String @map("review_cycle") @db.VarChar(80)
+  employeeId String @map("employee_id")
+  managerId String? @map("manager_id")
+  colleagueIds String[] @default([]) @map("colleague_ids")
+  status String @default("In Progress") @db.VarChar(11)
+  startDate DateTime @default(now()) @map("start_date")
+  endDate DateTime? @map("end_date")
+  selfAnswers Json? @map("self_answers")
+  managerAnswers Json? @map("manager_answers")
+  startedByUserId String @map("started_by_user_id")
+  version Int @default(1)
+  @@map("wf_feedback")
+}
+
+model WfMeeting {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  title String @db.VarChar(120)
+  employeeId String @map("employee_id")
+  managerId String @map("manager_id")
+  scheduledAt DateTime @map("scheduled_at")
+  status String @default("Scheduled") @db.VarChar(9)
+  notes String? @db.VarChar(4000)
+  actionItems String? @map("action_items") @db.VarChar(4000)
+  createdByUserId String @map("created_by_user_id")
+  version Int @default(1)
+  @@map("wf_meetings")
+}
+
+model WfPromotion {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  fromJobPositionId String? @map("from_job_position_id")
+  fromJobRoleId String? @map("from_job_role_id")
+  fromCadre String? @map("from_cadre") @db.VarChar(80)
+  toJobPositionId String? @map("to_job_position_id")
+  toJobRoleId String? @map("to_job_role_id")
+  toCadre String? @map("to_cadre") @db.VarChar(80)
+  newSalary Decimal? @map("new_salary") @db.Decimal(14, 2)
+  effectiveDate DateTime @map("effective_date") @db.Date
+  reason String @db.VarChar(2000)
+  status String @default("Proposed") @db.VarChar(9)
+  appliedAt DateTime? @map("applied_at")
+  successorId String? @map("successor_id")
+  handoverNotes String? @map("handover_notes") @db.VarChar(4000)
+  handoverStatus String @default("Not started") @map("handover_status") @db.VarChar(11)
+  handoverCompletedAt DateTime? @map("handover_completed_at")
+  requestedByUserId String @map("requested_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("wf_promotions")
+}
+
+model WfBranchTransfer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  fromCompanyId String? @map("from_company_id")
+  toCompanyId String @map("to_company_id")
+  effectiveDate DateTime @map("effective_date") @db.Date
+  reason String @db.VarChar(2000)
+  status String @default("Proposed") @db.VarChar(9)
+  appliedAt DateTime? @map("applied_at")
+  successorId String? @map("successor_id")
+  handoverNotes String? @map("handover_notes") @db.VarChar(4000)
+  handoverStatus String @default("Not started") @map("handover_status") @db.VarChar(11)
+  handoverCompletedAt DateTime? @map("handover_completed_at")
+  requestedByUserId String @map("requested_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("wf_branch_transfers")
+}
+
+model WfSalaryStructure {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  basicSalary Decimal @map("basic_salary") @db.Decimal(14, 2)
+  allowances Json @default("[]")
+  deductions Json @default("[]")
+  effectiveFrom DateTime @default(now()) @map("effective_from")
+  updatedByUserId String @map("updated_by_user_id")
+  version Int @default(1)
+  @@map("wf_salary_structures")
+}
+
+model WfPayslip {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  batch String @db.VarChar(80)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime @map("end_date") @db.Date
+  basicSalary Decimal @map("basic_salary") @db.Decimal(14, 2)
+  allowances Json
+  deductions Json
+  grossPay Decimal @map("gross_pay") @db.Decimal(14, 2)
+  totalDeductions Decimal @map("total_deductions") @db.Decimal(14, 2)
+  netPay Decimal @map("net_pay") @db.Decimal(14, 2)
+  loanId String? @map("loan_id")
+  loanDeduction Decimal? @map("loan_deduction") @db.Decimal(14, 2)
+  status String @default("Draft") @db.VarChar(14)
+  generatedByUserId String @map("generated_by_user_id")
+  generatedAt DateTime @default(now()) @map("generated_at")
+  confirmedByUserId String? @map("confirmed_by_user_id")
+  confirmedAt DateTime? @map("confirmed_at")
+  paidByUserId String? @map("paid_by_user_id")
+  paidAt DateTime? @map("paid_at")
+  version Int @default(1)
+  @@map("wf_payslips")
+}
+
+model WfContract {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  title String @db.VarChar(160)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime? @map("end_date") @db.Date
+  basicSalary Decimal @map("basic_salary") @db.Decimal(14, 2)
+  status String @default("Active") @db.VarChar(10)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_contracts")
+}
+
+model WfLoan {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  type String @db.VarChar(60)
+  amount Decimal @db.Decimal(14, 2)
+  installments Int
+  installmentAmount Decimal @map("installment_amount") @db.Decimal(14, 2)
+  installmentsPaid Int @default(0) @map("installments_paid")
+  reason String @db.VarChar(1000)
+  repaymentMethod String @map("repayment_method") @db.VarChar(17)
+  status String @default("Requested") @db.VarChar(9)
+  currentPeriodDue Decimal @map("current_period_due") @db.Decimal(14, 2)
+  currentPeriodPaid Decimal @default(0) @map("current_period_paid") @db.Decimal(14, 2)
+  periodStartDate DateTime? @map("period_start_date")
+  missedPeriods Int @default(0) @map("missed_periods")
+  totalPaid Decimal @default(0) @map("total_paid") @db.Decimal(14, 2)
+  requestedByUserId String @map("requested_by_user_id")
+  requestedAt DateTime @default(now()) @map("requested_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  version Int @default(1)
+  @@map("wf_loans")
+}
+
+model WfLoanPayment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  loanId String @map("loan_id")
+  amount Decimal @db.Decimal(14, 2)
+  paidOn DateTime @map("paid_on") @db.Date
+  payslipId String? @map("payslip_id")
+  recordedByUserId String @map("recorded_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_loan_payments")
+}
+
+model WfLoanLetter {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  loanId String @map("loan_id")
+  level Int
+  amountOwed Decimal @map("amount_owed") @db.Decimal(14, 2)
+  issuedAt DateTime @default(now()) @map("issued_at")
+  sent Boolean @default(false)
+  sentAt DateTime? @map("sent_at")
+  sentByUserId String? @map("sent_by_user_id")
+  @@map("wf_loan_letters")
+}
+
+model WfLoanTier {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  minMonthlySalary Decimal @map("min_monthly_salary") @db.Decimal(14, 2)
+  maxMonthlySalary Decimal? @map("max_monthly_salary") @db.Decimal(14, 2)
+  maxLoanAmount Decimal @map("max_loan_amount") @db.Decimal(14, 2)
+  @@map("wf_loan_tiers")
+}
+
+model WfReimbursement {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  type String @db.VarChar(20)
+  title String @db.VarChar(200)
+  amount Decimal @db.Decimal(14, 2)
+  status String @default("Requested") @db.VarChar(9)
+  requestedByUserId String @map("requested_by_user_id")
+  requestedAt DateTime @default(now()) @map("requested_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  paidAt DateTime? @map("paid_at")
+  version Int @default(1)
+  @@map("wf_reimbursements")
+}
+
+model WfAssetCategory {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  description String @default("") @db.VarChar(500)
+  @@map("wf_asset_categories")
+}
+
+model WfCompanyAsset {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  categoryId String @map("category_id")
+  batchNo String? @map("batch_no") @db.VarChar(60)
+  trackingId String @map("tracking_id") @db.VarChar(60)
+  purchaseDate DateTime @map("purchase_date") @db.Date
+  purchaseCost Decimal @map("purchase_cost") @db.Decimal(14, 2)
+  status String @default("Available") @db.VarChar(13)
+  expiryDate DateTime? @map("expiry_date") @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("wf_company_assets")
+}
+
+model WfAssetRequest {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  categoryId String @map("category_id")
+  description String @db.VarChar(1000)
+  status String @default("Requested") @db.VarChar(9)
+  requestedByUserId String @map("requested_by_user_id")
+  requestedAt DateTime @default(now()) @map("requested_at")
+  decidedByUserId String? @map("decided_by_user_id")
+  decidedAt DateTime? @map("decided_at")
+  version Int @default(1)
+  @@map("wf_asset_requests")
+}
+
+model WfAssetAllocation {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  assetId String @map("asset_id")
+  employeeId String @map("employee_id")
+  requestId String? @map("request_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  assignedByUserId String @map("assigned_by_user_id")
+  returnedAt DateTime? @map("returned_at")
+  returnCondition String? @map("return_condition") @db.VarChar(7)
+  returnNote String? @map("return_note") @db.VarChar(500)
+  receivedByUserId String? @map("received_by_user_id")
+  @@map("wf_asset_allocations")
+}
+
+model WfTicket {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  seq Int
+  type String @db.VarChar(120)
+  title String @db.VarChar(160)
+  description String @db.VarChar(4000)
+  raisedByUserId String @map("raised_by_user_id")
+  raisedByEmployeeId String? @map("raised_by_employee_id")
+  assigningType String @map("assigning_type") @db.VarChar(12)
+  raisedOn String @map("raised_on") @db.VarChar(160)
+  assignedTo String[] @default([]) @map("assigned_to")
+  priority Int
+  status String @default("New") @db.VarChar(11)
+  createdAt DateTime @default(now()) @map("created_at")
+  resolvedAt DateTime? @map("resolved_at")
+  version Int @default(1)
+  @@map("wf_tickets")
+}
+
+model WfFaqCategory {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(80)
+  @@map("wf_faq_categories")
+}
+
+model WfFaq {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  categoryId String @map("category_id")
+  question String @db.VarChar(300)
+  answer String @db.VarChar(4000)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("wf_faqs")
+}
+
+model WfQuery {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  employeeId String @map("employee_id")
+  raisedByUserId String @map("raised_by_user_id")
+  raisedByEmployeeId String? @map("raised_by_employee_id")
+  subject String @db.VarChar(200)
+  body String @db.VarChar(8000)
+  status String @default("Drafted") @db.VarChar(7)
+  responseDeadlineDays Int @map("response_deadline_days")
+  raisedAt DateTime @default(now()) @map("raised_at")
+  sentAt DateTime? @map("sent_at")
+  sentByUserId String? @map("sent_by_user_id")
+  version Int @default(1)
+  @@map("wf_queries")
+}
+
+model PlatformMasterItem {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  category String @db.VarChar(40)
+  label String @db.VarChar(120)
+  code String? @db.VarChar(40)
+  active Boolean @default(true)
+  system Boolean @default(false)
+  meta Json @default("{}")
+  sort Int @default(0)
+  removedAt DateTime? @map("removed_at")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("platform_master_items")
+}
+
+model PlatformTerms {
+  organizationId String @id @map("organization_id")
+  overrides Json @default("{}")
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("platform_terms")
+}
+
+model PlatformModuleSettings {
+  organizationId String @id @map("organization_id")
+  disabled String[] @default([])
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("platform_module_settings")
+}
+
+model PlatformLetterTemplate {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  key String @db.VarChar(60)
+  name String @db.VarChar(160)
+  category String @db.VarChar(120)
+  body String @db.VarChar(20000)
+  signatories String[] @default([])
+  active Boolean @default(true)
+  system Boolean @default(false)
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("platform_letter_templates")
+}
+
+model PlatformLetter {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  templateKey String @map("template_key") @db.VarChar(60)
+  title String @db.VarChar(200)
+  subjectEmployeeId String? @map("subject_employee_id")
+  reference String? @db.VarChar(100)
+  data Json
+  rendered String @db.VarChar(40000)
+  generatedByUserId String @map("generated_by_user_id")
+  generatedAt DateTime @default(now()) @map("generated_at")
+  sentAt DateTime? @map("sent_at")
+  sentTo String? @map("sent_to") @db.VarChar(160)
+  sentByUserId String? @map("sent_by_user_id")
+  @@map("platform_letters")
+}
+
+model AcctAccount {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number Int
+  name String @db.VarChar(120)
+  type String @db.VarChar(9)
+  subtype String @db.VarChar(24)
+  parentNumber Int? @map("parent_number")
+  description String? @db.VarChar(500)
+  isActive Boolean @default(true) @map("is_active")
+  allowManualEntry Boolean @default(true) @map("allow_manual_entry")
+  currency String @default("NGN") @db.VarChar(3)
+  system Boolean @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_accounts")
+}
+
+model AcctBranch {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(12)
+  name String @db.VarChar(160)
+  isHeadOffice Boolean @default(false) @map("is_head_office")
+  baseCurrency String @default("NGN") @map("base_currency") @db.VarChar(3)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_branches")
+}
+
+model AcctConsolidationGroup {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(120)
+  branchIds String[] @map("branch_ids")
+  eliminate Json @default("[]")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_consolidation_groups")
+}
+
+model AcctFiscalYear {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  year Int
+  status String @default("Open") @db.VarChar(6)
+  @@map("acct_fiscal_years")
+}
+
+model AcctPeriod {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  fiscalYear Int @map("fiscal_year")
+  month Int
+  status String @default("Open") @db.VarChar(6)
+  @@map("acct_periods")
+}
+
+model AcctLedgerSettings {
+  organizationId String @id @map("organization_id")
+  booksLockedBefore DateTime? @map("books_locked_before")
+  fxRates Json @default("[]") @map("fx_rates")
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("acct_ledger_settings")
+}
+
+model AcctJournalEntry {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(30)
+  entryDate DateTime @map("entry_date")
+  branchId String @map("branch_id")
+  source String @db.VarChar(20)
+  reference String? @db.VarChar(100)
+  memo String @db.VarChar(500)
+  status String @db.VarChar(16)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  postedByUserId String? @map("posted_by_user_id")
+  postedAt DateTime? @map("posted_at")
+  reversedByEntryId String? @map("reversed_by_entry_id")
+  reversesEntryId String? @map("reverses_entry_id")
+  approvalRef String? @map("approval_ref") @db.VarChar(100)
+  version Int @default(1)
+  approval Json?
+  @@map("acct_journal_entries")
+}
+
+model AcctJournalLine {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  entryId String @map("entry_id")
+  lineNo Int @map("line_no")
+  accountNumber Int @map("account_number")
+  debit Decimal @default(0) @db.Decimal(16, 2)
+  credit Decimal @default(0) @db.Decimal(16, 2)
+  description String? @db.VarChar(300)
+  costCenter String? @map("cost_center") @db.VarChar(60)
+  customerId String? @map("customer_id")
+  vendorId String? @map("vendor_id")
+  projectId String? @map("project_id")
+  @@map("acct_journal_lines")
+}
+
+model AcctRecurringJournal {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  memo String @db.VarChar(500)
+  lines Json
+  everyMonths Int @map("every_months")
+  nextDate DateTime @map("next_date")
+  endDate DateTime? @map("end_date")
+  lastPostedDate DateTime? @map("last_posted_date")
+  postedCount Int @default(0) @map("posted_count")
+  active Boolean @default(true)
+  branchId String @map("branch_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_recurring_journals")
+}
+
+model AcctYearEndClosing {
+  organizationId String @map("organization_id")
+  year Int
+  closedAt DateTime @default(now()) @map("closed_at")
+  closedByUserId String @map("closed_by_user_id")
+  netIncome Decimal @map("net_income") @db.Decimal(16, 2)
+  journalEntryId String @map("journal_entry_id")
+  @@id([organizationId, year])
+  @@map("acct_year_end_closings")
+}
+
+model AcctApprovalRule {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  docType String @map("doc_type") @db.VarChar(24)
+  minAmount Decimal @map("min_amount") @db.Decimal(16, 2)
+  maxAmount Decimal? @map("max_amount") @db.Decimal(16, 2)
+  approverRole String @map("approver_role") @db.VarChar(20)
+  level Int
+  active Boolean @default(true)
+  version Int @default(1)
+  @@map("acct_approval_rules")
+}
+
+model AcctSettings {
+  organizationId String @id @map("organization_id")
+  orgProfile Json @map("org_profile")
+  sequences Json
+  paymentTerms Json @map("payment_terms")
+  reminderRules Json @map("reminder_rules")
+  taxRegistration Json @map("tax_registration")
+  setupSteps Json @default("{}") @map("setup_steps")
+  version Int @default(1)
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@map("acct_settings")
+}
+
+model AcctTaxRate {
+  organizationId String @map("organization_id")
+  id String @db.VarChar(60)
+  name String @db.VarChar(80)
+  kind String @db.VarChar(10)
+  rate Decimal @db.Decimal(7, 4)
+  description String? @db.VarChar(300)
+  accountNumber Int @map("account_number")
+  isCompound Boolean @default(false) @map("is_compound")
+  isActive Boolean @default(true) @map("is_active")
+  version Int @default(1)
+  @@id([organizationId, id])
+  @@map("acct_tax_rates")
+}
+
+model AcctCustomer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(160)
+  type String @db.VarChar(9)
+  email String? @db.VarChar(160)
+  phone String? @db.VarChar(30)
+  address String? @db.VarChar(300)
+  city String? @db.VarChar(80)
+  arAccountNumber Int @map("ar_account_number")
+  currency String @default("NGN") @db.VarChar(3)
+  paymentTermsDays Int @default(30) @map("payment_terms_days")
+  paymentTermId String? @map("payment_term_id") @db.VarChar(60)
+  creditLimit Decimal @default(0) @map("credit_limit") @db.Decimal(16, 2)
+  creditHold Boolean @default(false) @map("credit_hold")
+  patientRef String? @map("patient_ref") @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_customers")
+}
+
+model AcctSalesDoc {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  kind String @db.VarChar(14)
+  number String @db.VarChar(40)
+  customerId String? @map("customer_id")
+  customerName String? @map("customer_name") @db.VarChar(160)
+  docDate DateTime @map("doc_date")
+  dueDate DateTime? @map("due_date")
+  expiryDate DateTime? @map("expiry_date")
+  lines Json
+  notes String? @db.VarChar(2000)
+  reason String? @db.VarChar(500)
+  status String @db.VarChar(20)
+  currency String @default("NGN") @db.VarChar(3)
+  exchangeRate Decimal @default(1) @map("exchange_rate") @db.Decimal(16, 6)
+  amountPaid Decimal @default(0) @map("amount_paid") @db.Decimal(16, 2)
+  refundedAmount Decimal @default(0) @map("refunded_amount") @db.Decimal(16, 2)
+  method String? @db.VarChar(16)
+  cashAccountNumber Int? @map("cash_account_number")
+  sourceDocId String? @map("source_doc_id")
+  convertedToId String? @map("converted_to_id")
+  convertedToInvoiceId String? @map("converted_to_invoice_id")
+  journalEntryId String? @map("journal_entry_id")
+  source String @default("Manual") @db.VarChar(12)
+  sourceRef String? @map("source_ref") @db.VarChar(100)
+  projectId String? @map("project_id")
+  recurEveryMonths Int? @map("recur_every_months")
+  recurNextDate DateTime? @map("recur_next_date")
+  recurEndDate DateTime? @map("recur_end_date")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  issuedAt DateTime? @map("issued_at")
+  version Int @default(1)
+  @@map("acct_sales_docs")
+}
+
+model AcctReceipt {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(40)
+  customerId String @map("customer_id")
+  receiptDate DateTime @map("receipt_date")
+  method String @db.VarChar(16)
+  depositAccountNumber Int @map("deposit_account_number")
+  amount Decimal @db.Decimal(16, 2)
+  allocations Json
+  settlementRate Decimal? @map("settlement_rate") @db.Decimal(16, 6)
+  reference String? @db.VarChar(100)
+  notes String? @db.VarChar(2000)
+  journalEntryId String @map("journal_entry_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  voidedAt DateTime? @map("voided_at")
+  @@map("acct_receipts")
+}
+
+model AcctCreditApplication {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  creditNoteId String @map("credit_note_id")
+  invoiceId String? @map("invoice_id")
+  kind String @db.VarChar(6)
+  amount Decimal @db.Decimal(16, 2)
+  cashAccountNumber Int? @map("cash_account_number")
+  journalEntryId String? @map("journal_entry_id")
+  appliedByUserId String @map("applied_by_user_id")
+  appliedAt DateTime @default(now()) @map("applied_at")
+  @@map("acct_credit_applications")
+}
+
+model AcctRevenueSchedule {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  invoiceId String @map("invoice_id")
+  customerId String @map("customer_id")
+  totalAmount Decimal @map("total_amount") @db.Decimal(16, 2)
+  startPeriod String @map("start_period") @db.VarChar(7)
+  months Int
+  deferredAccountNumber Int @map("deferred_account_number")
+  revenueAccountNumber Int @map("revenue_account_number")
+  entries Json
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_revenue_schedules")
+}
+
+model AcctDelayedCharge {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  customerId String @map("customer_id")
+  chargeDate DateTime @map("charge_date")
+  accountNumber Int @map("account_number")
+  description String @db.VarChar(300)
+  qty Decimal @db.Decimal(14, 3)
+  unitPrice Decimal @map("unit_price") @db.Decimal(16, 2)
+  taxRateId String? @map("tax_rate_id") @db.VarChar(60)
+  status String @default("Unbilled") @db.VarChar(8)
+  invoiceId String? @map("invoice_id")
+  removedAt DateTime? @map("removed_at")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_delayed_charges")
+}
+
+model AcctCustomerNotice {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  kind String @db.VarChar(9)
+  customerId String @map("customer_id")
+  invoiceId String? @map("invoice_id")
+  level Int?
+  tone String? @db.VarChar(40)
+  sentTo String? @map("sent_to") @db.VarChar(160)
+  sentByUserId String @map("sent_by_user_id")
+  sentAt DateTime @default(now()) @map("sent_at")
+  @@map("acct_customer_notices")
+}
+
+model AcctVendor {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(160)
+  email String? @db.VarChar(160)
+  phone String? @db.VarChar(30)
+  address String? @db.VarChar(300)
+  taxId String? @map("tax_id") @db.VarChar(40)
+  category String @db.VarChar(120)
+  currency String @default("NGN") @db.VarChar(3)
+  paymentTermsDays Int @default(30) @map("payment_terms_days")
+  paymentTermId String? @map("payment_term_id") @db.VarChar(60)
+  apAccountNumber Int @default(2000) @map("ap_account_number")
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_vendors")
+}
+
+model AcctPurchaseDoc {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  kind String @db.VarChar(13)
+  number String @db.VarChar(40)
+  vendorId String? @map("vendor_id")
+  vendorInvoiceNumber String? @map("vendor_invoice_number") @db.VarChar(60)
+  docDate DateTime @map("doc_date")
+  dueDate DateTime? @map("due_date")
+  needBy DateTime? @map("need_by")
+  expectedDate DateTime? @map("expected_date")
+  lines Json
+  notes String? @db.VarChar(2000)
+  justification String? @db.VarChar(2000)
+  reason String? @db.VarChar(500)
+  department String? @db.VarChar(120)
+  status String @db.VarChar(20)
+  approval Json?
+  currency String @default("NGN") @db.VarChar(3)
+  exchangeRate Decimal @default(1) @map("exchange_rate") @db.Decimal(16, 6)
+  amountPaid Decimal @default(0) @map("amount_paid") @db.Decimal(16, 2)
+  sourceDocId String? @map("source_doc_id")
+  convertedToId String? @map("converted_to_id")
+  journalEntryId String? @map("journal_entry_id")
+  projectId String? @map("project_id")
+  recurEveryMonths Int? @map("recur_every_months")
+  recurNextDate DateTime? @map("recur_next_date")
+  recurEndDate DateTime? @map("recur_end_date")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  postedAt DateTime? @map("posted_at")
+  version Int @default(1)
+  @@map("acct_purchase_docs")
+}
+
+model AcctGoodsReceipt {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(40)
+  purchaseOrderId String @map("purchase_order_id")
+  vendorId String @map("vendor_id")
+  receiptDate DateTime @map("receipt_date")
+  receivedByUserId String @map("received_by_user_id")
+  lines Json
+  notes String? @db.VarChar(2000)
+  stockedLineIds String[] @default([]) @map("stocked_line_ids")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_goods_receipts")
+}
+
+model AcctVendorPayment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(40)
+  vendorId String @map("vendor_id")
+  paymentDate DateTime @map("payment_date")
+  method String @db.VarChar(13)
+  fromAccountNumber Int @map("from_account_number")
+  amount Decimal @db.Decimal(16, 2)
+  allocations Json
+  settlementRate Decimal? @map("settlement_rate") @db.Decimal(16, 6)
+  reference String? @db.VarChar(100)
+  withheldTax Decimal @default(0) @map("withheld_tax") @db.Decimal(16, 2)
+  journalEntryId String? @map("journal_entry_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  status String @default("Posted") @db.VarChar(16)
+  approval Json?
+  @@map("acct_vendor_payments")
+}
+
+model AcctVendorCreditApplication {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  vendorCreditId String @map("vendor_credit_id")
+  billId String @map("bill_id")
+  amount Decimal @db.Decimal(16, 2)
+  appliedByUserId String @map("applied_by_user_id")
+  appliedAt DateTime @default(now()) @map("applied_at")
+  @@map("acct_vendor_credit_applications")
+}
+
+model AcctBankAccount {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  accountNumber Int @map("account_number")
+  bankName String @map("bank_name") @db.VarChar(120)
+  accountName String @map("account_name") @db.VarChar(160)
+  accountNo String @map("account_no") @db.VarChar(40)
+  currency String @default("NGN") @db.VarChar(3)
+  sortCode String? @map("sort_code") @db.VarChar(20)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, accountNumber], map: "acct_bank_accounts_number_key")
+  @@map("acct_bank_accounts")
+}
+
+model AcctStatementLine {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  accountNumber Int @map("account_number")
+  lineDate DateTime @map("line_date")
+  description String @db.VarChar(300)
+  amount Decimal @db.Decimal(16, 2)
+  reference String? @db.VarChar(100)
+  reconciled Boolean @default(false)
+  matchedJournalEntryId String? @map("matched_journal_entry_id")
+  ruleApplied String? @map("rule_applied")
+  origin String @default("import") @db.VarChar(6)
+  importedByUserId String @map("imported_by_user_id")
+  importedAt DateTime @default(now()) @map("imported_at")
+  @@index([organizationId, accountNumber, reconciled], map: "acct_statement_lines_account_idx")
+  @@map("acct_statement_lines")
+}
+
+model AcctReconciliationRule {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  accountNumber Int @map("account_number")
+  name String @db.VarChar(120)
+  descriptionContains String? @map("description_contains") @db.VarChar(120)
+  direction String? @db.VarChar(3)
+  contraAccount Int @map("contra_account")
+  memo String? @db.VarChar(200)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_reconciliation_rules")
+}
+
+model AcctReconciliation {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  accountNumber Int @map("account_number")
+  statementDate DateTime @map("statement_date")
+  openingBalance Decimal @map("opening_balance") @db.Decimal(16, 2)
+  closingBalance Decimal @map("closing_balance") @db.Decimal(16, 2)
+  status String @default("In Progress") @db.VarChar(12)
+  clearedKeys String[] @default([]) @map("cleared_keys")
+  startedByUserId String @map("started_by_user_id")
+  completedByUserId String? @map("completed_by_user_id")
+  completedAt DateTime? @map("completed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_reconciliations")
+}
+
+model AcctExpenseClaim {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(40)
+  claimantEmployeeId String? @map("claimant_employee_id")
+  claimDate DateTime @map("claim_date")
+  title String @db.VarChar(200)
+  costCenter String? @map("cost_center") @db.VarChar(120)
+  payMode String @map("pay_mode") @db.VarChar(20)
+  paidFromAccount Int? @map("paid_from_account")
+  lines Json
+  receiptRef String? @map("receipt_ref") @db.VarChar(100)
+  status String @default("Draft") @db.VarChar(16)
+  approval Json
+  journalEntryId String? @map("journal_entry_id")
+  paymentJournalEntryId String? @map("payment_journal_entry_id")
+  paidAt DateTime? @map("paid_at")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, number], map: "acct_expense_claims_number_key")
+  @@map("acct_expense_claims")
+}
+
+model AcctFixedAsset {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  tag String @db.VarChar(20)
+  name String @db.VarChar(160)
+  category String @db.VarChar(80)
+  acquisitionDate DateTime @map("acquisition_date")
+  cost Decimal @default(0) @db.Decimal(16, 2)
+  assetAccountNumber Int @map("asset_account_number")
+  method String @default("Straight Line") @db.VarChar(16)
+  usefulLifeMonths Int @default(0) @map("useful_life_months")
+  salvageValue Decimal @default(0) @map("salvage_value") @db.Decimal(16, 2)
+  reducingRateAnnual Decimal? @map("reducing_rate_annual") @db.Decimal(6, 2)
+  accumulatedDepreciation Decimal @default(0) @map("accumulated_depreciation") @db.Decimal(16, 2)
+  status String @default("Active") @db.VarChar(18)
+  sourceBillId String? @map("source_bill_id")
+  disposalDate DateTime? @map("disposal_date")
+  disposalProceeds Decimal? @map("disposal_proceeds") @db.Decimal(16, 2)
+  lastDepreciatedPeriod String? @map("last_depreciated_period") @db.VarChar(7)
+  revaluationReserve Decimal @default(0) @map("revaluation_reserve") @db.Decimal(16, 2)
+  impairmentLoss Decimal @default(0) @map("impairment_loss") @db.Decimal(16, 2)
+  cwipSpend Decimal @default(0) @map("cwip_spend") @db.Decimal(16, 2)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, tag], map: "acct_fixed_assets_tag_key")
+  @@map("acct_fixed_assets")
+}
+
+model AcctDepreciationRun {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  period String @db.VarChar(7)
+  entries Json
+  total Decimal @db.Decimal(16, 2)
+  journalEntryId String @map("journal_entry_id")
+  runByUserId String @map("run_by_user_id")
+  runAt DateTime @default(now()) @map("run_at")
+  @@unique([organizationId, period], map: "acct_depreciation_runs_period_key")
+  @@map("acct_depreciation_runs")
+}
+
+model AcctAssetRevaluation {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  assetId String @map("asset_id")
+  revaluedOn DateTime @map("revalued_on")
+  kind String @db.VarChar(11)
+  carryingBefore Decimal @map("carrying_before") @db.Decimal(16, 2)
+  carryingAfter Decimal @map("carrying_after") @db.Decimal(16, 2)
+  delta Decimal @db.Decimal(16, 2)
+  note String? @db.VarChar(500)
+  journalEntryId String @map("journal_entry_id")
+  byUserId String @map("by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_asset_revaluations")
+}
+
+model AcctCostCentre {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(20)
+  name String @db.VarChar(120)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, code], map: "acct_cost_centres_code_key")
+  @@map("acct_cost_centres")
+}
+
+model AcctBudget {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(160)
+  fiscalYear Int @map("fiscal_year")
+  status String @default("Draft") @db.VarChar(6)
+  lines Json @default("[]")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@map("acct_budgets")
+}
+
+model AcctTaxReturn {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  reference String @db.VarChar(40)
+  returnType String @map("return_type") @db.VarChar(4)
+  authority String @db.VarChar(10)
+  liabilityAccount Int @map("liability_account")
+  periodStart DateTime @map("period_start")
+  periodEnd DateTime @map("period_end")
+  outputTax Decimal @map("output_tax") @db.Decimal(16, 2)
+  inputTax Decimal @map("input_tax") @db.Decimal(16, 2)
+  netPayable Decimal @map("net_payable") @db.Decimal(16, 2)
+  status String @default("Open") @db.VarChar(6)
+  submissionRef String? @map("submission_ref") @db.VarChar(100)
+  filedVia String? @map("filed_via") @db.VarChar(120)
+  filedAt DateTime? @map("filed_at")
+  filedByUserId String? @map("filed_by_user_id")
+  paidAt DateTime? @map("paid_at")
+  journalEntryId String? @map("journal_entry_id")
+  preparedByUserId String @map("prepared_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@index([organizationId, returnType, periodEnd], map: "acct_tax_returns_period_idx")
+  @@map("acct_tax_returns")
+}
+
+model AcctProject {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  code String @db.VarChar(20)
+  name String @db.VarChar(160)
+  customerId String? @map("customer_id")
+  status String @default("Active") @db.VarChar(10)
+  startDate DateTime @map("start_date")
+  endDate DateTime? @map("end_date")
+  budgetAmount Decimal? @map("budget_amount") @db.Decimal(16, 2)
+  billable Boolean @default(false)
+  description String? @db.VarChar(2000)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, code], map: "acct_projects_code_key")
+  @@map("acct_projects")
+}
+
+model AcctTimeEntry {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  projectId String @map("project_id")
+  staffEmployeeId String @map("staff_employee_id")
+  entryDate DateTime @map("entry_date")
+  hours Decimal @db.Decimal(6, 2)
+  description String @db.VarChar(300)
+  billable Boolean
+  rate Decimal? @db.Decimal(16, 2)
+  revenueAccount Int @map("revenue_account")
+  status String @db.VarChar(12)
+  invoiceId String? @map("invoice_id")
+  removedAt DateTime? @map("removed_at")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, projectId, status], map: "acct_time_entries_project_idx")
+  @@map("acct_time_entries")
+}
+
+model AcctNotificationPrefs {
+  organizationId String @map("organization_id")
+  userId String @map("user_id")
+  prefs Json
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@id([organizationId, userId])
+  @@map("acct_notification_prefs")
+}
+
+model AcctIntegrationEvent {
+  organizationId String @map("organization_id")
+  kind String @db.VarChar(24)
+  sourceRef String @map("source_ref")
+  data Json @default("{}")
+  journalEntryId String? @map("journal_entry_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@id([organizationId, kind, sourceRef])
+  @@map("acct_integration_events")
+}
+
+model EmrWardRound {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  admissionId String @map("admission_id")
+  patientId String @map("patient_id")
+  encounterId String @map("encounter_id")
+  clinicianUserId String @map("clinician_user_id")
+  department String? @db.VarChar(120)
+  roundAt DateTime @default(now()) @map("round_at")
+  participants Json @default("[]")
+  clinicalProgress String? @map("clinical_progress") @db.VarChar(20)
+  progressNote String @default("") @map("progress_note")
+  devices Json @default("[]")
+  problems Json @default("[]")
+  tasks Json @default("[]")
+  safetyChecklist Json @default("{}") @map("safety_checklist")
+  escalationPlan String? @map("escalation_plan") @db.VarChar(2000)
+  dischargeReadiness Json @default("{}") @map("discharge_readiness")
+  communication Json @default("{}")
+  examination Json?
+  examinationRecordedByUserId String? @map("examination_recorded_by_user_id")
+  examinationRecordedAt DateTime? @map("examination_recorded_at")
+  summary String @default("")
+  status String @default("draft") @db.VarChar(8)
+  signedByUserId String? @map("signed_by_user_id")
+  signedAt DateTime? @map("signed_at")
+  updatedByUserId String? @map("updated_by_user_id")
+  updatedAt DateTime? @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, id], map: "emr_ward_rounds_org_id_key")
+  @@index([organizationId, admissionId, roundAt], map: "emr_ward_rounds_admission_idx")
+  @@map("emr_ward_rounds")
+}
+
+model EmrWardRoundAmendment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  wardRoundId String @map("ward_round_id")
+  note String @db.VarChar(4000)
+  byUserId String @map("by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("emr_ward_round_amendments")
+}
+
+model EmrMedicationChange {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientId String @map("patient_id")
+  encounterId String @map("encounter_id")
+  wardRoundId String? @map("ward_round_id")
+  prescriptionItemId String? @map("prescription_item_id")
+  replacementPrescriptionId String? @map("replacement_prescription_id")
+  drugName String @map("drug_name") @db.VarChar(200)
+  action String @db.VarChar(18)
+  previousDose String? @map("previous_dose") @db.VarChar(60)
+  previousFrequency String? @map("previous_frequency") @db.VarChar(60)
+  previousRoute String? @map("previous_route") @db.VarChar(60)
+  newDose String? @map("new_dose") @db.VarChar(60)
+  newFrequency String? @map("new_frequency") @db.VarChar(60)
+  newRoute String? @map("new_route") @db.VarChar(60)
+  reason String @db.VarChar(1000)
+  clinicalNote String? @map("clinical_note") @db.VarChar(2000)
+  monitoringRequired String? @map("monitoring_required") @db.VarChar(1000)
+  effectiveAt DateTime @default(now()) @map("effective_at")
+  clinicianUserId String @map("clinician_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, patientId, createdAt], map: "emr_medication_changes_patient_idx")
+  @@map("emr_medication_changes")
+}
+
+model EmrScadaEquipment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  tag String @db.VarChar(30)
+  assetId String? @map("asset_id")
+  name String @db.VarChar(160)
+  category String @db.VarChar(30)
+  manufacturer String @default("") @db.VarChar(120)
+  model String @default("") @db.VarChar(120)
+  serialNumber String @default("") @map("serial_number") @db.VarChar(120)
+  ownership String @default("Owned") @db.VarChar(20)
+  location Json
+  procurement Json @default("{}")
+  lifecycle Json @default("{}")
+  technical Json @default("{}")
+  compliance Json @default("{}")
+  machineState String @default("Unknown") @map("machine_state") @db.VarChar(16)
+  lastHeartbeatAt DateTime? @map("last_heartbeat_at")
+  lastLatencyMs Int? @map("last_latency_ms")
+  decommissionedAt DateTime? @map("decommissioned_at")
+  registeredByUserId String @map("registered_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, id], map: "emr_scada_equipment_org_id_key")
+  @@unique([organizationId, tag], map: "emr_scada_equipment_tag_key")
+  @@map("emr_scada_equipment")
+}
+
+model EmrScadaDeviceKey {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  label String @db.VarChar(80)
+  secretHash String @map("secret_hash") @db.Char(64)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt DateTime? @map("revoked_at")
+  revokedByUserId String? @map("revoked_by_user_id")
+  @@map("emr_scada_device_keys")
+}
+
+model EmrScadaReading {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  parameter String @db.VarChar(40)
+  value Float
+  severity String @db.VarChar(8)
+  recordedAt DateTime @map("recorded_at")
+  receivedAt DateTime @default(now()) @map("received_at")
+  deviceKeyId String @map("device_key_id")
+  @@index([organizationId, equipmentId, parameter, recordedAt], map: "emr_scada_readings_series_idx")
+  @@map("emr_scada_readings")
+}
+
+model EmrScadaEvent {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  type String @db.VarChar(24)
+  at DateTime
+  source String @db.VarChar(14)
+  actor String? @db.VarChar(160)
+  detail String? @db.VarChar(1000)
+  patientId String? @map("patient_id")
+  relatedOrderId String? @map("related_order_id")
+  correlationId String @map("correlation_id") @db.VarChar(80)
+  idempotencyKey String @map("idempotency_key") @db.VarChar(120)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([organizationId, equipmentId, idempotencyKey], map: "emr_scada_events_idempotency_key")
+  @@index([organizationId, equipmentId, at], map: "emr_scada_events_timeline_idx")
+  @@map("emr_scada_events")
+}
+
+model EmrScadaAlarm {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  raisedAt DateTime @default(now()) @map("raised_at")
+  source String @db.VarChar(14)
+  severity String @db.VarChar(13)
+  category String @db.VarChar(22)
+  description String @db.VarChar(1000)
+  parameter String? @db.VarChar(40)
+  value Float?
+  threshold Float?
+  status String @default("Raised") @db.VarChar(13)
+  dedupKey String? @map("dedup_key") @db.VarChar(120)
+  acknowledgedByUserId String? @map("acknowledged_by_user_id")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  investigationNote String? @map("investigation_note") @db.VarChar(2000)
+  escalatedTo String? @map("escalated_to") @db.VarChar(160)
+  escalatedAt DateTime? @map("escalated_at")
+  resolution String? @db.VarChar(2000)
+  resolvedByUserId String? @map("resolved_by_user_id")
+  resolvedAt DateTime? @map("resolved_at")
+  version Int @default(1)
+  @@index([organizationId, equipmentId, raisedAt], map: "emr_scada_alarms_equipment_idx")
+  @@map("emr_scada_alarms")
+}
+
+model EmrScadaWorkOrder {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  number String @db.VarChar(30)
+  type String @db.VarChar(10)
+  status String @default("Requested") @db.VarChar(14)
+  severity String @db.VarChar(8)
+  description String @db.VarChar(2000)
+  failureCategory String? @map("failure_category") @db.VarChar(80)
+  scheduledFor DateTime? @map("scheduled_for")
+  technician String? @db.VarChar(160)
+  checklist Json @default("[]")
+  partsUsed Json @default("[]") @map("parts_used")
+  diagnosis String? @db.VarChar(2000)
+  correctiveAction String? @map("corrective_action") @db.VarChar(2000)
+  laborCost Decimal? @map("labor_cost") @db.Decimal(14, 2)
+  startedAt DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  downtimeMinutes Int? @map("downtime_minutes")
+  returnToServiceTested Boolean @default(false) @map("return_to_service_tested")
+  returnToServiceNote String? @map("return_to_service_note") @db.VarChar(1000)
+  cancelReason String? @map("cancel_reason") @db.VarChar(500)
+  reportedByUserId String @map("reported_by_user_id")
+  reportedAt DateTime @default(now()) @map("reported_at")
+  version Int @default(1)
+  @@unique([organizationId, number], map: "emr_scada_work_orders_number_key")
+  @@map("emr_scada_work_orders")
+}
+
+model EmrScadaCalibration {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  status String @default("Scheduled") @db.VarChar(11)
+  scheduledFor DateTime @map("scheduled_for")
+  technician String? @db.VarChar(160)
+  vendor String? @db.VarChar(160)
+  standardsUsed String? @map("standards_used") @db.VarChar(500)
+  performedAt DateTime? @map("performed_at")
+  result String? @db.VarChar(4)
+  certificateNumber String? @map("certificate_number") @db.VarChar(80)
+  certificateExpiry DateTime? @map("certificate_expiry")
+  notes String? @db.VarChar(2000)
+  cancelReason String? @map("cancel_reason") @db.VarChar(500)
+  requestedByUserId String @map("requested_by_user_id")
+  requestedAt DateTime @default(now()) @map("requested_at")
+  version Int @default(1)
+  @@map("emr_scada_calibrations")
+}
+
+model EmrScadaConsumable {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  name String @db.VarChar(160)
+  lotNumber String @map("lot_number") @db.VarChar(80)
+  expiryDate DateTime @map("expiry_date") @db.Date
+  unit String @db.VarChar(30)
+  quantityOnHand Int @map("quantity_on_hand")
+  reorderThreshold Int @default(0) @map("reorder_threshold")
+  costPerUnit Decimal @default(0) @map("cost_per_unit") @db.Decimal(14, 2)
+  supplier String? @db.VarChar(160)
+  registeredByUserId String @map("registered_by_user_id")
+  registeredAt DateTime @default(now()) @map("registered_at")
+  version Int @default(1)
+  @@map("emr_scada_consumables")
+}
+
+model EmrScadaConsumableUsage {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  consumableId String @map("consumable_id")
+  quantityUsed Int @map("quantity_used")
+  reason String @db.VarChar(22)
+  source String @db.VarChar(14)
+  testName String? @map("test_name") @db.VarChar(160)
+  orderId String? @map("order_id")
+  byUserId String? @map("by_user_id")
+  at DateTime @default(now())
+  @@map("emr_scada_consumable_usage")
+}
+
+model EmrScadaWarranty {
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  provider String @db.VarChar(160)
+  start DateTime @db.Date
+  end DateTime @db.Date
+  coverage String @db.VarChar(1000)
+  contactName String? @map("contact_name") @db.VarChar(120)
+  contactPhone String? @map("contact_phone") @db.VarChar(30)
+  slaHours Int? @map("sla_hours")
+  updatedByUserId String @map("updated_by_user_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  @@id([organizationId, equipmentId])
+  @@map("emr_scada_warranties")
+}
+
+model EmrScadaWarrantyClaim {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  claimNumber String? @map("claim_number") @db.VarChar(80)
+  issue String @db.VarChar(2000)
+  status String @default("Submitted") @db.VarChar(10)
+  relatedWorkOrderId String? @map("related_work_order_id")
+  repairedUnderWarranty Boolean? @map("repaired_under_warranty")
+  costRecovered Decimal? @map("cost_recovered") @db.Decimal(14, 2)
+  resolutionNote String? @map("resolution_note") @db.VarChar(2000)
+  resolvedAt DateTime? @map("resolved_at")
+  raisedByUserId String @map("raised_by_user_id")
+  raisedAt DateTime @default(now()) @map("raised_at")
+  version Int @default(1)
+  @@map("emr_scada_warranty_claims")
+}
+
+model EmrScadaUsageSession {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  equipmentId String @map("equipment_id")
+  operator String @db.VarChar(160)
+  patientId String? @map("patient_id")
+  testName String? @map("test_name") @db.VarChar(160)
+  orderId String? @map("order_id")
+  correlationId String @map("correlation_id") @db.VarChar(80)
+  startedAt DateTime @map("started_at")
+  endedAt DateTime? @map("ended_at")
+  outcome String? @db.VarChar(9)
+  @@unique([organizationId, equipmentId, correlationId], map: "emr_scada_usage_sessions_correlation_key")
+  @@map("emr_scada_usage_sessions")
+}
+
+model AcctLandedCost {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  costDate DateTime @map("cost_date")
+  description String @db.VarChar(300)
+  creditAccount Int @map("credit_account")
+  total Decimal @db.Decimal(16, 2)
+  allocations Json
+  journalEntryId String @map("journal_entry_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId, costDate])
+  @@map("acct_landed_costs")
+}
+
+model AcctForecastScenario {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  name String @db.VarChar(160)
+  basis String @db.VarChar(30)
+  startPeriod String @map("start_period") @db.Char(7)
+  months Int
+  lines Json @default("[]")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  removedAt DateTime? @map("removed_at")
+  version Int @default(1)
+  @@index([organizationId, createdAt])
+  @@map("acct_forecast_scenarios")
+}
+
+model AcctAttachment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  entityType String @map("entity_type") @db.VarChar(20)
+  entityId String @map("entity_id")
+  entityLabel String @map("entity_label") @db.VarChar(120)
+  filename String @db.VarChar(200)
+  contentType String @map("content_type") @db.VarChar(40)
+  byteSize Int @map("byte_size")
+  sha256 String @db.Char(64)
+  note String? @db.VarChar(300)
+  version Int @default(1)
+  intakeKey String @map("intake_key") @db.VarChar(80)
+  status String @default("PENDING_UPLOAD") @db.VarChar(16)
+  objectKey String @map("object_key") @db.VarChar(250)
+  scanRequestedAt DateTime? @map("scan_requested_at")
+  scanAttempts Int @default(0) @map("scan_attempts")
+  scanErrorCode String? @map("scan_error_code") @db.VarChar(60)
+  scanLeaseToken String? @map("scan_lease_token")
+  scanLeaseExpiresAt DateTime? @map("scan_lease_expires_at")
+  scannedAt DateTime? @map("scanned_at")
+  scannerVersion String? @map("scanner_version") @db.VarChar(120)
+  cleanupObjectKeys String[] @default([]) @map("cleanup_object_keys")
+  storageCleanupPending Boolean @default(false) @map("storage_cleanup_pending")
+  uploadedByUserId String @map("uploaded_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  removedAt DateTime? @map("removed_at")
+  removedByUserId String? @map("removed_by_user_id")
+  @@unique([organizationId, intakeKey], map: "acct_attachments_intake_key")
+  @@index([organizationId, entityType, entityId], map: "acct_attachments_entity_idx")
+  @@index([status, scanRequestedAt], map: "acct_attachments_scan_idx")
+  @@map("acct_attachments")
+}
+
+model AcctEmailJob {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  noticeId String @map("notice_id")
+  recipient String @db.VarChar(160)
+  replyTo String? @map("reply_to") @db.VarChar(160)
+  fromName String @map("from_name") @db.VarChar(120)
+  subject String @db.VarChar(300)
+  body String @db.VarChar(20000)
+  status String @default("QUEUED") @db.VarChar(8)
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  lastError String? @map("last_error") @db.VarChar(60)
+  providerMessageId String? @map("provider_message_id") @db.VarChar(120)
+  sentAt DateTime? @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([organizationId, noticeId], map: "acct_email_jobs_notice_key")
+  @@index([status, nextAttemptAt], map: "acct_email_jobs_due_idx")
+  @@map("acct_email_jobs")
 }

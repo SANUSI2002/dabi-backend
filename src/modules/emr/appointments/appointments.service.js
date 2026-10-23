@@ -6,6 +6,7 @@
 // A booking made from a patient-app request (appointment-requests.service.js) passes its check-in
 // or cancellation back to that request.
 import { withTenant } from '../core/db.js';
+import { requireListed } from '../../org-config/orgConfig.service.js';
 import { afterCursor, page } from '../core/cursor.js';
 import { recordAudit } from '../core/audit.js';
 import { idempotent } from '../core/idempotency.js';
@@ -80,6 +81,7 @@ export async function insertBooking(tx, context, { patientId, scheduledAt, type,
   const patient = await findPatient(tx, context.organizationId, patientId, { id: true, status: true });
   if (!patient) throw new EmrError('PATIENT_NOT_FOUND');
   if (patient.status !== 'ACTIVE') throw new EmrError('PATIENT_INACTIVE');
+  await requireListed(tx, context, 'appointment-types', type ?? 'GENERAL', { what: 'The appointment type' });
   const row = await tx.emrAppointment.create({
     data: {
       organizationId: context.organizationId, patientId: patient.id, scheduledAt: new Date(scheduledAt), type,
@@ -137,7 +139,7 @@ export async function checkIn(context, id, expectedVersion) {
         },
         select: { id: true, patientId: true },
       });
-      await createForEncounter(tx, context, encounter, { station: STATION_FOR_TYPE[appointment.type], priority: 'NORMAL', complaint: reason });
+      await createForEncounter(tx, context, encounter, { station: STATION_FOR_TYPE[appointment.type] ?? 'Vital', priority: 'NORMAL', complaint: reason });
       await recordAudit(tx, context, { action: 'encounter.created', resourceType: 'encounter', resourceId: encounter.id });
       await enqueueEvent(tx, context, { type: 'encounter.created', aggregateType: 'encounter', aggregateId: encounter.id, data: { patientId: encounter.patientId, class: 'OUTPATIENT' } });
     }

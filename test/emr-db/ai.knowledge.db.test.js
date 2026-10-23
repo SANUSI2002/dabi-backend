@@ -21,7 +21,12 @@ async function source(status='PUBLISHED',audiences=metadata.audiences){const id=
 const env={SABI_AI_ENABLED:'true',SABI_AI_GOOGLE_PROCESSING_APPROVED:'true',SABI_AI_GOOGLE_API_KEY:'synthetic-not-transmitted',SABI_AI_MODEL:'synthetic-model'};
 const saved=Object.fromEntries(Object.keys(env).map(k=>[k,process.env[k]]));
 beforeAll(()=>Object.assign(process.env,env));
-afterAll(()=>{for(const k of Object.keys(env)){if(saved[k]===undefined)delete process.env[k];else process.env[k]=saved[k];}});
+afterAll(async()=>{
+  // This embedded database is shared across files. Retire only this suite's
+  // synthetic books so later document-only tests do not retrieve them.
+  try { if(admin)await prisma.aiKnowledgeDocument.updateMany({where:{uploadedByUserId:admin.id},data:{status:'RETIRED',leaseToken:null,leaseExpiresAt:null}}); }
+  finally { for(const k of Object.keys(env)){if(saved[k]===undefined)delete process.env[k];else process.env[k]=saved[k];} }
+});
 beforeAll(async()=>{admin=await newUser();reviewer=await newUser();normal=await newUser();support=await newUser();for(const u of [admin,reviewer])await prisma.platformRoleAssignment.create({data:{userId:u.id,roleCode:'SABI_PLATFORM_ADMIN'}});await prisma.platformRoleAssignment.create({data:{userId:support.id,roleCode:'SABI_SUPPORT'}});});
 describe('standalone AI account boundaries',()=>{
   it('requires professional discipline, regulator, licence number and current expiry',()=>{

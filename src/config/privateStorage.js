@@ -7,6 +7,7 @@ export const PRIVATE_BUCKETS = Object.freeze({
   hospitalEvidenceClean: 'sabi-hospital-evidence-clean',
   clinicalDocuments: 'sabi-clinical-documents',
   profileImages: 'sabi-profile-images',
+  financeDocuments: 'sabi-finance-documents',
 });
 
 export class PrivateStorageError extends Error {

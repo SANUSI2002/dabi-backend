@@ -15,7 +15,7 @@ describe('Supabase private bucket provisioning', () => {
   it('reports missing buckets without creating them by default', async () => {
     const storage = { getBucket: vi.fn().mockResolvedValue({ data: null, error: { statusCode: '404' } }), createBucket: vi.fn() };
     const result = await checkOrProvisionBuckets({ storage });
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(5); // incl. sabi-finance-documents
     expect(result.every((item) => item.state === 'MISSING')).toBe(true);
     expect(storage.createBucket).not.toHaveBeenCalled();
   });
@@ -31,7 +31,8 @@ describe('Supabase private bucket provisioning', () => {
     }
     const result = await checkOrProvisionBuckets({ storage }, { apply: true });
     expect(result.every((item) => item.state === 'READY' && item.private)).toBe(true);
-    expect(storage.createBucket).toHaveBeenCalledTimes(4);
+    expect(storage.createBucket).toHaveBeenCalledTimes(5);
+    expect(storage.createBucket).toHaveBeenCalledWith('sabi-finance-documents', expect.objectContaining({ public: false, fileSizeLimit: 10 * 1024 * 1024, allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'] }));
     expect(storage.createBucket).toHaveBeenCalledWith(PRIVATE_BUCKET_POLICIES[0].id, expect.objectContaining({ public: false, fileSizeLimit: 10 * 1024 * 1024 }));
   });
 
