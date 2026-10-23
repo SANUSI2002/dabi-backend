@@ -84,8 +84,33 @@ Client and Instance User bindings are conditional on this instance's exact
 resource name and SQL service. The API/worker database users have no CREATEDB,
 CREATEROLE or BYPASSRLS attributes. Only the migration identity and the explicitly
 approved official operator account have database-administration membership.
-Runtime table grants and EMR SET ROLE membership still require implementation
-and verification; connection permission alone does not give the API table access.
+The reviewed `ops/google-cloud/runtime-grants.sql` was applied from pinned commit
+`ed7a41b` on 24 October. API/worker have application-table DML through a NOLOGIN
+group, not ownership or schema administration. Both can explicitly SET ROLE to
+`sabi_emr_app` but do not inherit its privileges. A live PostgreSQL check confirmed
+application DML=true, direct EMR SELECT=false, schema CREATE=false,
+EMR inheritance=false and elevated role attributes=false for both identities.
+All 235 RLS-enabled tables and 216 FORCE RLS tables remain protected. The 18
+internal AI tables have explicit backend-only policies instead of relying on an
+owner connection; JEV job maintenance is worker-only. Immutable audit, allowance
+and receipt histories receive no UPDATE/DELETE grants. New tables receive no
+automatic/default grants. Eight embedded-PostgreSQL tests cover these grants,
+including repeat application, denial and policy checks; lint also passed.
+
+The baseline on-demand database backup completed successfully. A restore drill
+has not yet been performed. No users or medical records were imported.
+
+## Provider credentials and server secrets
+
+Five existing provider values (Resend, Cloudmersive, Daily, Google OAuth client
+ID/secret) were securely transferred into Secret Manager with approval. Seven
+independent server keys were generated directly into Secret Manager without
+printing them or saving plaintext files. All 12 have enabled version 1, verified
+through metadata-only queries. The existing two AI secrets were retained.
+`ops/google-cloud/secrets.md` records the environment mappings and per-secret
+API/worker access. The migration identity gets none of these application secrets.
+No expired database URL, Supabase key, old signing key or user password was copied.
+IAM and version checks are not proof that live provider workflows work end-to-end.
 
 `DATABASE_CONNECTION_MODE=cloud-sql-iam` selects the Google Node connector with
 ADC and automatic short-lived token renewal. Configure the exact instance name,
@@ -122,16 +147,18 @@ acceptance check before claiming every document API is migrated.
 
 ## Remaining cutover work — not yet completed
 
-1. Verify the baseline backup, complete runtime grants and conduct a restore drill.
+1. Conduct a restore drill for the completed baseline backup, then verify keyless
+   API/worker connectivity using their own identities and the applied SQL grants.
 2. Add the Scheduler identity and verify the existing API, worker and migration
    identities. Limit each
    identity to the database, buckets and individual secrets it needs; do not use
    project-wide Editor or download service-account keys.
 3. Connect the provisioned private buckets, Secret Manager values and Cloud SQL
-   configuration. Existing provider secrets must be transferred securely; never
-   print them, put them in source or expose them as frontend variables.
-4. Run all reviewed migrations once with a migration identity, then a restore
-   drill. Establish and test the runtime SQL grants, including tenant RLS roles.
+   configuration. Provider secrets are now transferred; pin their enabled versions
+   in the runtime revisions. Never expose them as frontend variables.
+4. Use the migration identity for subsequent schema changes. All 149 existing
+   migrations are applied, and runtime grants are tested; the actual attached
+   service-account connection and restore drill still require verification.
 5. Split API serving from interval workers. Use authenticated request-billed
    worker handlers and durable queue/Scheduler wakeups; do not suspend reminders,
    scanning, reconciliation or notifications by deploying the current combined
@@ -140,6 +167,13 @@ acceptance check before claiming every document API is migrated.
    reconciliation and subscription reconciliation; the existing interval hosts
    delegate to those same functions. This preparation does not yet implement
    Cloud Tasks/Scheduler orchestration or remove any existing worker.
+   The new explicit Docker `api` target uses `src/api.js`: no intervals, database
+   and five-private-bucket startup/readiness checks, bounded readiness caching and
+   SIGTERM draining. Six unit tests cover host behaviour. Its Google-only startup
+   requires IAM SQL and GCS rather than silently accepting legacy providers.
+   Default/`runtime` builds still use the existing combined entrypoint. Do not
+   promote the request-only target before the durable worker is deployed and
+   verified; this target alone is not a complete production rollout.
 6. Build immutable backend images in Google Cloud. Start with a bounded replica
    and database-pool budget; distributed rate enforcement is required before
    increasing API replicas.

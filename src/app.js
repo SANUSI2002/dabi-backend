@@ -98,7 +98,7 @@ app.use(auditActivity);
 // --- MODULAR BUCKET ROUTING ---
 app.get('/api/health', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  const revision = process.env.RENDER_GIT_COMMIT;
+  const revision = process.env.APP_REVISION || process.env.RENDER_GIT_COMMIT;
   res.json({ status: 'success', message: 'Sabi Health backend is running securely',
     release: {
       revision: /^[a-f0-9]{40}$/i.test(revision || '') ? revision : null,

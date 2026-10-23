@@ -47,3 +47,12 @@ COPY --chown=node:node docs ./docs
 USER node
 EXPOSE 8080
 CMD ["node", "src/index.js"]
+
+# Promote only together with the separately verified durable worker deployment.
+# The legacy combined target above remains available for local development.
+FROM runtime AS api
+CMD ["node", "src/api.js"]
+
+# An unqualified build preserves the existing combined entrypoint. Only the
+# reviewed Google rollout explicitly selects --target api with a working worker.
+FROM runtime AS combined
