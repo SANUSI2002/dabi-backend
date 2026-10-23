@@ -11,7 +11,12 @@ Do not delete the old providers or imply their records were migrated.
 - Official Google account: `damilare@sabihealth.org`.
 - Console reports USD 300 trial credit and 86 days remaining at inspection.
 - `sabi-ai-runtime` exists in `europe-west1` and reports healthy.
-- Cloud SQL has no existing instance. No new instance has been provisioned.
+- `sabi-production-db` is RUNNABLE in `us-east1`, Enterprise PostgreSQL 18.6,
+  with regional HA, 1 vCPU, 3.75 GiB RAM and 10 GiB SSD.
+- `sabi_production` is a fresh database: 149 migrations applied, zero unfinished
+  migrations and zero user accounts, verified through IAM authentication.
+- The schema has 363 application tables, including 235 RLS-enabled tables and
+  216 with FORCE RLS. These protections were not disabled during migration.
 - The old Render PostgreSQL database is expired and suspended; do not bypass
   migrations or configure a replacement as though it contained the old records.
 - The EMR backend release is merged at `f61552f`; frontend PR #7 is green and
@@ -34,9 +39,15 @@ baseline storage, before backup use, traffic and the other services. The user
 approved proceeding under the revised budget. This leaves approximately USD 48
 of the monthly target for API, workers, storage, AI and other Google usage;
 actual consumption must be monitored rather than represented as a hard cap.
-The instance form is prepared but has not been submitted: the account owner must
-complete the initial administrator credential entry and submission. No database
-is ready until the console confirms creation and connectivity is verified.
+The account owner completed the administrator credential entry and submission.
+Subsequent schema setup used short-lived IAM authentication over the loopback-only
+Cloud SQL Auth Proxy 2.26.0; the administrator password was not obtained or reused
+by the application. Seven automatic backups and seven days of PITR are configured.
+
+The earlier USD 90 total-trial alert was replaced with a USD 150 **monthly**
+project-scoped usage alert, excluding credits from the calculation so trial
+consumption still counts. Thresholds are 50%, 80%, 100% actual and 100% forecast.
+No automatic shutdown, Pub/Sub action or paid-billing upgrade was configured.
 
 ## Storage implementation
 
@@ -59,9 +70,37 @@ Provisioned and verified in the official project on 23 October 2026:
 All five use regional Standard storage in `us-east1`, uniform bucket-level
 access, enforced public-access prevention, Google-managed encryption and the
 default seven-day soft-delete recovery window. No source-provider objects were
-copied and no API/worker service-account access has yet been granted. Console
-creation is not proof of application connectivity; verify the keyless runtime
-and its restricted preview-signing permissions before cutover.
+copied. API/worker identities have bucket-scoped `sabiPrivateObjects` permissions
+(bucket metadata read and object create/read/delete, no IAM administration).
+Only the API identity has `sabiPreviewSigner` on itself, containing signBlob only.
+Console creation and IAM bindings are not proof of application connectivity;
+verify the keyless runtime and its restricted preview signing before cutover.
+
+## Database identities and release checks
+
+`sabi-api-production`, `sabi-worker-production` and `sabi-migration-production`
+exist as separate service identities, without downloaded keys. Their Cloud SQL
+Client and Instance User bindings are conditional on this instance's exact
+resource name and SQL service. The API/worker database users have no CREATEDB,
+CREATEROLE or BYPASSRLS attributes. Only the migration identity and the explicitly
+approved official operator account have database-administration membership.
+Runtime table grants and EMR SET ROLE membership still require implementation
+and verification; connection permission alone does not give the API table access.
+
+`DATABASE_CONNECTION_MODE=cloud-sql-iam` selects the Google Node connector with
+ADC and automatic short-lived token renewal. Configure the exact instance name,
+service-account IAM username, `CLOUD_SQL_DATABASE=sabi_production` and a bounded
+pool (initially 4). Leave `DATABASE_URL` unset in this mode. URL mode remains for
+development and embedded tests; unknown modes or mixed credentials fail closed.
+
+Release `29b5316` passed 997 unit tests and 620 embedded PostgreSQL workflow tests,
+with machine-readable reports independently checked in CI. One earlier run had
+reported a green GitHub status despite a midnight-sensitive reminder assertion
+failure; the replacement time is now relative to the original dose, and CI
+explicitly rejects any JSON report containing failures. No production reminder
+logic was weakened to fix that test. The production dependency audit is clean;
+three moderate development-only Vitest advisories remain. Do not represent
+dependency audit results as a complete application-security assessment.
 
 The Google adapter uses Application Default Credentials; no downloaded account
 key or Supabase credential is required. Five logical buckets map to private,
@@ -83,8 +122,9 @@ acceptance check before claiming every document API is migrated.
 
 ## Remaining cutover work — not yet completed
 
-1. Confirm the regional resource quote and provision the backed-up database.
-2. Create separate API, worker, migration and Scheduler identities. Limit each
+1. Verify the baseline backup, complete runtime grants and conduct a restore drill.
+2. Add the Scheduler identity and verify the existing API, worker and migration
+   identities. Limit each
    identity to the database, buckets and individual secrets it needs; do not use
    project-wide Editor or download service-account keys.
 3. Connect the provisioned private buckets, Secret Manager values and Cloud SQL
