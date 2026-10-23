@@ -318,7 +318,10 @@ describe('schedules', () => {
   it('a changed schedule cancels the old future doses and reminders', async () => {
     const who = await patient();
     const { schedule, dose } = await soonSchedule(who);
-    const changed = await as(who).patch(`/api/v1/medication-schedules/${schedule.id}`, { times: ['23:59'] });
+    // A fixed 23:59 replacement can itself become legitimately due when this
+    // suite runs near midnight. Keep the new dose beyond the old dose's check.
+    const replacementTime = localClock(after(dose, 120), 'Africa/Lagos');
+    const changed = await as(who).patch(`/api/v1/medication-schedules/${schedule.id}`, { times: [replacementTime] });
     expect(changed.body.data.version).toBe(2);
     expect(await prisma.medicationDose.findUnique({ where: { id: dose.id }, include: { reminder: true } })).toMatchObject({ status: 'CANCELLED', reminder: { status: 'CANCELLED' } });
     await runAt(after(dose));
