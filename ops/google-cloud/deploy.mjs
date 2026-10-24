@@ -42,7 +42,12 @@ if (action === 'build') {
   cloud(['auth', 'configure-docker', `${region}-docker.pkg.dev`]);
   for (const kind of ['api', 'worker']) {
     execute('docker', ['build', '--platform=linux/amd64', '--target', kind, '--tag', image(kind), root]);
-    execute('docker', ['push', image(kind)]);
+    // Cloud Shell's Docker daemon can have a different registry network path
+    // from its CLI. Google's pinned registry client uses the existing gcloud
+    // credential helper without daemon/network-policy changes or TLS bypasses.
+    const archive = join(mkdtempSync(join(tmpdir(), 'sabi-image-')), `${kind}.tar`);
+    execute('docker', ['save', '--output', archive, image(kind)]);
+    execute('go', ['run', 'github.com/google/go-containerregistry/cmd/crane@v0.22.1', 'push', archive, image(kind)]);
   }
 } else if (action === 'api' || action === 'worker') {
   const kind = action;

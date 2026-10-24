@@ -1,6 +1,6 @@
 # Build this from the backend repository root, never the frontend parent folder.
 # Resolve/pin the vendor image digest in the release pipeline before promotion.
-FROM node:22-bookworm-slim AS base
+FROM node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d AS base
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
