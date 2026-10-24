@@ -1,0 +1,7 @@
+{
+  "CLIENT_URL": "https://sabi-health-2hkde60mn-sanusi2002s-projects.vercel.app",
+  "PATIENT_PORTAL_URL": "https://sabi-health-2hkde60mn-sanusi2002s-projects.vercel.app/telemedicine",
+  "DOCTOR_PORTAL_URL": "https://sabi-health-2hkde60mn-sanusi2002s-projects.vercel.app/telemedicine/doctor-portal",
+  "PHARMACY_PORTAL_URL": "https://sabi-health-2hkde60mn-sanusi2002s-projects.vercel.app",
+  "SABI_AI_PORTAL_URL": "https://sabi-health-2hkde60mn-sanusi2002s-projects.vercel.app"
+}

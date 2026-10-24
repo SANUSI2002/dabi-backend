@@ -107,11 +107,45 @@ was changed/deleted in this deployment. This is a fresh database with no importe
 users, roles, hospitals, records or files. Old test passwords/sessions/admin grants
 do not become production accounts. No first production platform admin was granted.
 
-Before switching website traffic: complete the remaining legacy S3-document
-adapter work/route inventory, realistic upload/scan/preview and provider tests,
+Before switching website traffic: complete realistic upload/scan/preview and provider tests,
 signup/verification/login/refresh/MFA and tenant-isolation acceptance, backup
 restore drill, initial verified platform-owner provisioning, load/recovery and
 monitoring checks, and the reviewed frontend release/API-proxy update. CI/CD
 promotion to Google remains a separate follow-up; a Git push alone does not yet
 automatically run this deployment script. Retain old resources until separately
 authorised retirement.
+
+## Upload compatibility release and frontend acceptance preview
+
+On 24 October the Google API and worker were updated to
+`abf7cb37be406f2f3c7196398ae35f5a8bd8c29a` after CI run `40080479442`
+independently verified **1,032 unit** and **635 embedded PostgreSQL** tests.
+Ready revisions: API `sabi-api-production-00002-7cm`, worker
+`sabi-worker-production-00002-htg`. The API reported that exact source commit;
+readiness was 200, anonymous platform access 401, anonymous worker access 403.
+
+Both patient-document upload paths now use GCS in Google mode and join the
+persisted integrity-checked Cloudmersive screening workflow. Legacy S3 adapters
+remain for other environments, not as a Google production dependency. The
+compatibility signed-PUT path still needs exact-origin bucket CORS and a real
+signed-request smoke test; the current portal's authenticated binary-intake
+path does not need browser-to-bucket CORS.
+
+Protected Vercel preview (Ready; **not** production alias):
+`https://sabi-health-2hkde60mn-sanusi2002s-projects.vercel.app`.
+Deployment `dpl_9oFSV3ErjcfmBQRfTMQ1X4RLqgZj`, source frontend `bf15500`
+plus the preview-only configuration now committed as `d18b43f` in PR #7.
+An authorised CLI request through that preview's `/api/health` returned the
+Google `abf7cb3` revision, and `/telemedicine/login` returned 200. These HTTP
+checks do not establish a signed-in patient workflow or successful email delivery.
+
+The owner explicitly approved that single preview origin and temporary email
+callback bases. Apply these **only with** `deploy.mjs api --acceptance-preview`
+and `deploy.mjs worker --acceptance-preview`; ordinary deploy commands keep the
+production callback settings. `acceptance-preview.json` contains no secrets.
+The nested patient verification base needs the subsequent `943cad0` fix before
+activating that override. All existing origins remain; no wildcard is added.
+
+After acceptance, return both services to the production callback configuration
+as part of the reviewed live cutover. No user account, first-admin grant, restore
+drill or full clinical/payment acceptance is implied by preparing this preview.

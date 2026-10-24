@@ -11,6 +11,12 @@ const project = 'project-2dfff4eb-ff04-40b1-aff';
 const region = 'us-east1';
 const registry = `${region}-docker.pkg.dev/${project}/sabi-production-images`;
 const settings = JSON.parse(readFileSync(join(root, 'ops/google-cloud/production-env.json'), 'utf8'));
+// Opt-in only: normal deployments retain the production callback configuration.
+// The one exact preview origin and temporary callback bases were owner-approved.
+if (process.argv.includes('--acceptance-preview')) {
+  const preview = JSON.parse(readFileSync(join(root, 'ops/google-cloud/acceptance-preview.json'), 'utf8'));
+  Object.assign(settings, preview, { CLIENT_URLS: `${settings.CLIENT_URLS},${preview.CLIENT_URL}` });
+}
 const execute = (command, args, capture = false) => {
   const result = spawnSync(command, args, { cwd: root, stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit', encoding: 'utf8' });
   if (result.status !== 0) throw new Error(`${command} failed; no automatic promotion follows.`);
