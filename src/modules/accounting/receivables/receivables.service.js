@@ -105,7 +105,7 @@ export async function overview(context) {
       salesOrders: of('sales-order').map((d) => ({ ...base(d), estimateId: d.sourceDocId ?? undefined, status: d.status, invoiceId: d.convertedToInvoiceId ?? undefined })),
       invoices: of('invoice').map((d) => ({
         ...base(d), salesOrderId: d.sourceDocId ?? undefined, dueDate: iso(d.dueDate), status: shownStatus(d.status, d.dueDate), amountPaid: Number(d.amountPaid), currency: d.currency, exchangeRate: Number(d.exchangeRate),
-        issuedAt: iso(d.issuedAt), source: d.source === 'EMR Billing' ? 'EMR Billing' : 'Manual', emrInvoiceId: d.source === 'EMR Billing' ? d.sourceRef ?? undefined : undefined, projectId: d.projectId ?? undefined,
+        issuedAt: iso(d.issuedAt), source: ['EMR Billing', 'Payer Bill'].includes(d.source) ? d.source : 'Manual', emrInvoiceId: d.source === 'EMR Billing' ? d.sourceRef ?? undefined : undefined, projectId: d.projectId ?? undefined,
         revenueScheduleId: scheduleOf.get(d.id), ...(d.recurEveryMonths ? { isRecurring: true, recurringTemplate: false, recurrenceEveryMonths: d.recurEveryMonths, recurrenceNextDate: iso(d.recurNextDate), recurrenceEndDate: iso(d.recurEndDate) } : {}),
       })),
       receipts: receipts.map((r) => ({
