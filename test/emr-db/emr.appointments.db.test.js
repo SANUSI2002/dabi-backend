@@ -104,7 +104,9 @@ describe('around the hospital', () => {
   it('shows due follow-ups on the dashboard and appointments on the patient record', async () => {
     const p = await patient();
     const followUp = (await book({ patientId: p.id, scheduledAt: at(5), type: 'FOLLOW_UP', reason: 'Diabetes review' })).body.data;
-    const day = new Date(); day.setHours(0, 0, 0, 0); const month = new Date(day); month.setDate(1);
+    // The five-minute-ahead appointment can be tomorrow when CI runs near
+    // midnight. Query its actual calendar day, not the wall-clock booking day.
+    const day = new Date(followUp.scheduledAt); day.setHours(0, 0, 0, 0); const month = new Date(day); month.setDate(1);
     const board = (await as(doctor).get(`/dashboard?since=${encodeURIComponent(day.toISOString())}&monthStart=${encodeURIComponent(month.toISOString())}`)).body.data;
     expect(board.work.followUpsDue).toEqual(expect.arrayContaining([expect.objectContaining({ id: followUp.id, reason: 'Diabetes review', patient: expect.objectContaining({ id: p.id }) })]));
     const record = (await as(doctor).get(`/patients/${p.id}/record`)).body.data;
