@@ -6,8 +6,9 @@ import {
   getUploadMaxBytes,
 } from "./medical-documents.storage.js";
 import { buildEmergencySummaryPdf } from "./medical-documents.pdf.js";
-import { signedClinicalDocument } from './medical-documents.intake.js';
+import { signedClinicalDocument, intakeConfigured } from './medical-documents.intake.js';
 import { privateStorageBackend } from '../../config/privateStorage.js';
+import { wakeBackgroundJob } from '../../runtime/cloud-tasks.js';
 
 const error = (code, status = 400) =>
   Object.assign(new Error(code), { code, status });
@@ -16,6 +17,7 @@ const key = () => `quarantine/${crypto.randomUUID()}`;
 
 export const initializeUpload = async (ownerPatientId, data) => {
   const adapter = storage();
+  if (adapter.backend === 'gcs' && !intakeConfigured()) throw error('DOCUMENT_INTAKE_UNAVAILABLE', 503);
   const document = await repository.transaction(async (tx) => {
     if (!(await repository.isPatient(tx, ownerPatientId)))
       throw error("RESOURCE_NOT_FOUND", 404);
@@ -26,7 +28,8 @@ export const initializeUpload = async (ownerPatientId, data) => {
       throw error("RESOURCE_NOT_FOUND", 404);
     const item = await repository.create(tx, {
       ownerPatientId,
-      objectKey: key(),
+      objectKey: adapter.backend === 'gcs' ? `${key()}.${{ 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' }[data.contentType]}` : key(),
+      ...(adapter.backend === 'gcs' ? { uploadBackend: 'gcs' } : {}),
       originalFilename: data.filename,
       declaredContentType: data.contentType,
       byteSize: data.byteSize,
@@ -77,9 +80,12 @@ export const completeUpload = async (userId, id) => {
   if (!item) throw error("RESOURCE_NOT_FOUND", 404);
   if (item.status !== "PENDING_UPLOAD")
     throw error("INVALID_DOCUMENT_STATE", 409);
+  const adapter = storage();
+  if ((item.uploadBackend === 'gcs') !== (adapter.backend === 'gcs')) throw error('DOCUMENT_STORAGE_UNAVAILABLE', 503);
+  if (adapter.backend === 'gcs' && !intakeConfigured()) throw error('DOCUMENT_INTAKE_UNAVAILABLE', 503);
   let object;
   try {
-    object = await storage().head(item.objectKey);
+    object = await adapter.head(item.objectKey);
   } catch {
     throw error("UPLOAD_OBJECT_INVALID", 409);
   }
@@ -88,20 +94,23 @@ export const completeUpload = async (userId, id) => {
     object.byteSize > getUploadMaxBytes() ||
     object.contentType !== item.declaredContentType ||
     !DOCUMENT_CONTENT_TYPES.includes(object.contentType)
+    || (adapter.backend === 'gcs' && !/^[a-f0-9]{64}$/.test(object.sha256 || ''))
   )
     throw error("UPLOAD_OBJECT_INVALID", 409);
-  return repository.transaction(async (tx) => {
+  const completed = await repository.transaction(async (tx) => {
     const result = await repository.updateState(
       tx,
       id,
       userId,
       "PENDING_UPLOAD",
-      { status: "PENDING_SCAN", scanRequestedAt: new Date() },
+      { status: "PENDING_SCAN", scanRequestedAt: new Date(), ...(adapter.backend === 'gcs' ? { sha256: object.sha256 } : {}) },
     );
     if (!result.count) throw error("INVALID_DOCUMENT_STATE", 409);
     await repository.audit(tx, userId, "DOCUMENT_UPLOAD_COMPLETED", id);
     return { id, status: "PENDING_SCAN" };
   });
+  if (adapter.backend === 'gcs') await wakeBackgroundJob('patient-screening', id);
+  return completed;
 };
 
 const authorizeDownload = async (userId, id, shareId) => {
@@ -313,6 +322,9 @@ export const recordScanResult = async (id, data, replayDigest) => {
     const item = await repository.findScanDocument(tx, id);
     if (!item || item.status !== "PENDING_SCAN")
       throw error("RESOURCE_NOT_FOUND", 404);
+    // Google/private-intake documents are verified and promoted by the leased
+    // background worker. The legacy callback must not skip its integrity check.
+    if (item.uploadBackend === 'gcs' || item.uploadBackend === 'supabase') throw error('INVALID_DOCUMENT_STATE', 409);
     if (data.byteSize !== item.byteSize)
       throw error("INVALID_SCAN_RESULT", 400);
     const scannerTime = new Date(data.scannerTimestamp);

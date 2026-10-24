@@ -1,5 +1,6 @@
 import { Storage } from '@google-cloud/storage';
 import { Blob, Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const fail = () => { throw Object.assign(new Error('Private storage operation unavailable.'), { code: 'PRIVATE_STORAGE_UNAVAILABLE' }); };
@@ -42,6 +43,32 @@ export function createGoogleStorageClient(logicalBuckets, { sdk = new Storage(),
       // Validate before constructing a bucket handle, even when no I/O follows.
       bucketFor(logical);
       return {
+        createSignedUpload: (key, contentType, byteSize, seconds = 300) => result(async () => {
+          if (!safePath(key) || !key.startsWith('quarantine/') || !policy(logical).types.includes(contentType)
+            || !Number.isSafeInteger(byteSize) || byteSize <= 0 || byteSize > policy(logical).maxBytes
+            || !Number.isInteger(seconds) || seconds < 1 || seconds > 300) fail();
+          const bucket = await assertBucket(logical);
+          // Sign both limits: the browser cannot overwrite an existing object or
+          // send more bytes than the authenticated initialization allowed.
+          const extensionHeaders = { 'x-goog-if-generation-match': '0',
+            'x-goog-content-length-range': `${byteSize},${byteSize}`,
+            'cache-control': 'private, no-store, max-age=0' };
+          const [url] = await bucket.file(key).getSignedUrl({ version: 'v4', action: 'write',
+            expires: now() + seconds * 1000, contentType, extensionHeaders });
+          return { method: 'PUT', url, expiresInSeconds: seconds,
+            headers: { 'Content-Type': contentType, ...extensionHeaders } };
+        }),
+        inspect: (key, maxBytes = policy(logical).maxBytes) => result(async () => {
+          if (!safePath(key) || !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > policy(logical).maxBytes) fail();
+          const bucket = await assertBucket(logical);
+          const [metadata] = await bucket.file(key).getMetadata();
+          const byteSize = Number(metadata.size);
+          if (!Number.isSafeInteger(byteSize) || byteSize <= 0 || byteSize > maxBytes
+            || !policy(logical).types.includes(metadata.contentType) || !/^\d+$/.test(String(metadata.generation))) fail();
+          const [bytes] = await bucket.file(key, { generation: metadata.generation }).download({ validation: 'crc32c' });
+          if (bytes.length !== byteSize) fail();
+          return { byteSize, contentType: metadata.contentType, sha256: createHash('sha256').update(bytes).digest('hex') };
+        }),
         upload: (key, bytes, options = {}) => result(async () => {
           if (!safePath(key) || !Buffer.isBuffer(bytes) || !bytes.length || bytes.length > policy(logical).maxBytes
             || !policy(logical).types.includes(options.contentType) || options.upsert === true) fail();

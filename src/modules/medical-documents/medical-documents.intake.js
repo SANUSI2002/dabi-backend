@@ -4,6 +4,7 @@ import prisma from '../../config/db.js';
 import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient, privateStorageBackend, privateStorageConfigured, uploadPrivateObject } from '../../config/privateStorage.js';
 import { cloudmersiveConfigured } from '../../config/evidenceScanner.js';
 import { audit, isPatient, ownedRecord, safeDocumentSelect } from './medical-documents.repository.js';
+import { wakeBackgroundJob } from '../../runtime/cloud-tasks.js';
 
 export const documentError = (code, status = 400) => Object.assign(new Error(code), { code, status });
 const bucket = PRIVATE_BUCKETS.clinicalDocuments;
@@ -61,6 +62,7 @@ export async function receiveDocument(userId, data, bytes, requestKey, { db = pr
       if (changed.count) await audit(tx, userId, 'DOCUMENT_UPLOAD_COMPLETED', document.id);
     });
   }
+  await wakeBackgroundJob('patient-screening', document.id);
   return db.medicalDocument.findFirst({ where: { id: document.id, ownerPatientId: userId, status: { not: 'DELETED' } }, select: safeDocumentSelect });
 }
 

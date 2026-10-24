@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGoogleStorageClient, googleStorageConfigured } from '../src/config/googleStorage.js';
 
@@ -38,6 +39,32 @@ describe('Google Cloud private storage', () => {
     expect(result.error).toBeNull();
     expect(file.save).toHaveBeenCalledWith(bytes, expect.objectContaining({ validation: 'crc32c', preconditionOpts: { ifGenerationMatch: 0 }, metadata: expect.objectContaining({ cacheControl: 'private, no-store, max-age=0' }) }));
     expect((await storage().upload('quarantine/test.pdf', bytes, { contentType: 'application/pdf', upsert: true })).error).toBeTruthy();
+  });
+  it('signs only bounded, immutable quarantine uploads with exact byte limits', async () => {
+    const signed = await storage().createSignedUpload('quarantine/test.pdf', 'application/pdf', bytes.length, 60);
+    expect(signed.error).toBeNull();
+    expect(signed.data.headers).toMatchObject({ 'Content-Type': 'application/pdf', 'x-goog-if-generation-match': '0',
+      'x-goog-content-length-range': `${bytes.length},${bytes.length}` });
+    expect(file.getSignedUrl).toHaveBeenCalledWith({ version: 'v4', action: 'write', expires: 61000,
+      contentType: 'application/pdf', extensionHeaders: expect.objectContaining({ 'x-goog-if-generation-match': '0',
+        'x-goog-content-length-range': `${bytes.length},${bytes.length}`, 'cache-control': 'private, no-store, max-age=0' }) });
+    for (const [key, type, size, ttl] of [
+      ['clean/test.pdf', 'application/pdf', bytes.length, 60],
+      ['../test.pdf', 'application/pdf', bytes.length, 60],
+      ['quarantine/test.pdf', 'text/html', bytes.length, 60],
+      ['quarantine/test.pdf', 'application/pdf', 0, 60],
+      ['quarantine/test.pdf', 'application/pdf', 10485761, 60],
+      ['quarantine/test.pdf', 'application/pdf', bytes.length, 301],
+    ]) expect((await storage().createSignedUpload(key, type, size, ttl)).error).toBeTruthy();
+    expect(file.getSignedUrl).toHaveBeenCalledTimes(1);
+  });
+  it('checks the exact generation and hashes bytes before releasing an upload for scanning', async () => {
+    expect((await storage().inspect('quarantine/test.pdf', 100)).data).toEqual({ byteSize: bytes.length,
+      contentType: 'application/pdf', sha256: createHash('sha256').update(bytes).digest('hex') });
+    expect(bucket.file).toHaveBeenCalledWith('quarantine/test.pdf', { generation: '123' });
+    expect((await storage().inspect('quarantine/test.pdf', 1)).error).toBeTruthy();
+    file.download.mockResolvedValueOnce([Buffer.from('wrong-length')]);
+    expect((await storage().inspect('quarantine/test.pdf', 100)).error).toBeTruthy();
   });
   it('enforces profile-image type and size limits in the application, not imaginary bucket settings', async () => {
     const images = client().storage.from(buckets.profileImages);
