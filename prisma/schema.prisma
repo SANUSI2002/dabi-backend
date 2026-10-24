@@ -7105,6 +7105,129 @@ model AcctNotificationPrefs {
   @@map("acct_notification_prefs")
 }
 
+model AcctPayerTransfer {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  patientInvoiceId String @map("patient_invoice_id")
+  payerInvoiceId String @map("payer_invoice_id")
+  patientCustomerId String @map("patient_customer_id")
+  payerCustomerId String @map("payer_customer_id")
+  amount Decimal @db.Decimal(16, 2)
+  rebilledAmount Decimal @default(0) @map("rebilled_amount") @db.Decimal(16, 2)
+  authorizationCode String? @map("authorization_code") @db.VarChar(60)
+  enrolleeNumber String? @map("enrollee_number") @db.VarChar(60)
+  journalEntryId String @map("journal_entry_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  reversedAt DateTime? @map("reversed_at")
+  @@unique([organizationId, payerInvoiceId], map: "acct_payer_transfers_payer_invoice_key")
+  @@index([organizationId, patientInvoiceId], map: "acct_payer_transfers_patient_idx")
+  @@map("acct_payer_transfers")
+}
+
+model AcctPayerClaim {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(40)
+  payerCustomerId String @map("payer_customer_id")
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd DateTime @map("period_end") @db.Date
+  status String @default("Draft") @db.VarChar(11)
+  items Json
+  reference String? @db.VarChar(100)
+  notes String? @db.VarChar(2000)
+  submittedAt DateTime? @map("submitted_at")
+  submittedByUserId String? @map("submitted_by_user_id")
+  adjudicatedAt DateTime? @map("adjudicated_at")
+  adjudicatedByUserId String? @map("adjudicated_by_user_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, number], map: "acct_payer_claims_number_key")
+  @@index([organizationId, payerCustomerId], map: "acct_payer_claims_payer_idx")
+  @@map("acct_payer_claims")
+}
+
+model AcctCapitation {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  number String @db.VarChar(40)
+  payerCustomerId String @map("payer_customer_id")
+  startPeriod String @map("start_period") @db.Char(7)
+  months Int
+  enrollees Int
+  ratePerEnrollee Decimal @map("rate_per_enrollee") @db.Decimal(16, 2)
+  amount Decimal @db.Decimal(16, 2)
+  receivedDate DateTime @map("received_date") @db.Date
+  depositAccountNumber Int @map("deposit_account_number")
+  reference String? @db.VarChar(100)
+  entries Json
+  journalEntryId String @map("journal_entry_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@unique([organizationId, number], map: "acct_capitations_number_key")
+  @@map("acct_capitations")
+}
+
+model AcctWriteOff {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  invoiceId String @map("invoice_id")
+  customerId String @map("customer_id")
+  amount Decimal @db.Decimal(16, 2)
+  fromAllowance Decimal @map("from_allowance") @db.Decimal(16, 2)
+  reason String @db.VarChar(500)
+  recoveredAmount Decimal @default(0) @map("recovered_amount") @db.Decimal(16, 2)
+  journalEntryId String @map("journal_entry_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  version Int @default(1)
+  @@index([organizationId, invoiceId], map: "acct_write_offs_invoice_idx")
+  @@map("acct_write_offs")
+}
+
+model AcctCreditLossRun {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  asOf DateTime @map("as_of") @db.Date
+  rates Json
+  buckets Json
+  required Decimal @db.Decimal(16, 2)
+  previous Decimal @db.Decimal(16, 2)
+  adjustment Decimal @db.Decimal(16, 2)
+  journalEntryId String? @map("journal_entry_id")
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("acct_credit_loss_runs")
+}
+
+model AcctPortalLink {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  partyKind String @map("party_kind") @db.VarChar(8)
+  partyId String @map("party_id")
+  tokenHash String @unique(map: "acct_portal_links_token_key") @map("token_hash") @db.Char(64)
+  createdByUserId String @map("created_by_user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  revokedByUserId String? @map("revoked_by_user_id")
+  lastUsedAt DateTime? @map("last_used_at")
+  useCount Int @default(0) @map("use_count")
+  @@index([organizationId, partyKind, partyId], map: "acct_portal_links_party_idx")
+  @@map("acct_portal_links")
+}
+
+model AcctAlertDelivery {
+  organizationId String @map("organization_id")
+  userId String @map("user_id")
+  alertId String @map("alert_id") @db.VarChar(80)
+  sentAt DateTime @default(now()) @map("sent_at")
+  @@id([organizationId, userId, alertId])
+  @@map("acct_alert_deliveries")
+}
+
 model AcctIntegrationEvent {
   organizationId String @map("organization_id")
   kind String @db.VarChar(24)
@@ -7505,6 +7628,8 @@ model AcctEmailJob {
   providerMessageId String? @map("provider_message_id") @db.VarChar(120)
   sentAt DateTime? @map("sent_at")
   createdAt DateTime @default(now()) @map("created_at")
+  attachmentName String? @map("attachment_name") @db.VarChar(120)
+  attachment Bytes?
   @@unique([organizationId, noticeId], map: "acct_email_jobs_notice_key")
   @@index([status, nextAttemptAt], map: "acct_email_jobs_due_idx")
   @@map("acct_email_jobs")

@@ -4,7 +4,8 @@
 //   - a project code is unique; a billable project is tied to one of the organization's customers;
 //   - time is logged by a member of staff against an open project; billable time needs a revenue account
 //     and is pulled into an invoice once (receivables bills it); billed time cannot be removed;
-//   - notification preferences are the signed-in user's own (they only filter the in-app alerts);
+//   - notification preferences are the signed-in user's own: they filter the in-app alerts, and with
+//     emailDigest on, the same alerts are emailed to them as a digest (see email/staffAlerts.js);
 //   - acct.view reads; acct.post creates and changes projects and logs time.
 import { withTenant } from '../../emr/core/db.js';
 import { recordAudit } from '../../emr/core/audit.js';
@@ -16,7 +17,7 @@ import { requireAcct } from '../ledger/ledger.service.js';
 const org = (context) => ({ organizationId: context.organizationId });
 const audited = (tx, context, action, resourceId, changedFields = []) => recordAudit(tx, context, { action, resourceType: 'project', resourceId, changedFields });
 const iso = (d) => (d ? d.toISOString() : undefined);
-const KEYS = ['approvalPending', 'invoiceOverdue', 'billDueSoon', 'lowStock', 'budgetExceeded', 'largeJournal'];
+const KEYS = ['approvalPending', 'invoiceOverdue', 'billDueSoon', 'lowStock', 'budgetExceeded', 'largeJournal', 'emailDigest'];
 
 // ---- reading ----------------------------------------------------------------------------------------
 export async function overview(context) {

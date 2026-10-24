@@ -2,23 +2,26 @@
 // invoice, issuing with VAT and the stacked levy, credit control, receipts with early-pay discount and
 // FX, credit notes applied and refunded, cash-sale and refund receipts, delayed charges, deferred revenue,
 // recurring invoices, reminders and statements — with the trial balance tying out throughout.
+import { Buffer } from 'node:buffer';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../../src/app.js';
 import { addMember, createTenant, prisma } from './fixtures.js';
-import { deliverCustomerEmails } from '../../src/modules/accounting/email/customerEmail.js';
+import { deliverCustomerEmails, sendCustomerEmail } from '../../src/modules/accounting/email/customerEmail.js';
 
 const ifMatch = (version) => ({ 'If-Match': `W/"${version}"` });
 const as = (who) => {
   const url = (path) => `/api/v1/accounting/organizations/${who.organizationId}${path}`;
   return {
     get: (path) => request(app).get(url(path)).set('Authorization', who.auth),
+    raw: (path) => request(app).get(url(path)).set('Authorization', who.auth).buffer(true).parse((res, cb) => { const chunks = []; res.on('data', (c) => chunks.push(c)); res.on('end', () => cb(null, Buffer.concat(chunks))); }),
     post: (path, body = {}, headers = {}) => request(app).post(url(path)).set('Authorization', who.auth).set(headers).send(body),
     patch: (path, body = {}, headers = {}) => request(app).patch(url(path)).set('Authorization', who.auth).set(headers).send(body),
   };
 };
 const ok = (res, status = 200) => { expect(res.status, JSON.stringify(res.body)).toBe(status); return res.body.data; };
 const today = () => new Date().toISOString();
+const round = (n) => Math.round(n * 100) / 100;
 const daysAgo = (n) => new Date(Date.now() - n * 86_400_000).toISOString();
 
 let A; let finance; let controller; let admin; let hmo; let patient;
@@ -181,6 +184,64 @@ describe('receivables', () => {
       const data = await ar();
       expect(data.reminders.find((r) => r.invoiceId === inv.id).email).toMatchObject({ status: 'SENT', sentAt: expect.any(String) });
       expect(data.statementLog[0].email).toEqual({ status: 'FAILED', error: 'PROVIDER_HTTP_422' });
+    } finally {
+      process.env.RESEND_API_KEY = saved.key ?? ''; process.env.PASSWORD_RESET_EMAIL_FROM = saved.from ?? '';
+      if (saved.key === undefined) delete process.env.RESEND_API_KEY;
+      if (saved.from === undefined) delete process.env.PASSWORD_RESET_EMAIL_FROM;
+    }
+  });
+
+  it('prints invoices and statements from the books, the statement tying to the ledger', async () => {
+    const data = await ar();
+    const inv = data.invoices.find((i) => i.customerId === hmo.id && i.status !== 'Draft');
+    const pdf = await as(finance).raw(`/receivables/invoices/${inv.id}/pdf?download=1`);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+    expect(pdf.headers['content-disposition']).toMatch(/^attachment; filename="INV-\d{4}-\d+\.pdf"$/);
+    expect(pdf.body.subarray(0, 5).toString()).toBe('%PDF-');
+    expect((await as(finance).raw(`/receivables/invoices/${hmo.id}/pdf`)).status).toBe(404);
+    // the whole history, opening balance entry included, closing on the customer's receivable
+    const st = ok(await as(finance).get(`/receivables/customers/${hmo.id}/statement?from=2000-01-01`));
+    expect(st.openingBalance).toBe(0);
+    expect(st.lines.find((l) => /Opening AR balance/.test(l.description))).toMatchObject({ debit: 500000, credit: 0 });
+    expect(st.lines.every((l, i) => i === 0 || l.date >= st.lines[i - 1].date)).toBe(true); // in date order
+    expect(st.closingBalance).toBe(bal(await tb(), 1120)); // the only HMO customer
+    expect(st.closingBalance).toBe(st.lines.at(-1).balance);
+    expect(st.aging.reduce((n, a) => n + a.amount, 0)).toBeCloseTo(st.closingBalance, 2); // ageing ties to the balance
+    expect(st.aging.find((a) => a.label === 'Not on an invoice').amount).toBe(500000); // the opening balance
+    // a later window opens on the balance brought forward
+    const recent = ok(await as(finance).get(`/receivables/customers/${hmo.id}/statement?from=${today().slice(0, 10)}`));
+    expect(recent.openingBalance).toBe(round(st.closingBalance - recent.lines.reduce((n, l) => n + l.debit - l.credit, 0)));
+    expect((await as(finance).get(`/receivables/customers/${hmo.id}/statement?from=2026-02-01&to=2026-01-01`)).status).toBe(400);
+    const stPdf = await as(finance).raw(`/receivables/customers/${hmo.id}/statement?format=pdf`);
+    expect(stPdf.headers['content-type']).toBe('application/pdf');
+    expect(stPdf.headers['content-disposition']).toMatch(/^inline; filename="Statement-Hygeia-HMO-/);
+  });
+
+  it('emails an issued invoice with its PDF attached, and sends attachments to the provider', async () => {
+    const draft = ok(await as(finance).post('/receivables/invoices', { customerId: hmo.id, date: today(), lines: [svc(4000, 'Consultation', 1, 12000)] }), 201);
+    expect((await as(finance).post(`/receivables/invoices/${draft.id}/email`)).status).toBe(409); // drafts are not sent
+    ok(await as(finance).post(`/receivables/invoices/${draft.id}/issue`));
+    expect(ok(await as(finance).post(`/receivables/invoices/${draft.id}/email`)).delivery).toEqual({ status: 'NOT_SENT', reason: 'EMAIL_NOT_CONFIGURED' });
+    const saved = { key: process.env.RESEND_API_KEY, from: process.env.PASSWORD_RESET_EMAIL_FROM };
+    process.env.RESEND_API_KEY = 'synthetic-only'; process.env.PASSWORD_RESET_EMAIL_FROM = 'Sabi Health <billing@sabi.test>';
+    try {
+      const sent = ok(await as(finance).post(`/receivables/invoices/${draft.id}/email`, { to: 'accounts@hygeia.test' }));
+      expect(sent).toMatchObject({ to: 'accounts@hygeia.test', delivery: { status: 'QUEUED' } });
+      const job = await prisma.acctEmailJob.findFirst({ where: { organizationId: A.organizationId, recipient: 'accounts@hygeia.test' } });
+      expect(job.attachmentName).toMatch(/^INV-\d{4}-\d+\.pdf$/);
+      expect(Buffer.from(job.attachment).subarray(0, 5).toString()).toBe('%PDF-');
+      expect(job.body).toMatch(/Amount due: ₦12,000\.00/);
+      const calls = [];
+      const result = await sendCustomerEmail(job, async (url, init) => { calls.push(JSON.parse(init.body)); return { ok: true, json: async () => ({ id: 'synthetic-2' }) }; });
+      expect(result).toEqual({ ok: true, providerId: 'synthetic-2' });
+      expect(calls[0].attachments).toEqual([{ filename: job.attachmentName, content: Buffer.from(job.attachment).toString('base64') }]);
+      // statements carry the statement PDF
+      ok(await as(finance).post(`/receivables/customers/${hmo.id}/statement`, { from: '2000-01-01' }));
+      const stJob = await prisma.acctEmailJob.findFirst({ where: { organizationId: A.organizationId, attachmentName: { startsWith: 'Statement-' } } });
+      expect(stJob.body).toMatch(/Opening balance: ₦0\.00/);
+      const data = await ar();
+      expect(data.invoiceEmails.filter((e) => e.invoiceId === draft.id).map((e) => e.to).sort()).toEqual(['accounts@hygeia.test', 'claims@hygeia.test']);
     } finally {
       process.env.RESEND_API_KEY = saved.key ?? ''; process.env.PASSWORD_RESET_EMAIL_FROM = saved.from ?? '';
       if (saved.key === undefined) delete process.env.RESEND_API_KEY;

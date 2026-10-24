@@ -1,4 +1,5 @@
-// Emails to a hospital's customers (payment reminders, statements of account), sent through Resend.
+// Emails to a hospital's customers (invoices, payment reminders, statements of account), sent through
+// Resend, with the document attached as a PDF when there is one.
 //
 // A notice is recorded and its email queued in the same transaction; a worker sends queued emails
 // (never holding a database lock while calling the provider) and retries a provider outage with a
@@ -6,6 +7,7 @@
 // with replies going to the staff member who sent it. Without an email provider configured, or when the
 // customer has no email address, the notice is still recorded and says it was not emailed.
 import { randomUUID } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import { setInterval, clearInterval } from 'node:timers';
 import prisma from '../../../config/db.js';
 import { passwordResetEmailAllowedFor, passwordResetEmailConfigured } from '../../auth/auth.email.js';
@@ -25,7 +27,7 @@ export async function senderFor(context, db = prisma) {
 
 const clean = (s) => String(s ?? '').replace(/[\r\n]+/g, ' ').trim();
 /** Queues the email for a recorded notice (inside its transaction); says why when it cannot be sent. */
-export async function queueCustomerEmail(tx, context, { noticeId, recipient, subject, body, sender, hospitalName }) {
+export async function queueCustomerEmail(tx, context, { noticeId, recipient, subject, body, sender, hospitalName, attachment }) {
   if (!recipient) return { status: 'NOT_SENT', reason: 'NO_EMAIL_ADDRESS' };
   if (!emailConfigured() || !passwordResetEmailAllowedFor(recipient)) return { status: 'NOT_SENT', reason: 'EMAIL_NOT_CONFIGURED' };
   const name = clean(hospitalName || sender.hospitalName).slice(0, 120);
@@ -34,6 +36,7 @@ export async function queueCustomerEmail(tx, context, { noticeId, recipient, sub
     data: {
       id: randomUUID(), organizationId: context.organizationId, noticeId, recipient: recipient.slice(0, 160), replyTo: sender.replyTo?.slice(0, 160) ?? null,
       fromName: name, subject: clean(subject).slice(0, 300), body: `${body}\n\n${signature}`.slice(0, 20000),
+      ...(attachment ? { attachmentName: clean(attachment.filename).slice(0, 120), attachment: attachment.bytes } : {}),
     },
   });
   return { status: 'QUEUED' };
@@ -54,7 +57,10 @@ export async function sendCustomerEmail(job, fetcher = globalThis.fetch) {
   const response = await fetcher(RESEND_ENDPOINT, {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json', 'Idempotency-Key': job.id },
-    body: JSON.stringify({ from: `${job.fromName.replace(/[<>"]/g, '')} <${address}>`, to: [job.recipient], subject: job.subject, text: job.body, ...(job.replyTo ? { reply_to: job.replyTo } : {}) }),
+    body: JSON.stringify({
+      from: `${job.fromName.replace(/[<>"]/g, '')} <${address}>`, to: [job.recipient], subject: job.subject, text: job.body, ...(job.replyTo ? { reply_to: job.replyTo } : {}),
+      ...(job.attachment ? { attachments: [{ filename: job.attachmentName, content: Buffer.from(job.attachment).toString('base64') }] } : {}),
+    }),
     signal: globalThis.AbortSignal.timeout(10_000),
   });
   if (!response.ok) return { ok: false, retryable: response.status === 429 || response.status >= 500, code: `PROVIDER_HTTP_${response.status}` };

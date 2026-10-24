@@ -12,6 +12,7 @@ export const STARTER_CHART = [
   [1110, "Accounts Receivable — NHIS", "asset", "accounts_receivable"],
   [1120, "Accounts Receivable — HMOs", "asset", "accounts_receivable"],
   [1150, "Intercompany Receivable", "asset", "current_asset"],
+  [1190, "Allowance for Doubtful Debts", "asset", "contra_asset"],
   [1200, "Drug & Consumables Inventory", "asset", "inventory"],
   [1210, "Medical Supplies Inventory", "asset", "inventory"],
   [1300, "Prepaid Expenses", "asset", "current_asset"],
@@ -50,9 +51,12 @@ export const STARTER_CHART = [
   [4030, "Procedure & Theatre Revenue", "revenue", "operating_revenue"],
   [4040, "Admission & Bed Revenue", "revenue", "operating_revenue"],
   [4050, "Radiology & Imaging Revenue", "revenue", "operating_revenue"],
+  [4060, "Capitation Income", "revenue", "operating_revenue"],
   [4100, "Other Income", "revenue", "other_income"],
   [4110, "Foreign Exchange Gain", "revenue", "other_income"],
+  [4120, "Bad Debts Recovered", "revenue", "other_income"],
   [4900, "Discounts & Waivers", "revenue", "contra_revenue"],
+  [4910, "Claim Denials & Contractual Adjustments", "revenue", "contra_revenue"],
 
   // ---- Cost of goods sold 5000–5099 ----
   [5000, "Cost of Drugs Dispensed", "cogs", "cost_of_goods_sold"],
@@ -194,6 +198,8 @@ export const STARTER_SEQUENCES = [
   { key: "payment", label: "Vendor Payment", prefix: "PMT-", padding: 6, next: 1 },
   { key: "vendor-credit", label: "Vendor Credit", prefix: "VC-", padding: 6, next: 1 },
   { key: "expense", label: "Expense Claim", prefix: "EXP-", padding: 6, next: 1 },
+  { key: "payer-claim", label: "HMO / NHIA Claim", prefix: "CLM-", padding: 6, next: 1 },
+  { key: "capitation", label: "Capitation Receipt", prefix: "CAP-", padding: 6, next: 1 },
 ];
 
 export const STARTER_PAYMENT_TERMS = [
@@ -221,5 +227,5 @@ export const STARTER_TAX_RATES = [
   { id: "tax-levy-1", name: "NHIS Levy 1%", kind: "VAT", rate: 1, accountNumber: 2220, isCompound: false, isActive: true, description: "Statutory health levy on non-exempt services — stacks on top of VAT" },
 ];
 
-export const STARTER_ORG_PROFILE = { legalName: '', tradingName: '', tin: '', rcNumber: '', address: '', reportingCurrency: 'NGN', fiscalYearStartMonth: 1 };
+export const STARTER_ORG_PROFILE = { legalName: '', tradingName: '', tin: '', rcNumber: '', address: '', email: '', phone: '', paymentInstructions: '', reportingCurrency: 'NGN', fiscalYearStartMonth: 1 };
 export const STARTER_TAX_REGISTRATION = { vatTin: '', wht: false, payeStateId: '', vatRegistered: false };
