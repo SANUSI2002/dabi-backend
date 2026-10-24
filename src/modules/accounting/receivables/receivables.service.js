@@ -36,12 +36,12 @@ const OPEN = ['Open', 'Partially Paid'];
 const uuidish = () => Math.random().toString(36).slice(2, 10);
 
 // ---- shared helpers ---------------------------------------------------------------------------------
-async function customerOf(tx, context, id) {
+export async function customerOf(tx, context, id) {
   const c = await tx.acctCustomer.findFirst({ where: { ...org(context), id } });
   if (!c) throw notFound('Customer');
   return c;
 }
-async function docOf(tx, context, id, kind) {
+export async function docOf(tx, context, id, kind) {
   const d = await tx.acctSalesDoc.findFirst({ where: { ...org(context), id, kind } });
   if (!d) throw notFound({ estimate: 'Quotation', 'sales-order': 'Sales order', invoice: 'Invoice', 'credit-note': 'Credit note', 'sales-receipt': 'Sales receipt', 'refund-receipt': 'Refund receipt' }[kind]);
   return d;
@@ -177,13 +177,13 @@ export async function updateCustomer(context, id, expectedVersion, patch) {
 }
 
 // ---- quotations and sales orders --------------------------------------------------------------------
-async function createDoc(tx, context, kind, fields) {
+export async function createDoc(tx, context, kind, fields) {
   const number = await nextDocNumber(tx, context, kind);
   try {
     return await tx.acctSalesDoc.create({ data: { ...org(context), kind, number, createdByUserId: context.userId, ...fields } });
   } catch (error) { throw uniqueViolation(error, { pkey: 'HR_CODE_IN_USE', number_key: 'HR_CODE_IN_USE' }) ?? error; }
 }
-async function changeDoc(tx, context, d, data, action) {
+export async function changeDoc(tx, context, d, data, action) {
   await updateVersioned(tx.acctSalesDoc, { organizationId: context.organizationId, id: d.id, expectedVersion: d.version, data, notFoundCode: 'HR_RECORD_NOT_FOUND' });
   await audited(tx, context, action, d.kind.replace('-', '_'), d.id, Object.keys(data));
 }
@@ -362,6 +362,7 @@ export async function voidDocInTx(tx, context, kind, id) {
   const d = await docOf(tx, context, id, kind);
   if (d.status === 'Void') throw new EmrError('INVALID_STATE', { message: 'Already void.' });
   if (kind === 'invoice' && Number(d.amountPaid) > 0) throw new EmrError('INVALID_STATE', { message: 'Un-apply receipts and credit notes before voiding.' });
+  if (kind === 'invoice' && d.source === 'Payer Bill') throw new EmrError('INVALID_STATE', { message: 'This invoice bills a patient\'s charges to their payer: reverse the transfer instead of voiding it.' });
   if (d.journalEntryId) await reverseInTx(tx, context, d.journalEntryId, { memo: `Void ${kind.replace('-', ' ')} ${d.number}` });
   await changeDoc(tx, context, d, { status: 'Void' }, `${kind.replace('-', '_')}.voided`);
   if (kind === 'invoice') await tx.acctDelayedCharge.updateMany({ where: { ...org(context), invoiceId: id }, data: { status: 'Unbilled', invoiceId: null } });

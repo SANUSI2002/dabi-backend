@@ -8642,6 +8642,603 @@ paths:
         "500":
           $ref: "#/components/responses/EmrServerError"
       x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/capitation:
+    post:
+      tags:
+        - Accounting
+      summary: Capitation receivable
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_capitation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                payerId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                startPeriod:
+                  type: string
+                  pattern: ^\d{4}-(0[1-9]|1[0-2])$
+                months:
+                  type: integer
+                  minimum: 1
+                  maximum: 24
+                enrollees:
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 10000000
+                ratePerEnrollee:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 1000000000
+                receivedDate:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                    - type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                depositAccountNumber:
+                  type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                reference:
+                  type: string
+                  maxLength: 100
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+              required:
+                - payerId
+                - startPeriod
+                - months
+                - enrollees
+                - ratePerEnrollee
+                - receivedDate
+                - depositAccountNumber
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/capitation/recognize:
+    post:
+      tags:
+        - Accounting
+      summary: Recognize capitation
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_capitation_recognize
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                asOf:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                    - type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+              required:
+                - asOf
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/claims:
+    post:
+      tags:
+        - Accounting
+      summary: Create claim
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_claims
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                payerId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                periodStart:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                    - type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                periodEnd:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                    - type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                invoiceIds:
+                  minItems: 1
+                  maxItems: 500
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                notes:
+                  type: string
+                  maxLength: 2000
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+              required:
+                - payerId
+                - periodStart
+                - periodEnd
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/claims/{id}:
+    patch:
+      tags:
+        - Accounting
+      summary: Update claim
+      description: |-
+        Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found.
+
+        Optimistic concurrency: send the record’s current version in `If-Match` (e.g. `W/"3"`). A stale version returns 412 with the current version in `ETag`.
+      operationId: patch_api_v1_accounting_organizations_organizationId_receivables_claims_id
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: If-Match
+          in: header
+          required: true
+          description: The record version from your last read, e.g. W/"3".
+          schema:
+            type: string
+            examples:
+              - W/"3"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                invoiceIds:
+                  minItems: 1
+                  maxItems: 500
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                notes:
+                  type: string
+                  maxLength: 2000
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "412":
+          $ref: "#/components/responses/EmrPreconditionFailed"
+        "428":
+          $ref: "#/components/responses/EmrPreconditionRequired"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/claims/{id}/adjudicate:
+    post:
+      tags:
+        - Accounting
+      summary: Record adjudicate for claim
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_claims_id_adjudicate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                    - type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                items:
+                  minItems: 1
+                  maxItems: 500
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      invoiceId:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      approved:
+                        type: number
+                        minimum: 0
+                        maximum: 10000000000000
+                      reason:
+                        type: string
+                        maxLength: 300
+                        pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                      action:
+                        type: string
+                        enum:
+                          - write-off
+                          - rebill
+                    required:
+                      - invoiceId
+                      - approved
+                    additionalProperties: false
+              required:
+                - items
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/claims/{id}/cancel:
+    post:
+      tags:
+        - Accounting
+      summary: Cancel claim
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_claims_id_cancel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/claims/{id}/submit:
+    post:
+      tags:
+        - Accounting
+      summary: Submit claim
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_claims_id_submit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reference:
+                  type: string
+                  maxLength: 100
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/credit-loss:
+    post:
+      tags:
+        - Accounting
+      summary: Credit loss receivable
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_credit_loss
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                asOf:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                    - type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                rates:
+                  type: object
+                  properties:
+                    patient:
+                      minItems: 5
+                      maxItems: 5
+                      type: array
+                      items:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+                    payer:
+                      minItems: 5
+                      maxItems: 5
+                      type: array
+                      items:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+                  required:
+                    - patient
+                    - payer
+                  additionalProperties: false
+                post:
+                  type: boolean
+              required:
+                - rates
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
   /api/v1/accounting/organizations/{organizationId}/receivables/credit-notes:
     post:
       tags:
@@ -10001,6 +10598,82 @@ paths:
         "500":
           $ref: "#/components/responses/EmrServerError"
       x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/invoices/{id}/bill-payer:
+    post:
+      tags:
+        - Accounting
+      summary: Record bill payer for invoice
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_invoices_id_bill_payer
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                payerId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                amount:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 10000000000000
+                authorizationCode:
+                  type: string
+                  maxLength: 60
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+                enrolleeNumber:
+                  type: string
+                  maxLength: 60
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+              required:
+                - payerId
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
   /api/v1/accounting/organizations/{organizationId}/receivables/invoices/{id}/email:
     post:
       tags:
@@ -10213,6 +10886,79 @@ paths:
         "500":
           $ref: "#/components/responses/EmrServerError"
       x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/invoices/{id}/write-off:
+    post:
+      tags:
+        - Accounting
+      summary: Record write off for invoice
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_invoices_id_write_off
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 10000000000000
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])+$
+                date:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                    - type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+              required:
+                - reason
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
   /api/v1/accounting/organizations/{organizationId}/receivables/invoices/recurring/run:
     post:
       tags:
@@ -10265,6 +11011,89 @@ paths:
           $ref: "#/components/responses/EmrNotFound"
         "409":
           $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/payer-transfers/{id}/reverse:
+    post:
+      tags:
+        - Accounting
+      summary: Reverse payer transfer
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_payer_transfers_id_reverse
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/payers:
+    get:
+      tags:
+        - Accounting
+      summary: List payers
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: get_api_v1_accounting_organizations_organizationId_receivables_payers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
         "429":
           $ref: "#/components/responses/EmrRateLimited"
         "500":
@@ -11023,6 +11852,83 @@ paths:
             type: string
             format: uuid
             pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/EmrBadRequest"
+        "401":
+          $ref: "#/components/responses/EmrUnauthorized"
+        "403":
+          $ref: "#/components/responses/EmrForbidden"
+        "404":
+          $ref: "#/components/responses/EmrNotFound"
+        "409":
+          $ref: "#/components/responses/EmrConflict"
+        "429":
+          $ref: "#/components/responses/EmrRateLimited"
+        "500":
+          $ref: "#/components/responses/EmrServerError"
+      x-generated: true
+  /api/v1/accounting/organizations/{organizationId}/receivables/write-offs/{id}/recover:
+    post:
+      tags:
+        - Accounting
+      summary: Record recover for write off
+      description: "Hospital (EMR) endpoint: the bearer token must belong to an active member of `organizationId`, whose EMR licence is active. Records of other organizations are reported as not found."
+      operationId: post_api_v1_accounting_organizations_organizationId_receivables_write_offs_id_recover
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 10000000000000
+                date:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                    - type: string
+                      format: date
+                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                depositAccountNumber:
+                  type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                reference:
+                  type: string
+                  maxLength: 100
+                  pattern: ^(?:[^\p{Cc}]|[\n\r\t])*$
+              required:
+                - amount
+                - depositAccountNumber
+              additionalProperties: false
       responses:
         "200":
           description: Success.

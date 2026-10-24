@@ -25,10 +25,12 @@ export async function nextDocNumber(tx, context, key) {
   await ensureSettings(tx, context);
   const [row] = await tx.$queryRaw`SELECT "sequences" FROM "acct_settings" WHERE "organization_id" = ${context.organizationId} FOR UPDATE`;
   const sequences = row.sequences;
-  const s = sequences.find((x) => x.key === key);
+  // a document kind added after the books were set up starts on its starter numbering
+  const s = sequences.find((x) => x.key === key) ?? STARTER_SEQUENCES.find((x) => x.key === key);
   if (!s) throw new EmrError('INVALID_STATE', { message: `No numbering is set up for ${key}.` });
   const number = `${s.prefix}${new Date().getUTCFullYear()}-${String(s.next).padStart(s.padding, '0')}`;
-  await tx.acctSettings.updateMany({ where: org(context), data: { sequences: sequences.map((x) => (x.key === key ? { ...x, next: x.next + 1 } : x)) } });
+  const next = sequences.some((x) => x.key === key) ? sequences.map((x) => (x.key === key ? { ...x, next: x.next + 1 } : x)) : [...sequences, { ...s, next: s.next + 1 }];
+  await tx.acctSettings.updateMany({ where: org(context), data: { sequences: next } });
   return number;
 }
 

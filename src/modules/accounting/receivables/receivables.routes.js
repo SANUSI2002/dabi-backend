@@ -10,6 +10,7 @@ import { send } from '../../emr/core/http.js';
 import * as settings from '../settings/settings.service.js';
 import * as ar from './receivables.service.js';
 import * as documents from '../documents/documents.service.js';
+import * as payers from './payers.service.js';
 import { sendPdf } from '../documents/financePdf.js';
 
 const org = { organizationId: z.uuid() };
@@ -95,6 +96,21 @@ const v = {
   statementRead: z.object({ params: z.object(withId).strict(), query: z.object({ from: when.optional(), to: when.optional(), format: z.enum(['json', 'pdf']).optional(), download: z.enum(['1']).optional() }).strict() }),
   invoicePdf: z.object({ params: z.object(withId).strict(), query: z.object({ download: z.enum(['1']).optional() }).strict() }),
   emailInvoice: body({ to: z.email().max(160).optional() }, withId),
+  billPayer: body({ id: z.uuid().optional(), payerId: z.uuid(), amount: z.number().positive().max(1e13).optional(), authorizationCode: free(60).optional(), enrolleeNumber: free(60).optional() }, withId),
+  reverseTransfer: body({}, withId),
+  claim: body({ id: z.uuid().optional(), payerId: z.uuid(), periodStart: when, periodEnd: when, invoiceIds: z.array(z.uuid()).min(1).max(500).optional(), notes: free(2000).optional() }),
+  updateClaim: changes({ invoiceIds: z.array(z.uuid()).min(1).max(500).optional(), notes: free(2000).optional() }),
+  submitClaim: body({ reference: free(100).optional() }, withId),
+  cancelClaim: body({}, withId),
+  adjudicate: body({ date: when.optional(), items: z.array(z.object({ invoiceId: z.uuid(), approved: money, reason: free(300).optional(), action: z.enum(['write-off', 'rebill']).optional() }).strict()).min(1).max(500) }, withId),
+  capitation: body({
+    id: z.uuid().optional(), payerId: z.uuid(), startPeriod: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), months: z.number().int().min(1).max(24), enrollees: z.number().int().positive().max(10_000_000),
+    ratePerEnrollee: z.number().positive().max(1e9), receivedDate: when, depositAccountNumber: z.number().int(), reference: free(100).optional(),
+  }),
+  recognizeCapitation: body({ asOf: when }),
+  writeOff: body({ amount: z.number().positive().max(1e13).optional(), reason: text(500), date: when.optional() }, withId),
+  recover: body({ amount: z.number().positive().max(1e13), date: when.optional(), depositAccountNumber: z.number().int(), reference: free(100).optional() }, withId),
+  creditLoss: body({ asOf: when.optional(), rates: z.object({ patient: z.array(z.number().min(0).max(100)).length(5), payer: z.array(z.number().min(0).max(100)).length(5) }).strict(), post: z.boolean().optional() }),
 };
 
 export const settingsRoutes = express.Router({ mergeParams: true });
@@ -117,6 +133,20 @@ receivableRoutes.get('/customers/:id/statement', check(v.statementRead), handle(
 }));
 receivableRoutes.get('/invoices/:id/pdf', check(v.invoicePdf), handle(async (req, res) => sendPdf(res, await documents.invoicePdf(req.emr, req.params.id), { download: Boolean(req.query.download) })));
 r('post', '/invoices/:id/email', v.emailInvoice, (req) => ar.emailInvoice(req.emr, req.params.id, req.body));
+// healthcare payers: billing HMOs and NHIA, claims, capitation; write-offs and the credit-loss allowance
+r('get', '/payers', v.overview, (req) => payers.payersOverview(req.emr));
+r('post', '/invoices/:id/bill-payer', v.billPayer, (req) => payers.billToPayer(req.emr, req.params.id, req.body), 201);
+r('post', '/payer-transfers/:id/reverse', v.reverseTransfer, (req) => payers.reverseTransfer(req.emr, req.params.id));
+r('post', '/claims', v.claim, (req) => payers.createClaim(req.emr, req.body), 201);
+receivableRoutes.patch('/claims/:id', check(v.updateClaim), handle(async (req, res) => send(res, await payers.updateClaim(req.emr, req.params.id, requireVersion(req), req.body))));
+r('post', '/claims/:id/submit', v.submitClaim, (req) => payers.submitClaim(req.emr, req.params.id, req.body));
+r('post', '/claims/:id/cancel', v.cancelClaim, (req) => payers.cancelClaim(req.emr, req.params.id));
+r('post', '/claims/:id/adjudicate', v.adjudicate, (req) => payers.adjudicateClaim(req.emr, req.params.id, req.body));
+r('post', '/capitation', v.capitation, (req) => payers.recordCapitation(req.emr, req.body), 201);
+r('post', '/capitation/recognize', v.recognizeCapitation, (req) => payers.recognizeCapitation(req.emr, req.body));
+r('post', '/invoices/:id/write-off', v.writeOff, (req) => payers.writeOffInvoice(req.emr, req.params.id, req.body), 201);
+r('post', '/write-offs/:id/recover', v.recover, (req) => payers.recoverWriteOff(req.emr, req.params.id, req.body));
+r('post', '/credit-loss', v.creditLoss, (req) => payers.creditLoss(req.emr, req.body));
 r('post', '/estimates', v.estimate, (req) => ar.createEstimate(req.emr, req.body), 201);
 r('post', '/estimates/:id/status', v.estimateStatus, (req) => ar.setEstimateStatus(req.emr, req.params.id, req.body));
 r('post', '/sales-orders', v.salesOrder, (req) => ar.createSalesOrder(req.emr, req.body), 201);

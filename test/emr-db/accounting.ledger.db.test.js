@@ -37,7 +37,10 @@ beforeAll(async () => {
 describe('general ledger', () => {
   it('starts the books with the starter chart, a head office and this year', async () => {
     const data = ok(await as(finance).get(''));
-    expect(data.accounts).toHaveLength(63);
+    expect(data.accounts).toHaveLength(67);
+    // healthcare receivables: the allowance (a control account), capitation, denials and recoveries
+    expect(data.accounts.find((a) => a.number === 1190)).toMatchObject({ subtype: 'contra_asset', allowManualEntry: false });
+    expect(data.accounts.filter((a) => [4060, 4120, 4910].includes(a.number))).toHaveLength(3);
     expect(data.accounts.find((a) => a.number === 1100)).toMatchObject({ subtype: 'accounts_receivable', allowManualEntry: false });
     expect(data.branches).toEqual([expect.objectContaining({ code: 'HO', isHeadOffice: true })]);
     expect(data.periods.filter((p) => p.fiscalYear === new Date().getUTCFullYear())).toHaveLength(12);
