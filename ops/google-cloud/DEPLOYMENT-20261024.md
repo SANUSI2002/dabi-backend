@@ -146,6 +146,15 @@ production callback settings. `acceptance-preview.json` contains no secrets.
 The nested patient verification base needs the subsequent `943cad0` fix before
 activating that override. All existing origins remain; no wildcard is added.
 
+The fix and approved override were subsequently deployed from
+`9a89181d22f877a7cba4d0c1433f2de45a1d4f27`, CI run `40082466467`:
+**1,041 unit** and **635 embedded PostgreSQL** tests independently passed.
+Ready revisions are API `sabi-api-production-00003-vzx` and worker
+`sabi-worker-production-00003-g7x`. The protected preview's API proxy returned
+this source revision. The owner also approved the exact three-origin clinical
+bucket policy in `clinical-documents-cors.json`; it does not grant public object
+access or permission to list/delete objects.
+
 After acceptance, return both services to the production callback configuration
 as part of the reviewed live cutover. No user account, first-admin grant, restore
 drill or full clinical/payment acceptance is implied by preparing this preview.
