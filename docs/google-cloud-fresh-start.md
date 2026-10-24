@@ -165,17 +165,18 @@ database tests. See `ops/google-cloud/DEPLOYMENT-20261024.md` for the authoritat
 resource state, permissions, verified checks and remaining acceptance gaps. This
 does not mean the frontend is switched or all end-to-end workflows are certified.
 
-1. Conduct a restore drill for the completed baseline backup, then verify keyless
-   API/worker connectivity using their own identities and the applied SQL grants.
+1. Conduct a restore drill for the completed baseline backup. Keyless API/worker
+   startup and actual worker SQL execution are now verified; realistic data-path
+   and recovery checks remain.
 2. Recheck scoped permissions during acceptance. Scheduler/task identities and
    queue/invocation grants are now applied. Do not use project-wide Editor or
    download service-account keys.
-3. Connect the provisioned private buckets, Secret Manager values and Cloud SQL
-   configuration. Provider secrets are now transferred; pin their enabled versions
-   in the runtime revisions. Never expose them as frontend variables.
-4. Use the migration identity for subsequent schema changes. All 149 existing
-   migrations are applied, and runtime grants are tested; the actual attached
-   service-account connection and restore drill still require verification.
+3. Buckets, pinned Secret Manager versions and IAM SQL are now connected to the
+   deployed revisions. Test realistic provider and file workflows; never expose
+   server secrets as frontend variables.
+4. All 150 migrations and runtime grants are applied. Bootstrap used the approved
+   official operator's IAM login, without a database password. Establish the
+   separate migration-identity release job for future automated schema changes.
 5. API/worker separation and authenticated Tasks/Scheduler orchestration are now
    deployed. Perform realistic load, retry, crash-recovery and provider tests.
    The implemented design uses authenticated request-billed
@@ -184,8 +185,8 @@ does not mean the frontend is switched or all end-to-end workflows are certified
    entrypoint at scale-to-zero. Quote the complete worker cost.
    Bounded single-pass functions now exist for rider dispatch, rider transfer
    reconciliation and subscription reconciliation; the existing interval hosts
-   delegate to those same functions. This preparation does not yet implement
-   Cloud Tasks/Scheduler orchestration was added in the deployment update above;
+   delegate to those same functions. Cloud Tasks/Scheduler orchestration is now
+   added and verified as recorded in the deployment update above;
    the existing combined development entrypoint remains unchanged.
    The new explicit Docker `api` target uses `src/api.js`: no intervals, database
    and five-private-bucket startup/readiness checks, bounded readiness caching and
