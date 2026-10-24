@@ -72,7 +72,7 @@ if (action === 'build') {
     CLOUD_SQL_IAM_USER: `sabi-${kind}-production@${project}.iam` }), { mode: 0o600 });
   cloud(['run', 'deploy', `sabi-${kind}-production`, `--region=${region}`,
     `--image=${registry}/${kind}@${digest}`, `--service-account=sabi-${kind}-production@${project}.iam.gserviceaccount.com`,
-    '--execution-environment=gen2', '--cpu=1', '--memory=512Mi', '--min=0', '--max=1', '--max-instances=1',
+    '--execution-environment=gen2', '--cpu=1', '--memory=512Mi', `--min=${kind === 'api' ? 1 : 0}`, '--max=1', '--max-instances=1',
     `--concurrency=${kind === 'api' ? 40 : 2}`, '--timeout=300', '--cpu-throttling', '--ingress=all',
     '--startup-probe=httpGet.path=/healthz/live,initialDelaySeconds=0,periodSeconds=10,timeoutSeconds=2,failureThreshold=24',
     `--env-vars-file=${envFile}`, `--set-secrets=${refs.join(',')}`,
