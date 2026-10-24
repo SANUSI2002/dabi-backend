@@ -4981,6 +4981,8 @@ paths:
                   type: boolean
                 largeJournal:
                   type: boolean
+                emailDigest:
+                  type: boolean
               required:
                 - approvalPending
                 - invoiceOverdue

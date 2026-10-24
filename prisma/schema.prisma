@@ -7105,6 +7105,15 @@ model AcctNotificationPrefs {
   @@map("acct_notification_prefs")
 }
 
+model AcctAlertDelivery {
+  organizationId String @map("organization_id")
+  userId String @map("user_id")
+  alertId String @map("alert_id") @db.VarChar(80)
+  sentAt DateTime @default(now()) @map("sent_at")
+  @@id([organizationId, userId, alertId])
+  @@map("acct_alert_deliveries")
+}
+
 model AcctIntegrationEvent {
   organizationId String @map("organization_id")
   kind String @db.VarChar(24)

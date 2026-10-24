@@ -27,7 +27,7 @@ const v = {
   }),
   time: body({ id: z.uuid().optional(), projectId: z.uuid(), staffId: z.uuid(), date: when, hours: z.number().positive().max(24), description: text(300), billable: z.boolean(), rate: z.number().min(0).max(1e9).optional(), revenueAccount: z.number().int().min(4000).max(4999) }),
   empty: body({}, withId),
-  prefs: body(Object.fromEntries(['approvalPending', 'invoiceOverdue', 'billDueSoon', 'lowStock', 'budgetExceeded', 'largeJournal'].map((k) => [k, z.boolean()]))),
+  prefs: body({ ...Object.fromEntries(['approvalPending', 'invoiceOverdue', 'billDueSoon', 'lowStock', 'budgetExceeded', 'largeJournal'].map((k) => [k, z.boolean()])), emailDigest: z.boolean().optional() }),
 };
 
 export const projectRoutes = express.Router({ mergeParams: true });
