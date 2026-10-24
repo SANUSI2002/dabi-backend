@@ -157,26 +157,36 @@ acceptance check before claiming every document API is migrated.
 
 ## Remaining cutover work — not yet completed
 
+**24 October deployment update:** the request-only API, private worker, scoped
+queue identities, Cloud Tasks and Scheduler are now deployed and verified.
+The database has 150 applied migrations; all 27 worker categories completed idle
+checks with zero failures. Full deployed-source CI passed 1,025 unit and 635
+database tests. See `ops/google-cloud/DEPLOYMENT-20261024.md` for the authoritative
+resource state, permissions, verified checks and remaining acceptance gaps. This
+does not mean the frontend is switched or all end-to-end workflows are certified.
+
 1. Conduct a restore drill for the completed baseline backup, then verify keyless
    API/worker connectivity using their own identities and the applied SQL grants.
-2. Add the Scheduler identity and verify the existing API, worker and migration
-   identities. Limit each
-   identity to the database, buckets and individual secrets it needs; do not use
-   project-wide Editor or download service-account keys.
+2. Recheck scoped permissions during acceptance. Scheduler/task identities and
+   queue/invocation grants are now applied. Do not use project-wide Editor or
+   download service-account keys.
 3. Connect the provisioned private buckets, Secret Manager values and Cloud SQL
    configuration. Provider secrets are now transferred; pin their enabled versions
    in the runtime revisions. Never expose them as frontend variables.
 4. Use the migration identity for subsequent schema changes. All 149 existing
    migrations are applied, and runtime grants are tested; the actual attached
    service-account connection and restore drill still require verification.
-5. Split API serving from interval workers. Use authenticated request-billed
+5. API/worker separation and authenticated Tasks/Scheduler orchestration are now
+   deployed. Perform realistic load, retry, crash-recovery and provider tests.
+   The implemented design uses authenticated request-billed
    worker handlers and durable queue/Scheduler wakeups; do not suspend reminders,
    scanning, reconciliation or notifications by deploying the current combined
    entrypoint at scale-to-zero. Quote the complete worker cost.
    Bounded single-pass functions now exist for rider dispatch, rider transfer
    reconciliation and subscription reconciliation; the existing interval hosts
    delegate to those same functions. This preparation does not yet implement
-   Cloud Tasks/Scheduler orchestration or remove any existing worker.
+   Cloud Tasks/Scheduler orchestration was added in the deployment update above;
+   the existing combined development entrypoint remains unchanged.
    The new explicit Docker `api` target uses `src/api.js`: no intervals, database
    and five-private-bucket startup/readiness checks, bounded readiness caching and
    SIGTERM draining. Six unit tests cover host behaviour. Its Google-only startup
@@ -184,9 +194,8 @@ acceptance check before claiming every document API is migrated.
    Default/`runtime` builds still use the existing combined entrypoint. Do not
    promote the request-only target before the durable worker is deployed and
    verified; this target alone is not a complete production rollout.
-6. Build immutable backend images in Google Cloud. Start with a bounded replica
-   and database-pool budget; distributed rate enforcement is required before
-   increasing API replicas.
+6. Immutable digest-pinned images are published/deployed. Complete OS-image
+   vulnerability review and shared rate enforcement before increasing replicas.
 7. Establish initial platform ownership through a verified account and an
    explicitly authorised first-admin grant. Existing Render passwords, roles and
    sessions will not exist in this fresh database. Do not invent demo credentials.
