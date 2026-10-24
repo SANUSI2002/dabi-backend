@@ -9,10 +9,10 @@ import { logger } from './logging.js';
 let timer = null;
 let running = false;
 
-export async function runEmrWorkerOnce({ purge = false } = {}) {
+export async function runEmrWorkerOnce({ purge = false, deliveryLimit = 50 } = {}) {
   await processTelehealthHandoffs();
   await dispatchPending();
-  await deliverDue();
+  await deliverDue({ limit: deliveryLimit });
   if (purge) await purgeExpiredIdempotencyKeys();
 }
 

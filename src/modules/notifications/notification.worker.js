@@ -10,11 +10,11 @@ import { sendAppointmentReminders } from './appointment.notices.js';
 let timer = null;
 let running = false;
 
-export async function runNotificationWorkerOnce({ now = new Date() } = {}) {
+export async function runNotificationWorkerOnce({ now = new Date(), deliveryLimit = 50 } = {}) {
   const materialized = await materializeDue({ now });
   const reminders = await processDueReminders({ now });
   const appointments = await sendAppointmentReminders({ now });
-  const sent = await deliverDue({ now });
+  const sent = await deliverDue({ now, limit: deliveryLimit });
   return { materialized, reminders, appointments, sent };
 }
 

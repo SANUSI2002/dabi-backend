@@ -100,4 +100,17 @@ describe('non-administrator Google production database roles', () => {
       expect(r).toEqual({ worker: true, api: false, worker_enqueue_or_delete: false });
     } finally { await client.end(); }
   });
+
+  it('keeps worker coordination metadata inaccessible to the API role', async () => {
+    const client = await connect();
+    try {
+      const { rows: [r] } = await client.query(`SELECT
+        has_table_privilege($1,'runtime_job_checkpoints','SELECT') AND
+        has_table_privilege($1,'runtime_job_checkpoints','INSERT') AND
+        has_table_privilege($1,'runtime_job_checkpoints','UPDATE') AS worker,
+        has_table_privilege($2,'runtime_job_checkpoints','SELECT,INSERT,UPDATE,DELETE') AS api,
+        has_table_privilege($1,'runtime_job_checkpoints','DELETE') AS can_delete`, [worker, api]);
+      expect(r).toEqual({ worker: true, api: false, can_delete: false });
+    } finally { await client.end(); }
+  });
 });

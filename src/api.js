@@ -5,6 +5,7 @@ import prisma, { disconnectDatabase } from './config/db.js';
 import { privateStorageClient, privateStorageConfigured } from './config/privateStorage.js';
 import { checkOrProvisionBuckets } from './config/supabaseBuckets.js';
 import { createApiHost } from './runtime/api-host.js';
+import { cloudTasksConfig } from './runtime/cloud-tasks.js';
 
 const { host, preflight, drain } = createApiHost({
   app,
@@ -24,6 +25,7 @@ const { host, preflight, drain } = createApiHost({
 // the real database or private buckets. Never run schema migrations on startup.
 try {
   if (process.env.DATABASE_CONNECTION_MODE !== 'cloud-sql-iam') throw new Error('GOOGLE_DATABASE_NOT_CONFIGURED');
+  cloudTasksConfig();
   await preflight();
 }
 catch {

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { wakeBackgroundJob } from '../../runtime/cloud-tasks.js';
 import prisma from '../../config/db.js';
 import { recordAudit } from '../audit/audit.service.js';
 import { AI_CONSENT_VERSION, aiConfig, aiDocumentsAvailable, aiError } from './ai.config.js';
@@ -69,7 +70,7 @@ export async function queueAiMessage(user, id, input) {
   const sourceIds = [...new Set(input.sourceIds || [])].sort();
   const requestHash = createHash('sha256').update(JSON.stringify({ message: input.message, sourceIds })).digest('hex');
   try {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       await allowanceLock(tx);
       await tx.$queryRaw`SELECT id FROM ai_sessions WHERE id = ${id} FOR UPDATE`;
       await owned(user.id, id, tx);
@@ -91,6 +92,8 @@ export async function queueAiMessage(user, id, input) {
       await tx.aiSession.update({ where: { id }, data: { updatedAt: new Date() } });
       await audit(tx, user.id, 'AI_RESPONSE_REQUESTED', id); return publicRun(run);
     });
+    await wakeBackgroundJob('ai-chat', result.id);
+    return result;
   } catch (error) {
     if (error.code === 'P2002') throw aiError(409, 'AI_RESPONSE_CONFLICT', 'Another message is already being processed. Please reload the conversation.');
     throw error;

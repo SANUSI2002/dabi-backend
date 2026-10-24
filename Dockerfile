@@ -53,6 +53,9 @@ CMD ["node", "src/index.js"]
 FROM runtime AS api
 CMD ["node", "src/api.js"]
 
+FROM runtime AS worker
+CMD ["node", "src/worker.js"]
+
 # An unqualified build preserves the existing combined entrypoint. Only the
 # reviewed Google rollout explicitly selects --target api with a working worker.
 FROM runtime AS combined

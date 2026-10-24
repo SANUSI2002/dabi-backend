@@ -134,6 +134,8 @@ END $ai$;
 -- Worker-only job metadata; the assessment content still requires withTenant().
 GRANT SELECT, UPDATE ON jev_assessment_jobs TO
   "sabi-worker-production@project-2dfff4eb-ff04-40b1-aff.iam";
+GRANT SELECT, INSERT, UPDATE ON runtime_job_checkpoints TO
+  "sabi-worker-production@project-2dfff4eb-ff04-40b1-aff.iam";
 DO $job$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_policies WHERE schemaname='public'
