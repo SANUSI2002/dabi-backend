@@ -221,5 +221,5 @@ export const STARTER_TAX_RATES = [
   { id: "tax-levy-1", name: "NHIS Levy 1%", kind: "VAT", rate: 1, accountNumber: 2220, isCompound: false, isActive: true, description: "Statutory health levy on non-exempt services — stacks on top of VAT" },
 ];
 
-export const STARTER_ORG_PROFILE = { legalName: '', tradingName: '', tin: '', rcNumber: '', address: '', reportingCurrency: 'NGN', fiscalYearStartMonth: 1 };
+export const STARTER_ORG_PROFILE = { legalName: '', tradingName: '', tin: '', rcNumber: '', address: '', email: '', phone: '', paymentInstructions: '', reportingCurrency: 'NGN', fiscalYearStartMonth: 1 };
 export const STARTER_TAX_REGISTRATION = { vatTin: '', wht: false, payeStateId: '', vatRegistered: false };

@@ -7505,6 +7505,8 @@ model AcctEmailJob {
   providerMessageId String? @map("provider_message_id") @db.VarChar(120)
   sentAt DateTime? @map("sent_at")
   createdAt DateTime @default(now()) @map("created_at")
+  attachmentName String? @map("attachment_name") @db.VarChar(120)
+  attachment Bytes?
   @@unique([organizationId, noticeId], map: "acct_email_jobs_notice_key")
   @@index([status, nextAttemptAt], map: "acct_email_jobs_due_idx")
   @@map("acct_email_jobs")

@@ -1,6 +1,7 @@
 // Payables against real Postgres with RLS on: requisitions approved by role (never by their submitter),
 // order → goods receipt → bill, bills held for approval above a threshold, payments with withholding tax,
 // vendor credits, and the trial balance tying out throughout.
+import { Buffer } from 'node:buffer';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../../src/app.js';
@@ -11,6 +12,7 @@ const as = (who) => {
   const url = (path) => `/api/v1/accounting/organizations/${who.organizationId}${path}`;
   return {
     get: (path) => request(app).get(url(path)).set('Authorization', who.auth),
+    raw: (path) => request(app).get(url(path)).set('Authorization', who.auth).buffer(true).parse((res, cb) => { const chunks = []; res.on('data', (c) => chunks.push(c)); res.on('end', () => cb(null, Buffer.concat(chunks))); }),
     post: (path, body = {}, headers = {}) => request(app).post(url(path)).set('Authorization', who.auth).set(headers).send(body),
     patch: (path, body = {}, headers = {}) => request(app).patch(url(path)).set('Authorization', who.auth).set(headers).send(body),
   };
@@ -104,6 +106,19 @@ describe('payables', () => {
     const schedule = ok(await as(finance).get(`/planning/tax-returns/${wht.id}/schedule`));
     expect(schedule).toMatchObject({ returnType: 'WHT', authority: 'FIRS', outputTax: 75000, totals: { tax: 75000, reclaimed: 0 } });
     expect(schedule.rows).toEqual([expect.objectContaining({ source: 'Vendor Payment', counterparty: 'Emzor Pharmaceuticals', counterpartyTin: '0123-4567', tax: 75000 })]);
+  });
+
+  it("prints remittance advice and the supplier's statement, tying to Accounts Payable", async () => {
+    const pay = (await ap()).vendorPayments.find((p) => p.status === 'Posted');
+    const pdf = await as(finance).raw(`/payables/payments/${pay.id}/remittance?download=1`);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-disposition']).toMatch(/^attachment; filename="Remittance-/);
+    expect(pdf.body.subarray(0, 5).toString()).toBe('%PDF-');
+    const st = ok(await as(finance).get(`/payables/vendors/${vendor.id}/statement?from=2000-01-01`));
+    expect(st.closingBalance).toBe(-bal(await tb(), 2000)); // what the hospital owes Emzor
+    expect(st.lines.some((l) => l.debit === 1500000)).toBe(true); // the payment, WHT included, settles the bill
+    expect(st.aging.reduce((n, a) => n + a.amount, 0)).toBeCloseTo(st.closingBalance, 2);
+    expect((await as(finance).raw(`/payables/vendors/${vendor.id}/statement?format=pdf`)).headers['content-type']).toBe('application/pdf');
   });
 
   it('applies vendor credits and voids only unpaid bills', async () => {

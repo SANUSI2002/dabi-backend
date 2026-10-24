@@ -9,6 +9,8 @@ import { requireVersion } from '../../emr/core/concurrency.js';
 import { send } from '../../emr/core/http.js';
 import * as settings from '../settings/settings.service.js';
 import * as ar from './receivables.service.js';
+import * as documents from '../documents/documents.service.js';
+import { sendPdf } from '../documents/financePdf.js';
 
 const org = { organizationId: z.uuid() };
 const withId = { ...org, id: z.uuid() };
@@ -44,7 +46,10 @@ const reminderRule = z.object({ id: z.string().max(60), level: z.number().int().
 const v = {
   overview: z.object({ params: z.object(org).strict(), query: noQuery }),
   settings: changes({
-    org: z.object({ legalName: free(160), tradingName: free(160), tin: free(40), rcNumber: free(40), address: free(300), reportingCurrency: currency, fiscalYearStartMonth: z.number().int().min(1).max(12) }).strict().optional(),
+    org: z.object({
+      legalName: free(160), tradingName: free(160), tin: free(40), rcNumber: free(40), address: free(300), reportingCurrency: currency, fiscalYearStartMonth: z.number().int().min(1).max(12),
+      email: z.email().max(160).or(z.literal('')).optional(), phone: free(30).optional(), paymentInstructions: free(1000).optional(),
+    }).strict().optional(),
     sequences: z.array(sequence).max(30).optional(), paymentTerms: z.array(paymentTerm).max(30).optional(), reminderRules: z.array(reminderRule).max(9).optional(),
     taxRegistration: z.object({ vatTin: free(40), wht: z.boolean(), payeStateId: free(40), vatRegistered: z.boolean() }).strict().optional(),
     setupSteps: z.record(z.string().max(30), z.boolean()).optional(),
@@ -86,7 +91,10 @@ const v = {
   revalue: body({ asOf: when, rates: z.record(currency, z.number().positive().max(1e7)) }),
   reminder: body({}, withId),
   reminders: body({}),
-  statement: body({}, withId),
+  statement: body({ from: when.optional(), to: when.optional() }, withId),
+  statementRead: z.object({ params: z.object(withId).strict(), query: z.object({ from: when.optional(), to: when.optional(), format: z.enum(['json', 'pdf']).optional(), download: z.enum(['1']).optional() }).strict() }),
+  invoicePdf: z.object({ params: z.object(withId).strict(), query: z.object({ download: z.enum(['1']).optional() }).strict() }),
+  emailInvoice: body({ to: z.email().max(160).optional() }, withId),
 };
 
 export const settingsRoutes = express.Router({ mergeParams: true });
@@ -101,7 +109,14 @@ r('get', '/', v.overview, (req) => ar.overview(req.emr));
 r('post', '/customers', v.customer, (req) => ar.addCustomer(req.emr, req.body), 201);
 r('post', '/customers/import', v.importCustomers, (req) => ar.importCustomers(req.emr, req.body.rows));
 receivableRoutes.patch('/customers/:id', check(v.updateCustomer), handle(async (req, res) => send(res, await ar.updateCustomer(req.emr, req.params.id, requireVersion(req), req.body))));
-r('post', '/customers/:id/statement', v.statement, (req) => ar.markStatementSent(req.emr, req.params.id));
+r('post', '/customers/:id/statement', v.statement, (req) => ar.markStatementSent(req.emr, req.params.id, req.body));
+receivableRoutes.get('/customers/:id/statement', check(v.statementRead), handle(async (req, res) => {
+  const { from, to, format, download } = req.query;
+  const result = await documents.partyStatement(req.emr, 'customer', req.params.id, { from, to, format });
+  return format === 'pdf' ? sendPdf(res, result, { download: Boolean(download) }) : send(res, result);
+}));
+receivableRoutes.get('/invoices/:id/pdf', check(v.invoicePdf), handle(async (req, res) => sendPdf(res, await documents.invoicePdf(req.emr, req.params.id), { download: Boolean(req.query.download) })));
+r('post', '/invoices/:id/email', v.emailInvoice, (req) => ar.emailInvoice(req.emr, req.params.id, req.body));
 r('post', '/estimates', v.estimate, (req) => ar.createEstimate(req.emr, req.body), 201);
 r('post', '/estimates/:id/status', v.estimateStatus, (req) => ar.setEstimateStatus(req.emr, req.params.id, req.body));
 r('post', '/sales-orders', v.salesOrder, (req) => ar.createSalesOrder(req.emr, req.body), 201);

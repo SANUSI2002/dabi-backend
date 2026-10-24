@@ -9,6 +9,8 @@ import { requireVersion } from '../../emr/core/concurrency.js';
 import { send } from '../../emr/core/http.js';
 import * as ap from './payables.service.js';
 import * as approvals from '../control/approvals.service.js';
+import * as documents from '../documents/documents.service.js';
+import { sendPdf } from '../documents/financePdf.js';
 
 const org = { organizationId: z.uuid() };
 const withId = { ...org, id: z.uuid() };
@@ -89,6 +91,14 @@ r('post', '/bills/:id/void', v.empty, (req) => ap.voidBill(req.emr, req.params.i
 r('post', '/bills/recurring/run', v.run, (req) => ap.runRecurringBills(req.emr, req.body));
 r('post', '/payments', v.payment, (req) => ap.payVendor(req.emr, req.body), 201);
 r('post', '/payments/:id/decide', v.decision, (req) => ap.decideVendorPayment(req.emr, req.params.id, req.body));
+const docQuery = { from: when.optional(), to: when.optional(), format: z.enum(['json', 'pdf']).optional(), download: z.enum(['1']).optional() };
+payableRoutes.get('/vendors/:id/statement', check(z.object({ params: z.object(withId).strict(), query: z.object(docQuery).strict() })), handle(async (req, res) => {
+  const { from, to, format, download } = req.query;
+  const result = await documents.partyStatement(req.emr, 'vendor', req.params.id, { from, to, format });
+  return format === 'pdf' ? sendPdf(res, result, { download: Boolean(download) }) : send(res, result);
+}));
+payableRoutes.get('/payments/:id/remittance', check(z.object({ params: z.object(withId).strict(), query: z.object({ download: z.enum(['1']).optional() }).strict() })),
+  handle(async (req, res) => sendPdf(res, await documents.remittancePdf(req.emr, req.params.id), { download: Boolean(req.query.download) })));
 r('post', '/vendor-credits', v.credit, (req) => ap.createVendorCredit(req.emr, req.body), 201);
 r('post', '/vendor-credits/:id/apply', v.applyCredit, (req) => ap.applyVendorCredit(req.emr, req.params.id, req.body));
 r('post', '/revaluation', v.revalue, (req) => ap.revalueForeign(req.emr, req.body));
