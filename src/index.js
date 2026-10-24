@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { app } from './app.js';
 import { startExpiryRunner, stopExpiryRunner } from './modules/reservations/reservation.expiry.js';
-import { privateStorageClient } from './config/privateStorage.js';
+import { privateStorageClient, privateStorageConfigured } from './config/privateStorage.js';
 import { checkOrProvisionBuckets } from './config/supabaseBuckets.js';
 import { startEvidenceScanner } from './modules/platform/platform.evidence-scanner.js';
 import { startPharmacyScanner } from './modules/pharmacies/portal.scanner.js';
@@ -24,7 +24,7 @@ const server = app.listen(PORT, () => {
 });
 // A read-only preflight verifies bucket privacy after deployment. It never
 // creates buckets, logs credentials, or changes the application's DB target.
-if (process.env.SUPABASE_URL || process.env.SUPABASE_SECRET_KEY) {
+if (privateStorageConfigured()) {
   Promise.resolve().then(() => checkOrProvisionBuckets(privateStorageClient())).then((buckets) => {
     const ready = buckets.filter((bucket) => bucket.state === 'READY').length;
     console.log(`[storage] ${ready}/${buckets.length} private buckets ready`);

@@ -13,12 +13,12 @@ import { withTenant } from '../../emr/core/db.js';
 import { recordAudit } from '../../emr/core/audit.js';
 import { BUCKET, EXTENSIONS, configured, maxBytes, sha256, withScanner } from './attachments.service.js';
 
-export async function scanFinanceAttachments({ client, scan = scanWithCloudmersive, now = new Date(), isConfigured = configured } = {}) {
+export async function scanFinanceAttachments({ client, scan = scanWithCloudmersive, now = new Date(), isConfigured = configured, limit = 10 } = {}) {
   if (!isConfigured()) return 0;
   client ||= privateStorageClient();
   const due = await withScanner((tx) => tx.acctAttachment.findMany({
     where: { status: 'PENDING_SCAN', scanAttempts: { lt: 5 }, OR: [{ scanLeaseExpiresAt: null }, { scanLeaseExpiresAt: { lt: now } }] },
-    orderBy: [{ scanRequestedAt: 'asc' }, { id: 'asc' }], take: 10,
+    orderBy: [{ scanRequestedAt: 'asc' }, { id: 'asc' }], take: Math.min(10, Math.max(1, Number.isSafeInteger(limit) ? limit : 10)),
   }));
   let done = 0;
   for (const a of due) {

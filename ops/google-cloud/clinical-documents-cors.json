@@ -1,0 +1,18 @@
+[
+  {
+    "origin": [
+      "https://sabihealth.org",
+      "https://telemedicine.sabihealth.org",
+      "https://sabi-health-2hkde60mn-sanusi2002s-projects.vercel.app"
+    ],
+    "method": ["GET", "HEAD", "PUT"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Cache-Control",
+      "x-goog-if-generation-match",
+      "x-goog-content-length-range"
+    ],
+    "maxAgeSeconds": 300
+  }
+]

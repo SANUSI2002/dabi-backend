@@ -35,11 +35,41 @@ beforeEach(() => {
   model.revokeOtherEmailVerificationTokens.mockResolvedValue({ count: 0 });
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   if (originalPortal === undefined) delete process.env.PATIENT_PORTAL_URL;
   else process.env.PATIENT_PORTAL_URL = originalPortal;
 });
 
 describe('patient email verification', () => {
+  it.each(['https://telemedicine.sabihealth.org', 'https://preview.example.test/telemedicine'])('uses the configured supported production mount: %s', async base => {
+    vi.stubEnv('NODE_ENV', 'production');
+    process.env.PATIENT_PORTAL_URL = base;
+    const res = response();
+    await registerPatient({ body: { email: 'patient@example.test' } }, res, vi.fn());
+    expect(res.statusCode).toBe(201);
+    expect(mail.sendEmailVerificationEmail.mock.calls[0][0].verificationUrl).toMatch(new RegExp(`^${base.replaceAll('.', '\\.')}/verify-email/`));
+    model.findUserByEmail.mockResolvedValue(patient('hash'));
+    model.latestEmailVerificationToken.mockResolvedValue(null);
+    const resent = response();
+    await requestEmailVerification({ body: { email: 'patient@example.test' } }, resent, vi.fn());
+    expect(resent.statusCode).toBe(202);
+    expect(mail.sendEmailVerificationEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['', 'not-a-url', 'http://preview.example.test', 'https://user:password@preview.example.test',
+    'https://preview.example.test/telemedicine?redirect=elsewhere', 'https://preview.example.test/#fragment',
+    'https://preview.example.test/unsupported-mount'])('rejects an unsafe or unsupported production email base: %s', async base => {
+    vi.stubEnv('NODE_ENV', 'production');
+    process.env.PATIENT_PORTAL_URL = base;
+    const res = response();
+    await registerPatient({ body: { email: 'patient@example.test' } }, res, vi.fn());
+    expect(res.statusCode).toBe(503);
+    const resent = response();
+    await requestEmailVerification({ body: { email: 'patient@example.test' } }, resent, vi.fn());
+    expect(resent.statusCode).toBe(503);
+    expect(model.createPatient).not.toHaveBeenCalled();
+    expect(mail.sendEmailVerificationEmail).not.toHaveBeenCalled();
+  });
   it('registers pending and sends a hashed, expiring, one-use link', async () => {
     const res = response();
     await registerPatient({ body: { email: 'patient@example.test' } }, res, vi.fn());

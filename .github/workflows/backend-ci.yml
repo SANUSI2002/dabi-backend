@@ -24,6 +24,17 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Test
-        run: npm test
+        run: |
+          npm test -- --reporter=default --reporter=json --outputFile.json=artifacts/unit-results.json
+          node scripts/verify-test-results.mjs artifacts/unit-results.json
       - name: Verify EMR migrations, permissions and workflows in embedded PostgreSQL
-        run: npm run test:emr
+        run: |
+          npm run test:emr -- --reporter=default --reporter=json --outputFile.json=artifacts/emr-results.json
+          node scripts/verify-test-results.mjs artifacts/emr-results.json
+      - name: Retain test results for release review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: artifacts/*-results.json
+          if-no-files-found: ignore

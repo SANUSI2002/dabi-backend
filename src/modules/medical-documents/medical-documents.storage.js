@@ -6,7 +6,8 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { PRIVATE_BUCKETS } from "../../config/privateStorage.js";
+import { PRIVATE_BUCKETS, privateStorageClient } from "../../config/privateStorage.js";
+import { googleStorageConfigured } from "../../config/googleStorage.js";
 
 export const DOCUMENT_CONTENT_TYPES = [
   "application/pdf",
@@ -47,6 +48,11 @@ export class StorageUnavailableError extends Error {
 }
 
 export const readConfig = (env = process.env) => {
+  if (env.PRIVATE_STORAGE_PROVIDER === 'gcs' || env.DOCUMENT_STORAGE_PROVIDER === 'gcs') {
+    const ttl = Number(env.DOCUMENT_SIGNED_URL_TTL_SECONDS || 300);
+    if (env.PRIVATE_STORAGE_PROVIDER !== 'gcs' || !googleStorageConfigured(env) || !Number.isInteger(ttl) || ttl < 30 || ttl > 300) throw new StorageUnavailableError();
+    return { provider: 'gcs', bucket: PRIVATE_BUCKETS.clinicalDocuments, ttl };
+  }
   const provider = PROVIDERS[env.DOCUMENT_STORAGE_PROVIDER];
   if (!provider || provider.required.some((key) => !env[key]?.trim())) {
     throw new StorageUnavailableError();
@@ -61,9 +67,16 @@ export const getUploadMaxBytes = () => {
   const value = Number(
     process.env.DOCUMENT_UPLOAD_MAX_BYTES || 10 * 1024 * 1024,
   );
-  return Number.isInteger(value) && value > 0 && value <= 50 * 1024 * 1024
+  const limit = Number.isInteger(value) && value > 0 && value <= 50 * 1024 * 1024
     ? value
     : 10 * 1024 * 1024;
+  // Google uploads use the in-process Cloudmersive worker, not the legacy
+  // external scan callback. Never issue an upload larger than it can screen.
+  if (process.env.PRIVATE_STORAGE_PROVIDER === 'gcs' || process.env.DOCUMENT_STORAGE_PROVIDER === 'gcs') {
+    const scanner = Number(process.env.CLOUDMERSIVE_MAX_FILE_BYTES || 3500000);
+    return Math.min(limit, Number.isSafeInteger(scanner) && scanner > 0 && scanner <= 10 * 1024 * 1024 ? scanner : 3500000);
+  }
+  return limit;
 };
 
 export class R2DocumentStorage {
@@ -123,4 +136,29 @@ export class R2DocumentStorage {
   }
 }
 
-export const createDocumentStorage = () => new R2DocumentStorage();
+export class GoogleDocumentStorage {
+  constructor({ client = privateStorageClient(), config = readConfig() } = {}) {
+    if (client.provider !== 'gcs' || config.provider !== 'gcs') throw new StorageUnavailableError();
+    this.backend = 'gcs';
+    this.ttl = config.ttl;
+    this.objects = client.storage.from(PRIVATE_BUCKETS.clinicalDocuments);
+  }
+
+  async value(operation) {
+    const { data, error } = await operation;
+    if (error || !data) throw new StorageUnavailableError();
+    return data;
+  }
+
+  createUpload({ objectKey, contentType, byteSize }) {
+    if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > getUploadMaxBytes()) throw new StorageUnavailableError();
+    return this.value(this.objects.createSignedUpload(objectKey, contentType, byteSize, this.ttl));
+  }
+
+  head(objectKey) { return this.value(this.objects.inspect(objectKey, getUploadMaxBytes())); }
+
+  async delete(objectKey) { await this.value(this.objects.remove([objectKey])); }
+}
+
+export const createDocumentStorage = () => readConfig().provider === 'gcs'
+  ? new GoogleDocumentStorage() : new R2DocumentStorage();

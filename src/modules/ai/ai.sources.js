@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import prisma from '../../config/db.js';
-import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient } from '../../config/privateStorage.js';
+import { PRIVATE_BUCKETS, assertPrivateBucket, privateStorageClient, privateStorageBackend } from '../../config/privateStorage.js';
 import { recordAudit } from '../audit/audit.service.js';
 import { ownerDownload } from '../medical-documents/medical-documents.service.js';
 import { aiConfig, aiDocumentsAvailable, aiError, AI_DOCUMENT_CONSENT_VERSION } from './ai.config.js';
@@ -18,7 +18,7 @@ const missing = () => aiError(404, 'AI_SOURCE_NOT_FOUND', 'This document is not 
 const activeUser = async (userId, db = prisma) => {
   if (!await db.user.findFirst({ where: { id: userId, accountStatus: 'ACTIVE', emailVerifiedAt: { not: null } }, select: { id: true } })) throw aiError(403, 'AI_ACCOUNT_UNAVAILABLE', 'A verified, active account is required.');
 };
-const documentWhere = (ownerUserId) => ({ ownerPatientId: ownerUserId, status: 'CLEAN', scanVerdict: 'CLEAN', deletedAt: null, uploadBackend: 'supabase' });
+const documentWhere = (ownerUserId) => ({ ownerPatientId: ownerUserId, status: 'CLEAN', scanVerdict: 'CLEAN', deletedAt: null, uploadBackend: privateStorageBackend() });
 const audit = (db, userId, action, id) => recordAudit(db, { actorUserId: userId, action, resourceType: 'AI_DOCUMENT_SOURCE', resourceId: id });
 const safe = { id: true, documentId: true, state: true, revision: true, errorCode: true, patientLabels: true, createdAt: true, reviewedAt: true, finishedAt: true,
   document: { select: { originalFilename: true, kind: true } } };
@@ -37,7 +37,7 @@ export async function listAiSources(userId) {
 }
 export async function listAiSourceDocuments(userId) {
   await activeUser(userId);
-  return prisma.medicalDocument.findMany({ where: { ownerPatientId: userId, deletedAt: null, status: { not: 'DELETED' }, uploadBackend: 'supabase' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50,
+  return prisma.medicalDocument.findMany({ where: { ownerPatientId: userId, deletedAt: null, status: { not: 'DELETED' }, uploadBackend: privateStorageBackend() }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50,
     select: { id: true, originalFilename: true, kind: true, status: true, byteSize: true, createdAt: true } });
 }
 export async function getAiSource(userId, id) {

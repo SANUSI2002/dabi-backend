@@ -5,6 +5,10 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fn = () => vi.fn();
+const googleIntake = vi.hoisted(() => ({ configured: true }));
+vi.mock('../src/modules/medical-documents/medical-documents.intake.js', async importOriginal => ({
+  ...await importOriginal(), intakeConfigured: () => googleIntake.configured,
+}));
 const adapter = { createUpload: fn(), head: fn(), createDownload: fn(), delete: fn() };
 class StorageUnavailableError extends Error { constructor() { super('unavailable'); this.code = 'DOCUMENT_STORAGE_UNAVAILABLE'; } }
 vi.mock('../src/modules/medical-documents/medical-documents.storage.js', () => ({
@@ -12,7 +16,7 @@ vi.mock('../src/modules/medical-documents/medical-documents.storage.js', () => (
   getUploadMaxBytes: () => Number(process.env.DOCUMENT_UPLOAD_MAX_BYTES || 10485760),
   StorageUnavailableError,
   createDocumentStorage: () => {
-    if (process.env.DOCUMENT_STORAGE_PROVIDER !== 'r2') throw new StorageUnavailableError();
+    if (!['r2', 'gcs'].includes(process.env.DOCUMENT_STORAGE_PROVIDER)) throw new StorageUnavailableError();
     return adapter;
   },
 }));
@@ -45,6 +49,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.JWT_SECRET = 'medical-document-test-secret';
   process.env.DOCUMENT_STORAGE_PROVIDER = 'r2';
+  delete adapter.backend;
+  googleIntake.configured = true;
   process.env.DOCUMENT_UPLOAD_MAX_BYTES = '10485760';
   process.env.DOCUMENT_SCAN_CALLBACK_SECRET = secret;
   db = { documents: [], shares: [], scans: [], audits: [], eligibleDoctors: new Set(), eligibleCaregivers: new Set() };
@@ -82,6 +88,33 @@ const signedScan = (id, body, options = {}) => {
 };
 
 describe('secure medical document HTTP lifecycle', () => {
+  it('connects legacy Google uploads to the private background scanner with an integrity hash', async () => {
+    process.env.DOCUMENT_STORAGE_PROVIDER = 'gcs'; adapter.backend = 'gcs';
+    const initialized = await request(app).post('/api/v1/medical-documents/uploads').set(token(owner)).send(uploadBody);
+    expect(initialized.status).toBe(201);
+    expect(db.documents[0]).toMatchObject({ uploadBackend: 'gcs', status: 'PENDING_UPLOAD' });
+    expect(db.documents[0].objectKey).toMatch(/^quarantine\/[0-9a-f-]{36}\.pdf$/);
+    adapter.head.mockResolvedValueOnce({ byteSize: 100, contentType: 'application/pdf', sha256: 'a'.repeat(64) });
+    expect((await request(app).post(`/api/v1/medical-documents/${documentId}/complete-upload`).set(token(owner))).status).toBe(200);
+    expect(db.documents[0]).toMatchObject({ status: 'PENDING_SCAN', sha256: 'a'.repeat(64) });
+    const body = { verdict: 'CLEAN', validatedContentType: 'application/pdf', byteSize: 100, sha256: 'a'.repeat(64), scannerTimestamp: new Date().toISOString() };
+    expect((await signedScan(`${documentId}/result`, body)).status).toBe(409);
+    expect(db.documents[0].status).toBe('PENDING_SCAN');
+    expect((await request(app).post(`/api/v1/medical-documents/${documentId}/download`).set(token(owner))).status).toBe(404);
+  });
+
+  it('rejects Google uploads without screening, mismatched backends, and a missing integrity hash', async () => {
+    process.env.DOCUMENT_STORAGE_PROVIDER = 'gcs'; adapter.backend = 'gcs';
+    googleIntake.configured = false;
+    expect((await request(app).post('/api/v1/medical-documents/uploads').set(token(owner)).send(uploadBody)).status).toBe(503);
+    expect(db.documents).toHaveLength(0);
+    googleIntake.configured = true;
+    db.documents.push(safeDoc());
+    expect((await request(app).post(`/api/v1/medical-documents/${documentId}/complete-upload`).set(token(owner))).status).toBe(503);
+    db.documents[0].uploadBackend = 'gcs';
+    expect((await request(app).post(`/api/v1/medical-documents/${documentId}/complete-upload`).set(token(owner))).status).toBe(409);
+    expect(db.documents[0].status).toBe('PENDING_UPLOAD');
+  });
   it('initializes only authenticated patient uploads with opaque keys and minimal audits', async () => {
     expect((await request(app).post('/api/v1/medical-documents/uploads').send(uploadBody)).status).toBe(401);
     const response = await request(app).post('/api/v1/medical-documents/uploads').set(token(owner)).send(uploadBody);

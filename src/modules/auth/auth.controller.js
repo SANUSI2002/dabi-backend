@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { URL } from 'node:url';
 import * as AuthModel from './auth.model.js';
 import { generateAccessToken } from './auth.token.js';
 import { browserRequest, clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './auth.cookie.js';
@@ -26,6 +27,16 @@ export const toUserResponse = (user) => ({
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 const verificationMessage = 'If an unverified patient account exists for that email, a verification link has been requested.';
 const patientPortalUrl = () => (process.env.PATIENT_PORTAL_URL || 'http://127.0.0.1:5174').replace(/\/$/, '');
+const productionPatientPortalConfigured = () => {
+  try {
+    const url = new URL(patientPortalUrl());
+    // Both supported builds exist: the standalone patient host and the patient
+    // app mounted below the Sabi Health host. Never accept query/fragment tokens
+    // or user-info in a server-configured email base.
+    return url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash
+      && ['/', '/telemedicine'].includes(url.pathname);
+  } catch { return false; }
+};
 
 export async function sendPatientVerification(user, baseUrl = patientPortalUrl()) {
   const rawToken = crypto.randomBytes(32).toString('hex');
@@ -39,7 +50,7 @@ export async function sendPatientVerification(user, baseUrl = patientPortalUrl()
 
 export const registerPatient = async (req, res, next) => {
   try {
-    if (!verificationEmailConfigured() || !verificationEmailAllowedFor(req.body.email) || (process.env.NODE_ENV === 'production' && !/^https:\/\/[^/]+$/.test(process.env.PATIENT_PORTAL_URL || ''))) return res.status(503).json({ status: 'error', message: 'Patient email verification is not configured yet. Please try again later.' });
+    if (!verificationEmailConfigured() || !verificationEmailAllowedFor(req.body.email) || (process.env.NODE_ENV === 'production' && !productionPatientPortalConfigured())) return res.status(503).json({ status: 'error', message: 'Patient email verification is not configured yet. Please try again later.' });
     const user = await AuthModel.createPatient(req.body);
     const emailSent = await sendPatientVerification(user);
     return res.status(201).json({ status: 'success', message: emailSent ? 'Patient registered. Check your email to activate your account.' : 'Patient registered, but the verification email could not be sent. Request a new link.', emailSent, user: toUserResponse(user) });
@@ -174,7 +185,7 @@ export const getCurrentUser = async (req, res, next) => {
 const resetMessage = 'If an account exists for that email, password recovery instructions have been requested.';
 export const requestEmailVerification = async (req, res, next) => {
   try {
-    if (!verificationEmailConfigured() || (process.env.NODE_ENV === 'production' && !/^https:\/\/[^/]+$/.test(process.env.PATIENT_PORTAL_URL || ''))) return res.status(503).json({ status: 'error', message: 'Email verification is temporarily unavailable.' });
+    if (!verificationEmailConfigured() || (process.env.NODE_ENV === 'production' && !productionPatientPortalConfigured())) return res.status(503).json({ status: 'error', message: 'Email verification is temporarily unavailable.' });
     const user = await AuthModel.findUserByEmail(req.body.email);
     if (['PENDING', 'ACTIVE'].includes(user?.accountStatus) && !user.emailVerifiedAt && user.roles.some(({ role }) => role === 'PATIENT') && verificationEmailAllowedFor(user.email)) {
       const latest = await AuthModel.latestEmailVerificationToken(user.id);

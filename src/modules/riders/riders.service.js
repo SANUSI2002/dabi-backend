@@ -6,6 +6,7 @@ import prisma from "../../config/db.js";
 import {
   PRIVATE_BUCKETS,
   privateStorageClient,
+  privateStorageConfigured,
   uploadPrivateObject,
   signedEvidencePreview,
 } from "../../config/privateStorage.js";
@@ -37,8 +38,7 @@ export const digest = (value) =>
 export const enabled = () =>
   process.env.RIDER_REGISTRATION_ENABLED !== "false" &&
   evidenceScannerConfigured() &&
-  !!process.env.SUPABASE_URL &&
-  !!(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY);
+  privateStorageConfigured();
 export const maxBytes = () =>
   Math.min(evidenceUploadMaxBytes(), 5 * 1024 * 1024);
 export const audit = (tx, userId, type, meta) =>

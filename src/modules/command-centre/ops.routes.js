@@ -8,6 +8,7 @@
 import { Buffer } from 'node:buffer';
 import express from 'express';
 import { z } from 'zod';
+import { privateStorageBackend } from '../../config/privateStorage.js';
 import prisma from '../../config/db.js';
 import { validate } from '../../middleware/validateMiddleware.js';
 import { requireRecentMfa } from '../../middleware/mfaMiddleware.js';
@@ -88,7 +89,7 @@ async function scanRows(now = new Date()) {
   ]);
   const scanState = (s) => (s === 'PENDING_SCAN' || s === 'PENDING' ? 'PENDING' : s);
   return [
-    ...docs.map((d) => ({ id: d.id, source: 'Patient document', owner: 'A patient (contents not shown)', what: d.kind, status: scanState(d.status), attempts: d.scanAttempts, error: d.scanErrorCode || d.scanVerdict, since: d.updatedAt, retryOn: null, retryable: d.uploadBackend === 'supabase' && d.status === 'PENDING_SCAN' && d.scanAttempts >= 5 && !d.scanLeaseToken })),
+    ...docs.map((d) => ({ id: d.id, source: 'Patient document', owner: 'A patient (contents not shown)', what: d.kind, status: scanState(d.status), attempts: d.scanAttempts, error: d.scanErrorCode || d.scanVerdict, since: d.updatedAt, retryOn: null, retryable: d.uploadBackend === privateStorageBackend() && d.status === 'PENDING_SCAN' && d.scanAttempts >= 5 && !d.scanLeaseToken })),
     ...doctor.map((c) => ({ id: c.id, source: 'Doctor credential', owner: c.application.professional.user.full_name, what: c.kind, status: c.scanStatus, attempts: c.scanAttempts, error: c.scanErrorCode, since: c.createdAt, retryOn: 'doctors' })),
     ...pharmacy.map((c) => ({ id: c.id, source: 'Pharmacy credential', owner: c.pharmacy.name, what: c.kind, status: c.scanStatus, attempts: c.scanAttempts, error: c.scanErrorCode, since: c.createdAt, retryOn: 'pharmacies' })),
     ...evidence.map((e) => ({ id: e.id, source: 'Organisation evidence', owner: `${e.application.organizationName} (${e.application.reference})`, what: e.requirementKey, status: e.scanStatus, attempts: e.scanAttempts, error: e.scanErrorCode, since: e.createdAt, retryOn: 'onboarding' })),
@@ -188,7 +189,7 @@ opsRoutes.post('/jobs/:type/:id/retry', allow('platform.jobs.manage'), requireRe
     if (type === 'reminder') throw ccError('NOT_RETRYABLE', 409, 'Medicine reminders are time-specific and are not re-sent late.');
     if (type === 'rider-email') throw ccError('NOT_RETRYABLE', 409, 'Rider onboarding mail retries are controlled by the rider worker.');
     if (type === 'document-scan') return prisma.$transaction(async (tx) => {
-      const changed = await tx.medicalDocument.updateMany({ where: { id, uploadBackend: 'supabase', status: 'PENDING_SCAN', scanAttempts: { gte: 5 }, scanErrorCode: { not: null }, scanLeaseToken: null }, data: { scanAttempts: 0, scanErrorCode: null, scanLeaseExpiresAt: null } });
+      const changed = await tx.medicalDocument.updateMany({ where: { id, uploadBackend: privateStorageBackend(), status: 'PENDING_SCAN', scanAttempts: { gte: 5 }, scanErrorCode: { not: null }, scanLeaseToken: null }, data: { scanAttempts: 0, scanErrorCode: null, scanLeaseExpiresAt: null } });
       if (!changed.count) throw ccError('NOT_RETRYABLE', 409, 'Only a delayed patient scan can be retried here; credential decisions remain on their review page.');
       await audit(tx, 'Queued delayed patient-document security screening'); return { id, status: 'PENDING_SCAN' };
     });

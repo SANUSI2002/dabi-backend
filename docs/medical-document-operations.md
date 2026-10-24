@@ -2,9 +2,19 @@
 
 ## Security boundary
 
-Medical documents use one dedicated, private Cloudflare R2 bucket. Public access, custom public domains, anonymous object access, and public bearer-share links must remain disabled. The API stores opaque UUID object keys only and never stores signed URLs. Legacy `MedicalRecord.documentUrl` metadata is unchanged; migrating it requires a separate inventory, ownership validation, scanning, and cutover plan.
+Google production uses the private `sabi-prod-556396127853-clinical-documents` bucket through attached IAM identities, not Supabase or R2 credentials. Other environments may retain their existing S3-compatible adapter. Public access, custom public domains, anonymous object access, and public bearer-share links must remain disabled. The API stores opaque UUID object keys only and never stores signed URLs. Legacy `MedicalRecord.documentUrl` metadata is unchanged; migrating it requires a separate inventory, ownership validation, scanning, and cutover plan.
 
 Production use remains subject to an organization-specific medical-data compliance, privacy, retention, breach-response, and legal review. This implementation does not itself establish regulatory compliance.
+
+## Google production upload paths
+
+- `POST /api/v1/medical-documents/uploads/receive`: authenticated binary intake, immutable private upload, persisted SHA-256 and background Cloudmersive screening. This is the current portal flow and requires no browser-to-bucket CORS access.
+- `POST /api/v1/medical-documents/uploads` followed by the returned PUT and `POST /:id/complete-upload`: compatibility flow. Google mode is selected by `PRIVATE_STORAGE_PROVIDER=gcs`, even if an old `DOCUMENT_STORAGE_PROVIDER` remains. The signed PUT lasts at most five minutes, signs exact byte-size bounds, content type, no-store metadata and create-only generation preconditions. Completion reads and hashes the size-checked generation, then records `PENDING_SCAN` with `uploadBackend=gcs` and wakes the same background worker.
+- Both paths require configured private storage and scanning and are capped to the scanner's file-size allowance (currently 3,500,000 bytes). No document becomes downloadable during upload or screening. Only a worker-screened immutable `clean/` object may be signed for an authorised owner or eligible named recipient. External prescriptions remain pending clinical review.
+- The legacy HMAC scanner callback cannot alter Google/private-intake documents; it remains available for legacy S3-backed records only. GCS deletion uses persisted cleanup work, not a one-shot best effort.
+- The compatibility browser PUT needs an exact-origin bucket CORS policy allowing PUT and `Content-Type`, `Cache-Control`, `x-goog-if-generation-match`, `x-goog-content-length-range`. The owner-approved policy is `ops/google-cloud/clinical-documents-cors.json` (only the Health, telemedicine and exact acceptance-preview origins). Do not use wildcard origins. A real signed-PUT smoke test is still acceptance work; do not claim browser compatibility solely from unit tests or a preflight response.
+
+Fresh production has no imported legacy documents. Retained legacy S3 code is for non-Google environments; it is not a production storage dependency. Neither plaintext credentials nor signed URLs belong in logs, Git, tickets or screenshots.
 
 ## R2 setup and credentials
 

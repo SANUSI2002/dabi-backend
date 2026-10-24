@@ -1,6 +1,6 @@
 # Google Cloud backend packaging
 
-Target project: `project-2dfff4eb-ff04-40b1-aff` (production). Existing Render and `sabi-health-dev` remain staging. These files do not deploy resources or change either environment.
+Target project: `project-2dfff4eb-ff04-40b1-aff` (production). The 23 October fresh-start decision supersedes the earlier Render/Supabase staging plan: production must no longer depend on either provider after verified cutover. Old resources are retained, not deleted. These files do not themselves deploy resources or migrate data. See `google-cloud-fresh-start.md` for the current decision record.
 
 ## Images
 
@@ -33,11 +33,13 @@ The current entrypoint starts interval workers in the same process. A request-bi
 
 Current in-memory rate limits also require shared atomic enforcement before horizontal scaling. Review maximum replicas, concurrency and PostgreSQL pool totals together. Migrations, durable jobs, transactional outbox delivery, distributed limits, Google storage integration, backup/restore and full staging acceptance remain prerequisites for production cutover.
 
-All costs must fit the user's **less than USD 120 cumulative** allowance, with USD 90 as the operating target. The saved Google budget is an alert mechanism, not a hard total cap. No paid resource is created by either build command.
-
-The user subsequently approved a **USD 60/month ongoing hosting budget**, with no artificial
-30-day rollout expiry. This does not remove the original cumulative trial allowance or authorize
-a paid-billing upgrade. Plan the complete database/storage/API/worker/AI/backup cost against both
-constraints, using actual regional quotes and expected load before provisioning. The TypeSafe key
-is now stored in official-project Secret Manager (`typesafe-api-key`); no runtime access grant,
-resource deployment, database copy or DNS cutover was made by that secret setup.
+The current approved target is **USD 150/month**, using the remaining Google trial credit.
+The user explicitly replaced the earlier USD 120 cumulative trial cap; the USD 60/month
+proposal is also superseded. There is no artificial 30-day rollout expiry, but trial credit
+and trial eligibility are finite. No paid-billing upgrade or commitment is authorised.
+The saved Google budget is an alert mechanism, not a hard spending cap. Quote the complete
+HA database, backups, storage, API, worker and AI usage against the monthly target. The
+inspected HA database baseline is approximately USD 102/month before variable usage.
+No resource is created by the build commands above. The TypeSafe key is stored in
+official-project Secret Manager (`typesafe-api-key`); secret storage alone does not prove
+runtime connectivity or clinical readiness.
