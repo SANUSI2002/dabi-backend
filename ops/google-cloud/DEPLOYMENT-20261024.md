@@ -155,6 +155,16 @@ this source revision. The owner also approved the exact three-origin clinical
 bucket policy in `clinical-documents-cors.json`; it does not grant public object
 access or permission to list/delete objects.
 
+Applied that clinical bucket policy and read it back: public-access prevention
+remained `enforced` and uniform bucket access remained enabled. Real XML API
+PUT preflights accepted each of the three approved origins and returned no CORS
+allowance for `https://not-sabi.invalid`. Google API preflight likewise accepted
+only the approved preview and rejected an unrelated origin. API readiness was
+200 and the source remained `9a89181`. No medical file was submitted/opened by
+these preflight checks. Actual signed-PUT and signup/verification/upload/scan
+acceptance still require a newly verified account; the user-facing preview is
+left on the patient signup page for private password entry.
+
 After acceptance, return both services to the production callback configuration
 as part of the reviewed live cutover. No user account, first-admin grant, restore
 drill or full clinical/payment acceptance is implied by preparing this preview.
